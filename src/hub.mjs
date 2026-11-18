@@ -514,7 +514,14 @@ export async function startHub({
     for (const entry of workspace.repos) {
       try {
         const project = registerProject(entry.root);
-        const { reviewId, data } = analyzeProject(project, { scope: 'worktree' });
+        // Each repository may compare against its own scope (branch, range,
+        // commit); the workspace-level scope is the default.
+        const requested = entry.scope || { mode: 'worktree' };
+        const payload = { scope: requested.mode };
+        if (requested.range) payload.range = requested.range;
+        if (requested.base) payload.base = requested.base;
+        if (requested.commit) payload.commit = requested.commit;
+        const { reviewId, data } = analyzeProject(project, payload);
         const changed = data.nodes.filter((node) => node.status !== 'impacted_only').length;
         repos.push({
           id: entry.id,
@@ -524,6 +531,8 @@ export async function startHub({
           projectId: project.id,
           reviewId,
           changed,
+          scopeMode: requested.mode,
+          scopeLabel: data.meta.rangeLabel || requested.mode,
           stats: data.meta.stats,
         });
       } catch (error) {
@@ -559,6 +568,8 @@ export async function startHub({
         projectId: repo.projectId,
         reviewId: repo.reviewId,
         changed: repo.changed > 0,
+        scopeMode: repo.scopeMode,
+        scopeLabel: repo.scopeLabel,
         depth: depth.get(repo.id) ?? null,
         impactOrigins: [...(origins.get(repo.id) || [])],
         stats: repo.stats,
@@ -661,7 +672,17 @@ export async function startHub({
       if (pathname === '/api/commits') {
         const project = getProject(url.searchParams.get('project'));
         const repo = new GitRepo(project.root);
-        const all = url.searchParams.get('all') !== '0';
+        // Default to the checked-out branch: `--all` mixes every colleague's
+        // remote branch into the version chain and makes it look unrelated to
+        // the repository the user has open. The all-refs view stays available
+        // explicitly via `?all=1`.
+        const all = url.searchParams.get('all') === '1';
+        const branch = repo.branchName();
+        if (branch && branch !== project.branch) {
+          project.branch = branch;
+          project.updatedAt = formatTimestamp();
+          saveProjects();
+        }
         const args = [
           'log',
           '--date-order',
@@ -670,7 +691,9 @@ export async function startHub({
           '--pretty=format:%H%x1f%h%x1f%P%x1f%s%x1f%an%x1f%aI%x1f%D',
         ];
         if (all) args.splice(1, 0, '--all');
-        const { stdout } = repo.run(args);
+        else if (branch && branch !== 'unborn') args.push(branch);
+        else args.push('HEAD');
+        const { stdout } = repo.run(args, { allowFailure: true });
         const commits = stdout
           .split('\n')
           .filter(Boolean)
@@ -696,7 +719,7 @@ export async function startHub({
               refs,
             };
           });
-        sendJson(res, 200, { ok: true, commits, all });
+        sendJson(res, 200, { ok: true, commits, all, branch });
         return;
       }
 

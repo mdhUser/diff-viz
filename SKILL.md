@@ -140,6 +140,7 @@ diff-viz workspace --init
 - `id` 是后面 `links` 里引用的名字，建议直接用服务名。
 - 少了仓库就手动加一项；`path` 相对 workspace 文件所在目录。
 - 检查一遍 `repos` 再继续，漏掉的仓库不会出现在拓扑里。
+- **比较范围**：顶层 `scope` 是所有仓库的缺省值，`repos[].scope` 可单独覆盖；`mode` 支持 `worktree`（默认）/ `staged` / `last` / `range` / `base` / `commit`。跨仓对比同一目标分支时加 `"scope": { "mode": "range", "base": "global/feature/xxx" }`，不要逐仓手工生成 range review。
 
 ### 2. 补跨服务依赖
 
@@ -170,7 +171,8 @@ diff-viz --workspace path/to/workspace.json
 
 - 服务卡片：有改动（`changed`）、受影响层级（`depth`，0 表示自身有改动）、影响来源（`impactOrigins`）。
 - `meta.serviceEdges[]`：`from` 依赖 `to`，`kind: "manifest"` 表示自动识别的包依赖。
-- `meta.stats`：`{ repos, changed, impacted }`。
+- `meta.stats`：`{ repos, changed, impacted }`；`meta.repos[].scopeMode` / `scopeLabel` 表示该仓库实际比较的范围。
+- `meta.warnings` 是真实失败，`meta.notes` 是说明性信息；自己写注解时不要往 `warnings` 里塞说明文字。
 - 想深入某个服务：界面上点卡片；脚本里用 `meta.repos[].reviewId` 去读该仓库的完整 Review。
 - 没有浏览器时直接读 JSON：`curl "$HUB/api/data?review=<workspace-review-id>"`，看 `meta.repos` 和 `meta.serviceEdges`。
 

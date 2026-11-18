@@ -150,9 +150,10 @@ diff-viz --workspace path/to/diff-viz.workspace.json
 ```json
 {
   "name": "订单链路改造",
+  "scope": { "mode": "range", "base": "main" },
   "repos": [
     { "id": "order", "path": "../order-service" },
-    { "id": "user", "path": "../user-service" },
+    { "id": "user", "path": "../user-service", "scope": { "mode": "worktree" } },
     { "id": "common", "path": "../common-lib" }
   ],
   "links": [
@@ -160,6 +161,9 @@ diff-viz --workspace path/to/diff-viz.workspace.json
   ]
 }
 ```
+
+- **比较范围**：顶层 `scope` 是所有仓库的缺省值，`repos[].scope` 可以单独覆盖。`mode` 支持 `worktree`（默认）/ `staged` / `last` / `range` / `base` / `commit`，其中 `range` 需要 `range`（或 `base`）、`base` 需要 `base`、`commit` 需要 `commit`。跨仓库对比同一目标分支时，把 `scope` 写成 `{ "mode": "range", "base": "global/feature/xxx" }` 即可，不用逐仓生成 range review。
+- **比较范围会显示在服务卡片上**（`scopeMode` / `scopeLabel`），避免「都显示有改动，但不知道拿什么在比」。
 
 - **包依赖自动识别**：读每个仓库的 `package.json` / `pom.xml` / `go.mod` / `build.gradle(.kts)` / `*.csproj` / `composer.json`，把「依赖坐标」和兄弟仓库的「产物坐标」对上，生成 `kind: manifest` 的边。
 - **RPC / HTTP 手工补充**：静态解析跨服务调用误报太高，这类边写在 `links` 里（`kind` 自定，`via` 会显示在图上）。指向未声明仓库的 link 会被忽略并给出警告。

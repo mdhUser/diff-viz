@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { FolderGit2, GitBranch, RefreshCw, TriangleAlert } from 'lucide-react';
+import { FolderGit2, GitBranch, Info, RefreshCw, TriangleAlert } from 'lucide-react';
 import type { ReviewData, ServiceEdge, WorkspaceMeta, WorkspaceRepo } from '../types';
 import { cn } from '../cn';
 
@@ -94,11 +94,22 @@ export function WorkspaceView({ data, refreshing, onOpenReview, onRefresh }: Wor
       </header>
 
       {meta.warnings && meta.warnings.length > 0 ? (
-        <div className="flex shrink-0 items-start gap-2 border-b border-line/80 bg-[#fdf2f3] px-6 py-2 text-[10px] text-rose">
+        <div className="flex shrink-0 items-start gap-2 border-b border-line/80 bg-[#fdf6ea] px-6 py-2 text-[10px] text-amber">
           <TriangleAlert size={12} className="mt-0.5 shrink-0" />
           <div className="space-y-0.5">
             {meta.warnings.map((warning) => (
               <div key={warning}>{warning}</div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {meta.notes && meta.notes.length > 0 ? (
+        <div className="flex shrink-0 items-start gap-2 border-b border-line/80 bg-ink-850/50 px-6 py-2 text-[10px] text-mist-500">
+          <Info size={12} className="mt-0.5 shrink-0" />
+          <div className="space-y-0.5">
+            {meta.notes.map((note) => (
+              <div key={note}>{note}</div>
             ))}
           </div>
         </div>
@@ -175,6 +186,11 @@ export function WorkspaceView({ data, refreshing, onOpenReview, onRefresh }: Wor
                         <GitBranch size={9} />
                         <span className="truncate">{repo.branch || '—'}</span>
                       </div>
+                      {repo.scopeLabel && repo.scopeMode !== 'worktree' ? (
+                        <div className="mt-0.5 truncate font-mono text-[8.5px] text-mist-600" title={repo.scopeLabel}>
+                          {repo.scopeMode} · {repo.scopeLabel}
+                        </div>
+                      ) : null}
                     </div>
                     <span
                       className={cn(

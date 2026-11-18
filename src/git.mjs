@@ -8,6 +8,7 @@ export function runGit(root, args, options = {}) {
   const result = spawnSync('git', ['-C', root, ...args], {
     encoding: options.encoding === 'buffer' ? null : 'utf8',
     maxBuffer: MAX_BUFFER,
+    input: options.input,
     env: {
       ...process.env,
       GIT_PAGER: 'cat',
@@ -135,6 +136,52 @@ export class GitRepo {
     const result = this.run(['show', `:${filePath}`], { allowFailure: true, encoding: 'buffer' });
     if (result.status !== 0) return null;
     return result.stdout;
+  }
+
+  /**
+   * Read many `<ref>:<path>` blobs with a single git process.
+   *
+   * Historical reviews scan every source file at a commit. Spawning `git show`
+   * once per file made that take tens of seconds on a mid-size repo (2900 files
+   * ≈ 43 s at ~15 ms/process); `cat-file --batch` turns it into a handful of
+   * process launches. Chunked so a huge repo does not produce one giant buffer.
+   */
+  readFilesAt(ref, filePaths, { chunkSize = 400 } = {}) {
+    const result = new Map();
+    const batchable = [];
+    for (const filePath of filePaths) {
+      result.set(filePath, null);
+      // A newline would split the batch query, so fall back to `git show`.
+      if (filePath.includes('\n')) continue;
+      batchable.push(filePath);
+    }
+    for (const filePath of filePaths.filter((item) => item.includes('\n'))) {
+      result.set(filePath, this.show(ref, filePath));
+    }
+    for (let start = 0; start < batchable.length; start += chunkSize) {
+      const chunk = batchable.slice(start, start + chunkSize);
+      const input = `${chunk.map((filePath) => `${ref}:${filePath}`).join('\n')}\n`;
+      const { stdout } = this.run(['cat-file', '--batch'], { input, encoding: 'buffer' });
+      let position = 0;
+      for (const filePath of chunk) {
+        const headerEnd = stdout.indexOf(0x0a, position);
+        if (headerEnd === -1) break;
+        const header = stdout.subarray(position, headerEnd).toString('utf8');
+        position = headerEnd + 1;
+        if (header.endsWith(' missing')) continue;
+        const separator = header.lastIndexOf(' ');
+        const size = Number(header.slice(separator + 1));
+        if (!Number.isFinite(size)) break;
+        // header is `<oid> <type> <size>`; only blobs carry useful content.
+        if (!header.includes(' blob ')) {
+          position += size + 1;
+          continue;
+        }
+        result.set(filePath, stdout.subarray(position, position + size));
+        position += size + 1; // trailing LF after the payload
+      }
+    }
+    return result;
   }
 
   listFiles({ includeUntracked = true } = {}) {

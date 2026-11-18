@@ -770,9 +770,21 @@ export function scanRepository(
   const cached = caching ? readScanCache(repo.root) : { files: {} };
   const nextCache = {};
 
-  for (const filePath of candidates) {
+  // Blob contents at a git ref arrive via `cat-file --batch` in chunks: one
+  // git process per few hundred files instead of one per file. Memory stays
+  // bounded to a chunk because the map is replaced, not accumulated.
+  const REF_CHUNK = 400;
+  let refContents = new Map();
+  let refChunkStart = -1;
+
+  for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+    const filePath = candidates[candidateIndex];
     const absolute = path.join(absoluteRoot, filePath);
     let key = null;
+    if (gitRef && (refChunkStart === -1 || candidateIndex - refChunkStart >= REF_CHUNK)) {
+      refChunkStart = candidateIndex;
+      refContents = repo.readFilesAt(gitRef, candidates.slice(candidateIndex, candidateIndex + REF_CHUNK));
+    }
     if (!gitRef) {
       try {
         const stat = fs.statSync(absolute);
@@ -796,7 +808,7 @@ export function scanRepository(
 
     let buffer;
     if (gitRef) {
-      buffer = repo.show(gitRef, filePath);
+      buffer = refContents.get(filePath);
       if (!buffer) continue;
       if (buffer.length > MAX_SOURCE_BYTES) {
         skippedLarge += 1;

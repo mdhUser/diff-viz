@@ -111,3 +111,49 @@ test('workspace template picks up sibling git repositories', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('repo scope: workspace default, per-repo override and validation', () => {
+  const dir = makeTempRepo();
+  const repoA = makeTempRepo();
+  const repoB = makeTempRepo();
+  try {
+    write(
+      dir,
+      'ws.json',
+      JSON.stringify({
+        name: 'scoped',
+        scope: { mode: 'range', base: 'main' },
+        repos: [
+          { id: 'a', path: repoA },
+          { id: 'b', path: repoB, scope: { mode: 'worktree' } },
+        ],
+        links: [],
+      }),
+    );
+    const workspace = loadWorkspace(path.join(dir, 'ws.json'));
+    assert.deepEqual(workspace.repos[0].scope, { mode: 'range', range: 'main' });
+    assert.deepEqual(workspace.repos[1].scope, { mode: 'worktree' });
+
+    write(
+      dir,
+      'bad.json',
+      JSON.stringify({ repos: [{ id: 'a', path: repoA, scope: { mode: 'nope' } }] }),
+    );
+    assert.throws(() => loadWorkspace(path.join(dir, 'bad.json')), /scope.mode 不支持/);
+
+    write(
+      dir,
+      'bad-range.json',
+      JSON.stringify({ repos: [{ id: 'a', path: repoA, scope: { mode: 'range' } }] }),
+    );
+    assert.throws(() => loadWorkspace(path.join(dir, 'bad-range.json')), /需要 range 或 base/);
+
+    // no scope anywhere falls back to worktree
+    write(dir, 'plain.json', JSON.stringify({ repos: [{ id: 'a', path: repoA }] }));
+    assert.deepEqual(loadWorkspace(path.join(dir, 'plain.json')).repos[0].scope, { mode: 'worktree' });
+  } finally {
+    cleanup(dir);
+    cleanup(repoA);
+    cleanup(repoB);
+  }
+});

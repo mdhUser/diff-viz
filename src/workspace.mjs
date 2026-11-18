@@ -159,6 +159,37 @@ export function readRepoManifest(root) {
   return { names: uniq(names), deps: uniq(deps), ecosystems };
 }
 
+const SCOPE_MODES = new Set(['worktree', 'staged', 'last', 'range', 'base', 'commit']);
+
+/**
+ * A repo may pin its own comparison scope; a workspace-level `scope` is the
+ * default for repos that do not. This is what makes cross-repo branch reviews
+ * work: every repo can compare against the same target branch without the
+ * caller generating range reviews by hand.
+ */
+function normalizeScope(raw, label) {
+  if (raw === undefined || raw === null) return null;
+  const value = typeof raw === 'string' ? { mode: raw } : raw;
+  if (typeof value !== 'object') throw new Error(`${label} 的 scope 必须是对象或字符串。`);
+  const mode = String(value.mode || '');
+  if (!SCOPE_MODES.has(mode)) {
+    throw new Error(`${label} 的 scope.mode 不支持：${mode}（可选 ${[...SCOPE_MODES].join(' / ')}）`);
+  }
+  const scope = { mode };
+  if (mode === 'range') {
+    const range = value.range || value.base;
+    if (!range) throw new Error(`${label} 的 scope.mode=range 需要 range 或 base。`);
+    scope.range = String(range);
+  } else if (mode === 'base') {
+    if (!value.base) throw new Error(`${label} 的 scope.mode=base 需要 base。`);
+    scope.base = String(value.base);
+  } else if (mode === 'commit') {
+    if (!value.commit) throw new Error(`${label} 的 scope.mode=commit 需要 commit。`);
+    scope.commit = String(value.commit);
+  }
+  return scope;
+}
+
 export function loadWorkspace(file) {
   const absolute = path.resolve(file);
   const raw = readText(absolute);
@@ -170,6 +201,7 @@ export function loadWorkspace(file) {
     throw new Error(`workspace 文件不是合法 JSON：${error.message}`);
   }
   const base = path.dirname(absolute);
+  const defaultScope = normalizeScope(parsed.scope, 'workspace');
   const repos = (parsed.repos || []).map((entry, index) => {
     if (!entry || !entry.path) throw new Error(`workspace.repos[${index}] 缺少 path。`);
     const root = path.resolve(base, entry.path);
@@ -181,11 +213,13 @@ export function loadWorkspace(file) {
     }
     if (!stat.isDirectory()) throw new Error(`仓库路径不是目录：${root}`);
     const id = String(entry.id || path.basename(root));
+    const scope = normalizeScope(entry.scope, `repos[${index}]（${id}）`) || defaultScope || { mode: 'worktree' };
     return {
       id,
       label: String(entry.label || entry.id || path.basename(root)),
       root,
       path: toPosix(entry.path),
+      scope,
     };
   });
   if (!repos.length) throw new Error('workspace.repos 不能为空。');

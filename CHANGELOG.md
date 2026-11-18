@@ -8,6 +8,18 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-18
+
+### Added
+
+- 工作区支持按仓库指定比较范围：`repos[].scope` 可以是 `worktree` / `staged` / `last` / `range` / `base` / `commit`，工作区顶层的 `scope` 作为缺省值。跨仓库对比同一目标分支时不再需要手工生成每个仓库的 range review。
+- 服务卡片显示该仓库实际使用的比较范围（`scopeMode` / `scopeLabel`），只能看到「5 个仓都有改动」却不知道拿什么在比的困惑没有了。
+
+### Fixed
+
+- 工作区提示条分不清「说明」和「错误」：新增 `meta.notes`（中性色），`meta.warnings` 改为琥珀色告警样式，不再用红色冒充报错。
+- 补上 `test/git.test.mjs` 缺失的 `GitRepo` / `scanRepository` 导入（批量 blob 读取的两个测试此前直接 `ReferenceError`）。
+
 ## [0.8.1] - 2026-11-18
 
 ### Fixed

@@ -7,7 +7,7 @@ import { GitRepo } from '../src/git.mjs';
 import { buildReviewData } from '../src/collect.mjs';
 import { startHub } from '../src/hub.mjs';
 import { writeReviewStore } from '../src/review-store.mjs';
-import { cleanup, commitAll, makeTempRepo, write } from './helpers.mjs';
+import { cleanup, commitAll, makeTempRepo, run, write } from './helpers.mjs';
 
 test('hub registers projects, serves data, lists commits and builds historical reviews', async () => {
   const repoDir = makeTempRepo();
@@ -277,6 +277,52 @@ test('projects can be added by path, validated, deduplicated and removed', async
 });
 
 
+test('commit history defaults to the checked-out branch and all=1 includes every ref', async () => {
+  const repoDir = makeTempRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-viz-hub-branch-'));
+  write(repoDir, 'base.txt', 'base\n');
+  commitAll(repoDir, 'base commit');
+  const base = run(repoDir, 'git', ['rev-parse', 'HEAD']).trim();
+
+  run(repoDir, 'git', ['checkout', '-qb', 'feature/current']);
+  write(repoDir, 'current.txt', 'current\n');
+  commitAll(repoDir, 'current branch work');
+
+  run(repoDir, 'git', ['checkout', '-qb', 'feature/other', base]);
+  write(repoDir, 'other.txt', 'other\n');
+  commitAll(repoDir, 'other branch work');
+  run(repoDir, 'git', ['checkout', '-q', 'feature/current']);
+
+  const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
+  try {
+    const project = await fetch(`${server.url}api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: repoDir }),
+    }).then((response) => response.json());
+
+    const scoped = await fetch(`${server.url}api/commits?project=${project.project.id}`).then((response) =>
+      response.json(),
+    );
+    assert.equal(scoped.branch, 'feature/current');
+    assert.equal(scoped.all, false);
+    const subjects = scoped.commits.map((commit) => commit.subject);
+    assert.ok(subjects.includes('current branch work'));
+    assert.ok(subjects.includes('base commit'));
+    assert.ok(!subjects.includes('other branch work'), 'other branches must stay out of the default chain');
+
+    const all = await fetch(`${server.url}api/commits?project=${project.project.id}&all=1`).then((response) =>
+      response.json(),
+    );
+    assert.equal(all.all, true);
+    assert.ok(all.commits.some((commit) => commit.subject === 'other branch work'));
+  } finally {
+    await server.close();
+    cleanup(repoDir);
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('hub prunes old reviews and keeps state private', async () => {
   const repoDir = makeTempRepo();
   write(repoDir, 'a.ts', 'export const a = 1;\n');
@@ -386,5 +432,64 @@ test('hub builds a workspace review across repositories', async () => {
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(workspaceDir, { recursive: true, force: true });
     fs.rmSync(plainDir, { recursive: true, force: true });
+  }
+});
+
+test('workspace honors per-repo and workspace-level comparison scopes', async () => {
+  const repo = makeTempRepo();
+  const weird = makeTempRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-viz-ws-scope-'));
+  const wsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-viz-ws-scope-file-'));
+  try {
+    // main gets an initial file, then the feature branch changes it.
+    write(repo, 'a.ts', 'export const a = 1;\n');
+    commitAll(repo, 'init');
+    run(repo, 'git', ['branch', '-M', 'main']);
+    run(repo, 'git', ['checkout', '-q', '-b', 'feature']);
+    write(repo, 'a.ts', 'export const a = 2;\n');
+    commitAll(repo, 'feature change');
+
+    write(weird, 'b.ts', 'export const b = 1;\n');
+    commitAll(weird, 'init');
+
+    const wsFile = path.join(wsDir, 'diff-viz.workspace.json');
+    write(
+      wsDir,
+      'diff-viz.workspace.json',
+      JSON.stringify({
+        name: 'scoped workspace',
+        scope: { mode: 'range', base: 'main' },
+        repos: [
+          { id: 'repo', path: repo },
+          { id: 'weird', path: weird, scope: { mode: 'worktree' } },
+        ],
+        links: [],
+      }),
+    );
+
+    const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
+    try {
+      const response = await fetch(`${server.url}api/workspace`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: wsFile }),
+      }).then((res) => res.json());
+      assert.equal(response.ok, true);
+      const data = await fetch(`${server.url}api/data?review=${response.reviewId}`).then((res) => res.json());
+      const scoped = data.meta.repos.find((item) => item.id === 'repo');
+      const worktree = data.meta.repos.find((item) => item.id === 'weird');
+      assert.equal(scoped.scopeMode, 'range');
+      assert.match(scoped.scopeLabel, /main/);
+      assert.equal(scoped.changed, true);
+      assert.equal(worktree.scopeMode, 'worktree');
+      assert.equal(worktree.changed, false);
+    } finally {
+      await server.close();
+    }
+  } finally {
+    cleanup(repo);
+    cleanup(weird);
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.rmSync(wsDir, { recursive: true, force: true });
   }
 });

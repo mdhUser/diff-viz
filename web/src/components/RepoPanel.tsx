@@ -42,6 +42,8 @@ export function RepoPanel({
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [loadingCommits, setLoadingCommits] = useState(false);
   const [commitsError, setCommitsError] = useState<string | null>(null);
+  const [allBranches, setAllBranches] = useState(false);
+  const [branch, setBranch] = useState<string | null>(null);
   const [newRoot, setNewRoot] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -100,11 +102,16 @@ export function RepoPanel({
     let cancelled = false;
     setLoadingCommits(true);
     setCommitsError(null);
-    fetch(`/api/commits?project=${encodeURIComponent(selectedId)}`, { cache: 'no-store' })
+    fetch(`/api/commits?project=${encodeURIComponent(selectedId)}&all=${allBranches ? '1' : '0'}`, {
+      cache: 'no-store',
+    })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const payload = (await response.json()) as { commits?: CommitInfo[] };
-        if (!cancelled) setCommits(payload.commits ?? []);
+        const payload = (await response.json()) as { commits?: CommitInfo[]; branch?: string };
+        if (!cancelled) {
+          setCommits(payload.commits ?? []);
+          setBranch(payload.branch ?? null);
+        }
       })
       .catch((loadError) => {
         if (!cancelled) setCommitsError(loadError instanceof Error ? loadError.message : String(loadError));
@@ -115,7 +122,7 @@ export function RepoPanel({
     return () => {
       cancelled = true;
     };
-  }, [open, selectedId]);
+  }, [open, selectedId, allBranches]);
 
   if (!open) return null;
   const selectedProject = projects.find((project) => project.id === selectedId) ?? projects[0];
@@ -253,9 +260,47 @@ export function RepoPanel({
               <span className="text-[9px] text-mist-600">打开</span>
             </button>
 
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-mist-500">版本链条</span>
-              {loadingCommits ? <Loader2 size={11} className="animate-spin text-accent" /> : null}
+            <div className="mb-2 flex items-center justify-between gap-2 px-1">
+              <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-mist-500">
+                版本链条
+                {branch ? (
+                  <span
+                    className="max-w-[150px] truncate rounded border border-line px-1 py-0.5 font-mono text-[8.5px] normal-case tracking-normal text-mist-600"
+                    title={`当前分支：${branch}`}
+                  >
+                    {branch}
+                  </span>
+                ) : null}
+              </span>
+              <span className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setAllBranches(false)}
+                  className={cn(
+                    'rounded border px-1.5 py-0.5 text-[9px] transition',
+                    allBranches
+                      ? 'border-transparent text-mist-600 hover:text-mist-400'
+                      : 'border-accent/25 bg-accent-soft text-accent-bright',
+                  )}
+                  title="只显示当前分支的历史"
+                >
+                  当前分支
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAllBranches(true)}
+                  className={cn(
+                    'rounded border px-1.5 py-0.5 text-[9px] transition',
+                    allBranches
+                      ? 'border-accent/25 bg-accent-soft text-accent-bright'
+                      : 'border-transparent text-mist-600 hover:text-mist-400',
+                  )}
+                  title="包含所有分支（含他人的远程分支）"
+                >
+                  全部分支
+                </button>
+                {loadingCommits ? <Loader2 size={11} className="animate-spin text-accent" /> : null}
+              </span>
             </div>
 
             {commitsError ? (

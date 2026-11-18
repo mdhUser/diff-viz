@@ -97,6 +97,8 @@ export interface WorkspaceRepo {
   branch?: string;
   reviewId: string;
   changed: boolean;
+  scopeMode?: string;
+  scopeLabel?: string;
   depth: number | null;
   impactOrigins: string[];
   stats?: {
@@ -125,6 +127,7 @@ export interface WorkspaceMeta {
   repos: WorkspaceRepo[];
   serviceEdges: ServiceEdge[];
   warnings?: string[];
+  notes?: string[];
 }
 
 export interface ReviewData {

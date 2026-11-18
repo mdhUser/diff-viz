@@ -166,8 +166,15 @@ function getWorktreeContent(repo, filePath) {
   }
 }
 
-function readContent(repo, scope, filePath, side) {
+function readContent(repo, scope, filePath, side, prefetched = null) {
   if (!filePath) return null;
+  if (prefetched) {
+    const ref = side === 'new' ? scope.newRef : scope.baseRef;
+    if (ref) {
+      const key = `${ref}\u0000${filePath}`;
+      if (prefetched.has(key)) return prefetched.get(key);
+    }
+  }
   if (side === 'new') {
     if (scope.mode === 'WORKTREE' || scope.mode === 'worktree') return getWorktreeContent(repo, filePath);
     if (scope.mode === 'staged') return repo.showIndex(filePath);
@@ -177,24 +184,43 @@ function readContent(repo, scope, filePath, side) {
   return repo.show(scope.baseRef, filePath);
 }
 
+// Changed-file contents at a revision are read in two batch calls (base ref and
+// target ref) instead of two `git show` processes per changed file.
+function prefetchRevContents(repo, scope, files) {
+  if (scope.mode !== 'rev') return null;
+  const jobs = new Map();
+  const add = (ref, filePath) => {
+    if (!ref || !filePath) return;
+    if (!jobs.has(ref)) jobs.set(ref, new Set());
+    jobs.get(ref).add(filePath);
+  };
+  for (const file of files) {
+    const oldPath = file.oldPath || file.path;
+    if (file.status !== 'added') add(scope.baseRef, oldPath);
+    if (file.status !== 'deleted') add(scope.newRef, file.path);
+  }
+  const contents = new Map();
+  for (const [ref, paths] of jobs) {
+    const read = repo.readFilesAt(ref, [...paths]);
+    for (const [filePath, buffer] of read) contents.set(`${ref}\u0000${filePath}`, buffer);
+  }
+  return contents;
+}
+
 function addedLineCount(content) {
   if (!content) return 0;
   if (content === '') return 0;
   return content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
 }
 
-function loadFileContents(repo, scope, file) {
+function loadFileContents(repo, scope, file, prefetched = null) {
   const oldPath = file.oldPath || file.path;
   const newPath = file.path;
   let oldBuffer = null;
   let newBuffer = null;
 
-  if (file.status !== 'added') oldBuffer = readContent(repo, scope, oldPath, 'old');
-  if (file.status !== 'deleted') {
-    if (scope.mode === 'worktree') newBuffer = getWorktreeContent(repo, newPath);
-    else if (scope.mode === 'staged') newBuffer = repo.showIndex(newPath);
-    else newBuffer = repo.show(scope.newRef, newPath);
-  }
+  if (file.status !== 'added') oldBuffer = readContent(repo, scope, oldPath, 'old', prefetched);
+  if (file.status !== 'deleted') newBuffer = readContent(repo, scope, newPath, 'new', prefetched);
 
   const binary =
     Boolean(file.binary) ||
@@ -409,11 +435,12 @@ export function buildReviewData(repo, options = {}) {
   const { scope, files: parsedFiles, warnings } = collectChangeSet(repo, options);
   const changedFiles = [];
   const seenPaths = new Set();
+  const prefetchedContents = prefetchRevContents(repo, scope, parsedFiles);
 
   for (const file of parsedFiles) {
     if (!file.path || seenPaths.has(file.path)) continue;
     seenPaths.add(file.path);
-    const contents = loadFileContents(repo, scope, file);
+    const contents = loadFileContents(repo, scope, file, prefetchedContents);
     const patch = clampText(file.patch, MAX_PATCH_CHARS);
     const node = {
       id: file.path,
