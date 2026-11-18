@@ -8,6 +8,18 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-18
+
+### Fixed
+
+- Windows 上 `diff-viz skill install` 默认改为复制 `SKILL.md`：Windows 创建符号链接需要开发者模式，之前会静默回退，现在直接按复制处理，`--dry-run` 也如实报告。
+- 测试脚本改用 `node --test` 自动发现用例，不再依赖 shell 展开 `test/*.test.mjs`（Windows 的 cmd 不展开通配符，CI 上直接跑不起来）。
+
+### Changed
+
+- CI 矩阵扩展到 `ubuntu-latest` / `macos-latest` / `windows-latest`，并在 ubuntu 上补跑 Node 24。
+- 修掉三处平台假设：Windows 的 8.3 短路径、symlink 断言、CRLF 换行。
+
 ## [0.7.0] - 2026-11-18
 
 ### Added
