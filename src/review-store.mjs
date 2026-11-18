@@ -323,12 +323,18 @@ export function removeReviewStore(target) {
 
 /** True when `candidate` is the same path as, or inside, `root`. */
 export function isInside(root, candidate) {
+  // realpathSync.native expands Windows 8.3 short paths (RUNNER~1 → runneradmin),
+  // so both sides end up in the same form and the relative check stays reliable.
   const real = (value) => {
     const absolute = path.resolve(value);
     try {
-      return fs.realpathSync(absolute);
+      return fs.realpathSync.native(absolute);
     } catch {
-      return absolute;
+      try {
+        return fs.realpathSync(absolute);
+      } catch {
+        return absolute;
+      }
     }
   };
   const relative = path.relative(real(root), real(candidate));

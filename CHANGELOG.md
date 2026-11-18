@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-18
+
+### Fixed
+
+- Windows 上 hub 按 `dataPath` 导入 Review 时，`fs.realpathSync` 返回 8.3 短路径（`RUNNER~1`）而目标路径是长路径，导致「数据在仓库内」判定失败、回退成整份上传后报格式错误。改用 `realpathSync.native` 统一两侧路径形式。
+- 工作区模板测试改用 `os.tmpdir()`，不再假设 POSIX 的 `/tmp`。
+
+> 0.8.0 的 Windows CI 因此为红色；0.8.1 是同一批改动的补丁版本。
+
 ## [0.8.0] - 2026-11-18
 
 ### Added

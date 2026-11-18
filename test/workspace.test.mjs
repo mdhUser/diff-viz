@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {
   computeServiceImpact,
@@ -97,7 +98,7 @@ test('loads a workspace file and validates its shape', () => {
 });
 
 test('workspace template picks up sibling git repositories', () => {
-  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'dv-ws-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dv-ws-'));
   const a = path.join(dir, 'alpha');
   const b = path.join(dir, 'beta');
   fs.mkdirSync(path.join(a, '.git'), { recursive: true });
