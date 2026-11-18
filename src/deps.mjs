@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { isProbablyBinary, naturalCompare, readJsonSafe, toPosix } from './util.mjs';
+import { isProbablyBinary, naturalCompare, toPosix } from './util.mjs';
 import { readScanCache, writeScanCache } from './cache.mjs';
 import {
   EMPTY_REGISTRY,
@@ -392,7 +392,7 @@ function loadGoModule(root, readFile = (name) => readText(path.join(root, name))
 /* workspace packages                                                  */
 /* ------------------------------------------------------------------ */
 
-function expandWorkspacePattern(root, pattern) {
+function expandWorkspacePattern(root, pattern, snapshotDirs = null) {
   const cleaned = pattern.replace(/^\.\//, '').replace(/\/+$/, '');
   if (!cleaned) return [];
   if (!cleaned.includes('*')) return [cleaned];
@@ -404,6 +404,15 @@ function expandWorkspacePattern(root, pattern) {
     for (const base of dirs) {
       if (part !== '*') {
         next.push(base ? `${base}/${part}` : part);
+        continue;
+      }
+      if (snapshotDirs) {
+        for (const dir of snapshotDirs) {
+          if (dirnamePosix(dir) !== base) continue;
+          const name = path.posix.basename(dir);
+          if (name === 'node_modules' || name.startsWith('.')) continue;
+          next.push(dir);
+        }
         continue;
       }
       let entries = [];
@@ -422,18 +431,34 @@ function expandWorkspacePattern(root, pattern) {
   return dirs;
 }
 
-function loadWorkspacePackages(root) {
-  const manifest = readJsonSafe(path.join(root, 'package.json'));
+function loadWorkspacePackages(root, readFile = (name) => readText(path.join(root, name)), snapshotFiles = null) {
+  const readManifest = (name) => {
+    try {
+      return JSON.parse(readFile(name));
+    } catch {
+      return null;
+    }
+  };
+  const manifest = readManifest('package.json');
   if (!manifest) return new Map();
   const raw = Array.isArray(manifest.workspaces)
     ? manifest.workspaces
     : Array.isArray(manifest.workspaces?.packages)
       ? manifest.workspaces.packages
       : [];
-  const dirs = [...new Set(raw.flatMap((pattern) => expandWorkspacePattern(root, String(pattern))))];
+  // Expand workspace globs from the index, including directories absent on disk.
+  const snapshotDirs = snapshotFiles ? new Set() : null;
+  for (const file of snapshotFiles || []) {
+    let dir = dirnamePosix(file);
+    while (dir) {
+      snapshotDirs.add(dir);
+      dir = dirnamePosix(dir);
+    }
+  }
+  const dirs = [...new Set(raw.flatMap((pattern) => expandWorkspacePattern(root, String(pattern), snapshotDirs)))];
   const packages = new Map();
   for (const dir of dirs) {
-    const pkg = readJsonSafe(path.join(root, dir, 'package.json'));
+    const pkg = readManifest(`${dir}/package.json`);
     if (!pkg?.name) continue;
     let entry = pkg.source || pkg.module || pkg.main;
     if (typeof entry === 'string') {
@@ -475,14 +500,9 @@ export function createResolver({
   registry = EMPTY_REGISTRY,
   packageIndexes = new Map(),
 }) {
-  const pythonRoots = ['', 'src', 'lib'].filter((prefix) => {
-    if (!prefix) return true;
-    try {
-      return fs.statSync(path.join(root, prefix)).isDirectory();
-    } catch {
-      return false;
-    }
-  });
+  const pythonRoots = ['', 'src', 'lib'].filter(
+    (prefix) => !prefix || [...fileSet].some((file) => file.startsWith(`${prefix}/`)),
+  );
 
   const goFilesByDir = new Map();
   for (const filePath of fileSet) {
@@ -720,6 +740,7 @@ export function scanRepository(
     includeUntracked = true,
     maxFiles = MAX_SCAN_FILES,
     gitRef = null,
+    gitIndex = false,
     useCache = true,
     registry = EMPTY_REGISTRY,
   } = {},
@@ -727,12 +748,12 @@ export function scanRepository(
   const warnings = [];
   const allFiles = gitRef
     ? repo.listFilesAt(gitRef)
-    : repo.listFiles({ includeUntracked });
+    : repo.listFiles({ includeUntracked: !gitIndex && includeUntracked });
   const absoluteRoot = repo.root;
   const readTextAt = (relativePath) => {
     try {
-      if (gitRef) {
-        const buffer = repo.show(gitRef, relativePath);
+      if (gitRef || gitIndex) {
+        const buffer = gitRef ? repo.show(gitRef, relativePath) : repo.showIndex(relativePath);
         return buffer ? buffer.toString('utf8') : null;
       }
       return readText(path.join(absoluteRoot, relativePath));
@@ -762,18 +783,20 @@ export function scanRepository(
 
   const tsconfig = loadTsconfig(absoluteRoot, readTextAt);
   const goModule = loadGoModule(absoluteRoot, readTextAt);
-  const workspacePackages = gitRef ? new Map() : loadWorkspacePackages(absoluteRoot);
+  const workspacePackages = gitRef
+    ? new Map()
+    : loadWorkspacePackages(absoluteRoot, readTextAt, gitIndex ? allFiles : null);
 
-  // Parsing is a pure function of file content, so an mtime+size key is enough
-  // to skip re-reading unchanged files between runs.
-  const caching = useCache && !gitRef && process.env.DIFF_VIZ_NO_CACHE !== '1';
+  // Disk metadata only identifies worktree content; index/revision scans must
+  // neither reuse nor overwrite the worktree cache.
+  const caching = useCache && !gitRef && !gitIndex && process.env.DIFF_VIZ_NO_CACHE !== '1';
   const cached = caching ? readScanCache(repo.root) : { files: {} };
   const nextCache = {};
 
   for (const filePath of candidates) {
     const absolute = path.join(absoluteRoot, filePath);
     let key = null;
-    if (!gitRef) {
+    if (!gitRef && !gitIndex) {
       try {
         const stat = fs.statSync(absolute);
         if (!stat.isFile() || stat.size > MAX_SOURCE_BYTES) {
@@ -795,8 +818,8 @@ export function scanRepository(
     }
 
     let buffer;
-    if (gitRef) {
-      buffer = repo.show(gitRef, filePath);
+    if (gitRef || gitIndex) {
+      buffer = gitRef ? repo.show(gitRef, filePath) : repo.showIndex(filePath);
       if (!buffer) continue;
       if (buffer.length > MAX_SOURCE_BYTES) {
         skippedLarge += 1;

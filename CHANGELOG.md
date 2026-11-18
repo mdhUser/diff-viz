@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `--staged` 的依赖图统一读取 Git 暂存区中的源码、TS 路径别名、Go module 和 workspace 包配置；未暂存的 import 修改、文件删除及未跟踪文件不再造成影响分析漏报或误报，且不会复用工作区解析缓存。
+
 ## [0.7.0] - 2026-11-18
 
 ### Added

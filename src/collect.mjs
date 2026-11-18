@@ -438,6 +438,7 @@ export function buildReviewData(repo, options = {}) {
     includeUntracked: !scanRef && options.untracked !== false,
     maxFiles: options.maxScanFiles ?? 15000,
     gitRef: scanRef,
+    gitIndex: !scanRef && scope.mode === 'staged',
     registry,
   });
   warnings.push(...scan.warnings);
