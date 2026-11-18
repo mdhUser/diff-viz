@@ -8,6 +8,27 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-18
+
+### Added
+
+- 多仓库工作区：`diff-viz workspace` 读取 `diff-viz.workspace.json`，一次分析多个仓库并生成服务级改动拓扑；`workspace --init` 扫描同级仓库生成模板，`--workspace <file>` 指定其他文件。
+- 服务间依赖识别：自动读取 `package.json` / `pom.xml` / `go.mod` / `build.gradle(.kts)` / `*.csproj` / `composer.json`，把依赖坐标与兄弟仓库的产物坐标对上；静态解析不可靠的 RPC / HTTP 调用通过 `links` 声明补边。
+- 跨服务影响传播：仓库改动后，依赖它的仓库标记为「受影响」并给出层级，服务级图上按依赖方向高亮；点击服务卡片进入该仓库原有的文件级拓扑。
+
+### Changed
+
+- **Review 存储改为拆分格式（解决大文件问题）**：`.diff-review-data.json` 只保留 `meta` / `edges` / 节点元数据，`diff`、`oldContent`、`newContent` 拆到同级 `<data>.nodes/` 目录（`storage.format: 2`）；hub 快照同样改为 `<reviewId>/manifest.json` + `nodes/`。`annotate` 只重写清单，`--node` 时不再读取或改写任何节点内容文件。84 MB / 120 节点的 Review 实测：`annotate --node` 从 2.9 s、峰值内存 670 MB 降到 0.06 s、60 MB（暖缓存对比 0.43 s / 545 MB）；无 `--node` 时同样只写清单。
+- 浏览器按需加载节点内容：`/api/data` 只返回清单，打开详情抽屉时才请求 `GET /api/node?review=<id>&id=<path>`；同 Review 内切换文件不会重复下载整份数据。需要完整数据的老脚本可用 `/api/data?review=<id>&full=1`。
+- hub 的 `POST /api/state`（勾选 TODO / 标记 Review / 忽略）只改清单，不再整份读写 Review；`annotate` 同步 hub 改用新增的 `POST /api/annotate`，只上传注解。
+- CLI → hub 的导入支持 `dataPath`：数据文件在仓库内时由 hub 直接复制节点文件，不再把整份 Review 序列化进 HTTP body（跨仓库/外部路径仍回退为完整上传）。
+
+### Fixed
+
+- 旧的单文件 Review（`.diff-review-data.json` 或 `~/.diff-viz/reviews/<id>.json`）仍可读取；第一次写回时自动升级为拆分格式，hub 也能继续加载旧快照。
+- 升级时如果旧版本的 hub 进程还在跑：`review` / `serve` 会自动回退到整份上传而不是报错；`annotate` 会提示重启 hub 后再看注解（不会为了同步重新读写整份大文件）。
+- `<data>.nodes/` 目录不再被 `git status` 当成未跟踪文件：数据文件写入时同时把节点目录加入 `.git/info/exclude`，未跟踪文件扫描也会跳过该目录。
+
 ## [0.7.1] - 2026-11-18
 
 ### Fixed

@@ -329,13 +329,21 @@ function synthesizeUntrackedSections(repo, scope, options = {}) {
   const warnings = [];
   if (!scope.includeUntracked) return { files, warnings };
   const excluded = new Set(ALWAYS_EXCLUDED);
+  const excludedPrefixes = [];
   for (const excludePath of options.excludePaths ?? []) {
     if (!excludePath) continue;
     const relative = path.relative(repo.root, excludePath);
-    if (relative && !relative.startsWith('..')) excluded.add(toPosix(relative));
+    if (relative && !relative.startsWith('..')) {
+      const posix = toPosix(relative);
+      excluded.add(posix);
+      // Split review storage keeps hundreds of node payload files in a sibling
+      // directory; they must never show up as untracked source files.
+      excludedPrefixes.push(`${posix}/`);
+    }
   }
   let candidates = repo.listUntracked().map(toPosix).filter((filePath) => {
     if (excluded.has(filePath)) return false;
+    if (excludedPrefixes.some((prefix) => filePath.startsWith(prefix))) return false;
     if (filePath.startsWith('.diff-review/')) return false;
     return true;
   });

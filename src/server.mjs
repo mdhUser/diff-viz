@@ -4,7 +4,8 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { formatTimestamp, readJsonSafe, shortId, writeJsonAtomic } from './util.mjs';
+import { readReviewStore } from './review-store.mjs';
+import { formatTimestamp, shortId } from './util.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, '..', 'dist');
@@ -64,10 +65,10 @@ async function readBody(req, limit = 1024 * 1024) {
 }
 
 export function updateReviewState(dataPath, payload) {
-  const data = readJsonSafe(dataPath);
-  if (!data) throw new Error('找不到数据文件，请先运行 diff-viz 生成数据。');
+  const store = readReviewStore(dataPath);
+  const data = store.manifest;
   if (!Array.isArray(data.nodes)) throw new Error('数据文件格式不正确。');
-  const node = data.nodes.find((item) => item.path === payload.nodeId || item.id === payload.nodeId);
+  const node = store.findNode(payload.nodeId);
   if (!node) throw new Error(`节点不存在：${payload.nodeId}`);
 
   if (payload.action === 'addTodo') {
@@ -84,7 +85,9 @@ export function updateReviewState(dataPath, payload) {
     node.todos = Array.isArray(node.todos) ? node.todos : [];
     node.todos.push(todo);
     data.meta.updatedAt = formatTimestamp();
-    writeJsonAtomic(dataPath, data);
+    // Split storage only rewrites the manifest here; the per-node payload keeps
+    // the original source and is never read or rewritten for a todo toggle.
+    store.save();
     return { ok: true, todo };
   }
 
@@ -97,7 +100,7 @@ export function updateReviewState(dataPath, payload) {
   if (payload.reviewed !== undefined) node.reviewed = Boolean(payload.reviewed);
   if (payload.ignored !== undefined) node.ignored = Boolean(payload.ignored);
   data.meta.updatedAt = formatTimestamp();
-  writeJsonAtomic(dataPath, data);
+  store.save();
   return { ok: true };
 }
 
@@ -121,12 +124,26 @@ function createRequestHandler({ dataPath }) {
           sendJson(res, 404, { error: '数据文件不存在，请重新运行 diff-viz。' });
           return;
         }
-        const raw = await fsp.readFile(dataPath, 'utf8');
+        const store = readReviewStore(dataPath);
+        // The legacy single-review server predates lazy node loading, so keep
+        // serving the complete payload here.
+        const body = JSON.stringify(store.toFullData());
         res.writeHead(200, {
           'Content-Type': 'application/json; charset=utf-8',
           'Cache-Control': 'no-store',
         });
-        res.end(raw);
+        res.end(body);
+        return;
+      }
+
+      if (pathname === '/api/node') {
+        const store = readReviewStore(dataPath);
+        const node = store.readNode(url.searchParams.get('id'));
+        if (!node) {
+          sendJson(res, 404, { error: '节点不存在。' });
+          return;
+        }
+        sendJson(res, 200, node);
         return;
       }
 

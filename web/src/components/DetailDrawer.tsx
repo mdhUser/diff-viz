@@ -56,7 +56,7 @@ export function DetailDrawer({
   const [copied, setCopied] = useState(false);
   const meta = STATUS_META[node.status];
   const Icon = meta.icon;
-  const hunkCount = (node.diff.match(/^@@/gm) || []).length;
+  const hunkCount = node.hunkCount ?? (node.diff ? (node.diff.match(/^@@/gm) || []).length : 0);
   const todoOpen = todos.filter((todo) => !isTodoDone(todo)).length;
 
   useEffect(() => {

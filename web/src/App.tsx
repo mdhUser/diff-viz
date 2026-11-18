@@ -18,6 +18,7 @@ import { Legend } from './components/Legend';
 import { DetailDrawer } from './components/DetailDrawer';
 import { ResizeHandle } from './components/ResizeHandle';
 import { RepoPanel } from './components/RepoPanel';
+import { WorkspaceView } from './components/WorkspaceView';
 import { computeLayout } from './layout';
 import { cn } from './cn';
 
@@ -382,6 +383,51 @@ export function App() {
     [data, selectedId],
   );
 
+  // v2 reviews ship node metadata only; the diff payload is fetched when a
+  // drawer is opened so large reviews never download every file at once.
+  useEffect(() => {
+    if (!selectedId || !currentReviewId || !data) return undefined;
+    const node = data.nodes.find((item) => item.id === selectedId);
+    if (!node || node.status === 'impacted_only' || node.contentLoaded) return undefined;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/node?review=${encodeURIComponent(currentReviewId)}&id=${encodeURIComponent(selectedId)}`,
+          { cache: 'no-store' },
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const full = (await response.json()) as ReviewNode;
+        if (cancelled) return;
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                nodes: current.nodes.map((item) =>
+                  item.id === selectedId ? { ...item, ...full, contentLoaded: true } : item,
+                ),
+              }
+            : current,
+        );
+      } catch {
+        if (cancelled) return;
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                nodes: current.nodes.map((item) =>
+                  item.id === selectedId ? { ...item, contentLoaded: true, contentMissing: true } : item,
+                ),
+              }
+            : current,
+        );
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data, selectedId, currentReviewId]);
+
   const isTodoDone = useCallback(
     (nodeId: string, todo: ReviewTodo) => todoOverrides[`${nodeId}::${todo.id}`] ?? Boolean(todo.completed),
     [todoOverrides],
@@ -608,6 +654,20 @@ export function App() {
           </button>
         </div>
       </div>
+    );
+  }
+
+  if (data && data.meta.workspace) {
+    return (
+      <WorkspaceView
+        data={data}
+        refreshing={refreshing}
+        onOpenReview={(reviewId) => {
+          setCurrentReviewId(reviewId);
+          void fetchReview(reviewId);
+        }}
+        onRefresh={() => void refreshReview()}
+      />
     );
   }
 

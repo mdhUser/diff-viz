@@ -21,9 +21,15 @@ export interface ReviewNode {
   summary: string;
   impactAnalysis: string;
   todos: ReviewTodo[];
-  diff: string;
+  diff?: string;
   oldContent?: string;
   newContent?: string;
+  // v2 storage keeps the heavy fields in per-node payload files; the graph
+  // payload only carries metadata plus these loading hints.
+  payload?: string;
+  hunkCount?: number;
+  contentLoaded?: boolean;
+  contentMissing?: boolean;
   language?: string;
   oldPath?: string;
   renamed?: boolean;
@@ -72,6 +78,7 @@ export interface ReviewMeta {
   updatedAt?: string;
   warnings?: string[];
   durationMs?: number;
+  workspace?: boolean;
   stats: {
     changedFiles: number;
     impactedFiles: number;
@@ -81,6 +88,43 @@ export interface ReviewMeta {
     edges?: number;
     scannedFiles?: number;
   };
+}
+
+export interface WorkspaceRepo {
+  id: string;
+  name: string;
+  root: string;
+  branch?: string;
+  reviewId: string;
+  changed: boolean;
+  depth: number | null;
+  impactOrigins: string[];
+  stats?: {
+    changes?: number;
+    changedFiles?: number;
+    impactedFiles?: number;
+    additions?: number;
+    deletions?: number;
+    todos?: number;
+  };
+}
+
+export interface ServiceEdge {
+  id?: string;
+  from: string;
+  to: string;
+  kind: string;
+  via?: string;
+}
+
+export interface WorkspaceMeta {
+  workspace: true;
+  name: string;
+  file?: string;
+  stats: { repos: number; changed: number; impacted: number };
+  repos: WorkspaceRepo[];
+  serviceEdges: ServiceEdge[];
+  warnings?: string[];
 }
 
 export interface ReviewData {

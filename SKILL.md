@@ -138,6 +138,8 @@ diff-viz annotate \
 
 然后在浏览器点右上角刷新按钮。`annotate` 支持 `--annotations -` 从 stdin 读取。只改单个文件时用 `--node <path>` 过滤。
 
+`annotate` 只重写清单（`--node` 时也不碰节点内容文件），所以对大仓库反复写摘要不会变慢；运行中的 hub 会通过 `/api/annotate` 增量同步，无需重新上传整份 Review。
+
 ## hub 管理
 
 ```bash
@@ -169,8 +171,13 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 
 ## 数据契约（写入 `.diff-review-data.json`）
 
+数据是拆分存储：`.diff-review-data.json` 是清单（meta / edges / 节点元数据），
+`diff`、`oldContent`、`newContent` 在 `.diff-review-data.json.nodes/<payload>.json` 里，
+按需读取。Agent 通常不需要直接读这些文件，用 `--json-only` 的输出即可。
+
 ```json
 {
+  "storage": { "format": 2, "nodesDir": ".diff-review-data.json.nodes" },
   "meta": {
     "timestamp": "2026-11-13T10:00:00Z",
     "branch": "feature/x",
@@ -190,7 +197,8 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
       "todos": [
         { "id": "c-todo-17", "text": "TODO: ...", "source": "code_comment", "completed": false, "line": 17 }
       ],
-      "diff": "@@ ..."
+      "hunkCount": 3,
+      "payload": "0f2a6c8d1e3b4a5c6d7e"
     }
   ],
   "edges": [
@@ -206,6 +214,7 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 - 浏览器「依赖流向」按这个原始方向画箭头；「影响流向」则把真正的因果边画成 `变更文件 → 受影响文件`（标「影响」），改动文件之间按 `上游 → 下游` 画（标「上游」），用于 Review 顺序。
 - `impacted_only` 是未改动、但依赖链上受影响的文件；不要给它写 `summary`。
 - `nodes[].imports` / `importedBy` 是完整直接依赖列表（可能包含未画进图里的文件），详情抽屉会标「图外」。
+- 清单里没有 `diff` / `oldContent` / `newContent`：`nodes[].payload` 指向内容文件，浏览器打开详情时才加载（`GET /api/node?review=<id>&id=<path>`）。
 - 完整字段定义见 `README.md`。
 
 ## 支持的语言
@@ -217,6 +226,7 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 - Kotlin / C#：`import` / `using`，按声明的包名或命名空间 + 文件名索引解析。
 - Rust：`mod`、`use`（含 `crate::` / `super::` / `self::`）。
 - Ruby：`require_relative` / `require`。
+- 多仓库：`diff-viz workspace` 读取 `diff-viz.workspace.json`，按 manifest 识别包依赖、按 `links` 补充 RPC，生成服务级改动拓扑。
 - 其他语言：在仓库放 `.diff-viz/languages.json`，或用 `--languages <file>` 指定，声明扩展名、import 正则和解析策略即可。
 - 其他文件仍会作为变更节点展示，只是没有依赖边。
 
@@ -232,5 +242,5 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 
 ## 安全
 
-- 服务只绑定 `127.0.0.1`，但数据文件包含完整的旧/新文件内容。
-- 不要把 `.diff-review-data.json` / `.diff-review-annotations.json` 提交到 Git、上传或贴到公开渠道。
+- 服务只绑定 `127.0.0.1`，但数据文件包含完整的旧/新文件内容，节点内容拆在 `<data>.nodes/` 目录里。
+- 不要把 `.diff-review-data.json`、`.diff-review-data.json.nodes/`、`.diff-review-annotations.json` 提交到 Git、上传或贴到公开渠道。

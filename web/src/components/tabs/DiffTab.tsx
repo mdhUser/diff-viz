@@ -57,10 +57,14 @@ export function DiffTab({ node }: DiffTabProps) {
   const [splitView, setSplitView] = useState(false);
   const [fullFile, setFullFile] = useState(false);
 
-  const hunkCount = useMemo(() => (node.diff.match(/^@@/gm) || []).length, [node.diff]);
+  const hunkCount = useMemo(
+    () => node.hunkCount ?? (node.diff ? (node.diff.match(/^@@/gm) || []).length : 0),
+    [node.hunkCount, node.diff],
+  );
   const oldValue = node.oldContent ?? '';
   const newValue = node.newContent ?? '';
-  const noTextChange = !node.binary && oldValue === newValue;
+  const contentLoaded = node.contentLoaded === true || node.oldContent !== undefined || node.newContent !== undefined;
+  const noTextChange = contentLoaded && !node.binary && oldValue === newValue;
 
   if (node.status === 'impacted_only') {
     return (
@@ -78,6 +82,26 @@ export function DiffTab({ node }: DiffTabProps) {
         icon={<FileWarning size={22} />}
         title="二进制文件"
         description="diff-viz 不渲染二进制内容的文本 Diff，请在本地工具中对比该文件。"
+      />
+    );
+  }
+
+  if (node.contentMissing) {
+    return (
+      <EmptyPanel
+        icon={<FileWarning size={22} />}
+        title="节点内容缺失"
+        description="这个节点的内容文件已被清理或损坏，重新运行一次 diff-viz 即可恢复。"
+      />
+    );
+  }
+
+  if (!contentLoaded) {
+    return (
+      <EmptyPanel
+        icon={<Loader2 size={22} className="animate-spin text-accent" />}
+        title="正在加载文件内容"
+        description="大仓库的节点内容按需读取，只会加载当前文件。"
       />
     );
   }

@@ -32,6 +32,7 @@
 - **Agent 注解**：Agent 可把自己的总结、影响分析、风险点写入 JSON；界面直接展示并支持勾选确认。
 - **单 hub 复用**：多个仓库、多次分析共用一个常驻进程，不再为每次 Review 启动新端口。
 - **实时**：hub 监听文件变化并自动重算，页面通过 SSE 自动刷新，不用手动重跑。
+- **多仓库工作区**：`diff-viz workspace` 一次分析多个仓库，按 manifest 自动识别包依赖、按声明补充 RPC 调用，生成服务级改动拓扑并沿依赖方向传播影响。
 - **仓库与历史**：界面内按路径添加/移除仓库、切换已注册仓库，通过版本链条浏览最多 80 个提交（含分支、tag、merge），查看历史 commit 的 Diff + 依赖拓扑。
 - **状态持久化**：勾选、已 Review、忽略状态写回 hub 的 Review 缓存，同时备份到 `localStorage`。
 - **零运行时依赖**：CLI 只用 Node.js 内置模块；`dist/` 已包含构建好的前端资源。
@@ -57,7 +58,7 @@ diff-viz
 
 1. 当前工作区有改动 → Review 工作区（包含暂存与未暂存、未跟踪的新文件）。
 2. 工作区干净 → Review 最近一次提交。
-3. 生成 `.diff-review-data.json`。
+3. 生成 `.diff-review-data.json`（清单：meta / 依赖边 / 节点元数据）和 `.diff-review-data.json.nodes/`（每个节点一份 `diff` 与完整源码）。
 4. 确保一个常驻 hub 在 `http://127.0.0.1:5173`（端口被占用会自动递增），把本次结果注册进去并打开浏览器。
 5. CLI 随后退出；hub 留在后台，后续分析复用它。
 
@@ -110,10 +111,12 @@ diff-viz annotate \
 | `--last` | 最近一次提交 |
 | `--range <A..B\|A...B>` | 提交范围 |
 | `--base <ref>` | 与目标分支的 merge-base 比较 |
-| `--data <file>` | 数据文件路径，默认 `<repo>/.diff-review-data.json` |
+| `--data <file>` | 清单文件路径，默认 `<repo>/.diff-review-data.json`；节点内容写入同级 `<file>.nodes/` |
 | `--annotations <file>` | 生成时合并注解 JSON |
 | `--node <path>` | 仅用于 `annotate`：只更新指定节点的注解 |
 | `--languages <file>` | 额外语言定义 JSON，默认读取 `<repo>/.diff-viz/languages.json` |
+| `--workspace <file>` | 分析多仓库工作区并生成服务级拓扑 |
+| `--init` | 配合 `workspace` 命令，扫描同级仓库生成模板 |
 | `--summary <text>` | 覆盖整体摘要 |
 | `--impact-depth <n>` | 下游影响深度，默认 3（最多 6） |
 | `--max-impact <n>` | 最多展示受影响文件数，默认 120 |
@@ -126,6 +129,44 @@ diff-viz annotate \
 | `hub` | 前台启动/查看常驻 hub |
 | `stop` | 停止后台 hub |
 | `--quiet` | 减少日志输出 |
+
+## 多仓库工作区
+
+一次改动横跨几个服务时，单仓视图看不到服务之间的牵连。工作区模式把多个仓库一起分析，并在服务级别画出依赖与影响。
+
+```bash
+# 在仓库的父目录生成模板（自动收录同级的 git 仓库）
+diff-viz workspace --init
+
+# 分析并打开服务级拓扑（默认读取 ./diff-viz.workspace.json）
+diff-viz workspace
+
+# 指定其他 workspace 文件
+diff-viz --workspace path/to/diff-viz.workspace.json
+```
+
+`diff-viz.workspace.json`：
+
+```json
+{
+  "name": "订单链路改造",
+  "repos": [
+    { "id": "order", "path": "../order-service" },
+    { "id": "user", "path": "../user-service" },
+    { "id": "common", "path": "../common-lib" }
+  ],
+  "links": [
+    { "from": "order", "to": "user", "kind": "rpc", "via": "UserService/GetUser" }
+  ]
+}
+```
+
+- **包依赖自动识别**：读每个仓库的 `package.json` / `pom.xml` / `go.mod` / `build.gradle(.kts)` / `*.csproj` / `composer.json`，把「依赖坐标」和兄弟仓库的「产物坐标」对上，生成 `kind: manifest` 的边。
+- **RPC / HTTP 手工补充**：静态解析跨服务调用误报太高，这类边写在 `links` 里（`kind` 自定，`via` 会显示在图上）。指向未声明仓库的 link 会被忽略并给出警告。
+- **影响传播**：某个仓库有改动时，依赖它的仓库标记为「受影响」并给出层级，服务级图上按依赖方向高亮。
+- **点进单个服务**：服务卡片点开后进入该仓库原有的文件级拓扑，两套视图共享同一份改动数据。
+
+服务级图只回答「哪些服务改了、谁被牵连、按什么顺序看」；跨服务的文件级精确连边不在当前范围内。
 
 ## 界面
 
@@ -233,10 +274,13 @@ diff-viz skill install --dir ~/.config/my-agent/skills --copy
 
 ## 数据契约
 
-默认写入 `.diff-review-data.json`：
+默认写入 `.diff-review-data.json`（清单）和 `.diff-review-data.json.nodes/`（节点内容）。清单只保留 meta、依赖边和节点元数据，`diff` / `oldContent` / `newContent` 按节点拆到单独文件，`annotate` 与 hub 的状态写入因此不必整份读写大仓库的 Review。
+
+清单 `.diff-review-data.json`：
 
 ```json
 {
+  "storage": { "format": 2, "nodesDir": ".diff-review-data.json.nodes" },
   "meta": {
     "timestamp": "2026-11-13T10:00:00Z",
     "branch": "feature/auth-update",
@@ -256,13 +300,11 @@ diff-viz skill install --dir ~/.config/my-agent/skills --copy
       "todos": [
         { "id": "c-todo-17", "text": "TODO: ...", "source": "code_comment", "completed": false, "line": 17 }
       ],
-      "diff": "@@ -1,27 +1,39 @@ ...",
-      "oldContent": "...",
-      "newContent": "...",
+      "hunkCount": 3,
+      "payload": "0f2a6c8d1e3b4a5c6d7e",
       "language": "typescript",
       "imports": ["src/utils/format.ts"],
       "importedBy": ["src/api/routes.ts", "src/auth/refresh.ts"]
-
     }
   ],
   "edges": [
@@ -271,12 +313,25 @@ diff-viz skill install --dir ~/.config/my-agent/skills --copy
 }
 ```
 
+节点内容 `.diff-review-data.json.nodes/<payload>.json`：
+
+```json
+{
+  "diff": "@@ -1,27 +1,39 @@ ...",
+  "oldContent": "...",
+  "newContent": "..."
+}
+```
+
 约定：
 
 - `status`: `added` | `modified` | `deleted` | `impacted_only`。
 - `edges.source` **import 了** `edges.target`（依赖边）。UI 的「影响流向」会在渲染时反向画箭头。
 - `impacted_only` 表示该文件没有改动，但（间接）依赖了变更文件。
-- `oldContent` / `newContent` 是完整文件内容，仅用于浏览器内 Diff；超过 400,000 字符会截断。
+- `storage.format: 2` 表示拆分存储；`nodes[].payload` 指向 `<nodesDir>/<payload>.json`，`hunkCount` 是改动区块数（避免为了显示计数去读内容文件）。
+- `oldContent` / `newContent` 是完整文件内容，仅用于浏览器内 Diff；超过 400,000 字符会截断。它们只在节点内容文件里，浏览器打开详情时通过 `/api/node` 按需加载。
+- `annotate` 只重写清单：`--node <path>` 时同样不会读取或改写任何节点内容文件。旧版单文件数据仍可读取，第一次写回时自动升级成拆分格式。
+- 需要整份数据（脚本/兼容用途）时用 `/api/data?review=<id>&full=1`，hub 会临时合并节点内容。
 - `impactChain` 是受影响文件的传播路径（如 `["src/a.ts","src/b.ts","src/c.ts"]`），第一个元素是触发它的变更文件。
 - `ignored` 表示该节点被人工标记为无关改动；`reviewed` 表示已 Review，二者都会在重新生成时保留。
 - `imports` / `importedBy` 是该文件**完整**的直接依赖列表，包含没有画进图里的上游文件；详情抽屉会把这些文件标成「图外」。
@@ -324,8 +379,9 @@ diff-viz skill install --dir ~/.config/my-agent/skills --copy
 
 ## 状态持久化
 
-- 勾选 TODO / 标记 Review → `POST /api/state` → 写回 hub 中对应的 Review 缓存。
+- 勾选 TODO / 标记 Review → `POST /api/state` → 只重写 hub 中对应 Review 的清单，不碰节点内容文件。
 - 同时写入 `localStorage`，hub 不可用时仍可勾选。
+- `annotate` 同步到 hub 走 `/api/annotate`，只传注解而不是整份 Review；页面点右上角刷新即可看到。
 - 重新生成同一 Review 时，会按 todo id / 文本保留完成状态、已 Review 标记和忽略标记，并保留手工添加的备注。
 - hub 只监听 `127.0.0.1`，不对局域网开放。
 
@@ -337,10 +393,13 @@ diff-viz/
 ├── src/
 │   ├── cli.mjs             # 参数解析与命令
 │   ├── collect.mjs         # diff → 依赖图 → 数据文件
+│   ├── review-store.mjs    # 拆分存储：清单 + 逐节点内容文件、旧格式读取/升级
 │   ├── diff-parse.mjs      # unified diff 解析 / TODO 扫描
 │   ├── deps.mjs            # JS/TS、Python、Go、Java import 解析 + 扫描缓存
 │   ├── cache.mjs           # 文件级解析缓存（mtime + size）
 │   ├── languages.mjs       # 语言注册表（内置 + 自定义语言）
+│   ├── workspace.mjs       # 多仓库工作区：manifest 依赖检测、服务级影响传播
+│   ├── review-store.mjs    # Review 拆分存储（manifest + 节点内容目录）
 │   ├── git.mjs             # Git 命令封装、.git/info/exclude 写入
 │   ├── hub.mjs             # 常驻 hub：仓库注册、历史 Review、watch/SSE、状态 API
 │   ├── server.mjs          # 单 Review HTTP 服务（兼容/测试）
@@ -434,7 +493,7 @@ npm run package:skill:standalone  # 可选：离线自包含包（含 bin/src/di
 - 二进制文件只标记状态，不渲染文本 Diff。
 - 自动刷新只对 hub **本进程里分析过**的仓库生效；hub 重启后需要再运行一次 `diff-viz` 才会重新挂监听。commit / range 这类历史 Review 不会自动重算。
 - `fs.watch` 的 recursive 模式在 macOS / Windows 可用，Linux 上 Node 不支持，会自动退化为不监听；也可以用 `DIFF_VIZ_NO_WATCH=1` 主动关闭。
-- 数据文件包含完整源码内容，**不要提交到 Git 或分享**；`~/.diff-viz/reviews` 里的缓存同样是完整源码（已收紧到 0600，并按数量自动清理）。
+- 数据文件（清单 + `<data>.nodes/` 目录）包含完整源码内容，**不要提交到 Git 或分享**；节点目录会自动写入 `.git/info/exclude`。`~/.diff-viz/reviews` 里的缓存同样是完整源码（目录 0700、文件 0600，并按数量自动清理）。
 
 ## 最近版本
 

@@ -4,9 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { ensureGitExcluded, findRepoRoot, GitRepo } from './git.mjs';
 import { applyAnnotations, buildReviewData, mergePreviousState } from './collect.mjs';
 import { ensureHub, hubIsAlive, readHubInfo, startHub, stopHub } from './hub.mjs';
+import { workspaceTemplate } from './workspace.mjs';
+import { isInside, readReviewStore, reviewLayout, writeReviewStore } from './review-store.mjs';
 import { openInBrowser } from './server.mjs';
 import { AGENTS, agentNames, installSkill } from './skill.mjs';
-import { readJsonSafe, writeJsonAtomic } from './util.mjs';
+import { writeJsonAtomic } from './util.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
@@ -20,6 +22,7 @@ diff-viz · 本地代码变更可视化 Review 工具
   diff-viz annotate [选项]           将 Agent/人工总结合并进数据文件
   diff-viz hub [选项]                前台启动常驻 hub（只启动一次）
   diff-viz stop                      停止本地 hub
+  diff-viz workspace [--init]        分析多仓库工作区（读取 ./diff-viz.workspace.json）
   diff-viz skill install [选项]      把薄 SKILL.md 注册到 Agent 技能目录
 
 范围 (默认: 工作区有改动则看工作区，否则看最近一次提交):
@@ -29,7 +32,7 @@ diff-viz · 本地代码变更可视化 Review 工具
   --base <ref>            查看与目标分支的差异 (merge-base..HEAD)
 
 输出与界面:
-  --data <file>           数据文件路径 (默认 <repo>/.diff-review-data.json)
+  --data <file>           清单文件路径 (默认 <repo>/.diff-review-data.json，节点内容存 <file>.nodes/)
   --annotations <file>    生成时合并注解文件 (JSON，见 SKILL.md)
   --node <path>           annotate 时只更新指定节点
   --languages <file>      额外语言定义 JSON（也可放 <repo>/.diff-viz/languages.json）
@@ -44,6 +47,10 @@ diff-viz · 本地代码变更可视化 Review 工具
   --max-impact <n>        最多展示多少个受影响文件 (默认 120)
   --no-untracked          不把未跟踪的新文件纳入 Review
   --repo <dir>            指定仓库目录 (默认当前目录)
+
+工作区 (多仓库):
+  --workspace <file>      指定 workspace JSON，分析其中所有仓库并生成服务级拓扑
+  --init                  配合 workspace 命令，生成 workspace 模板
 
 Skill:
   --agent <name>          dsh | claude | cursor | agents（默认 dsh）
@@ -91,6 +98,7 @@ const BOOLEAN_FLAGS = new Set([
   'version',
   'quiet',
   'verbose',
+  'init',
 ]);
 
 const VALUE_FLAGS = new Set([
@@ -106,6 +114,7 @@ const VALUE_FLAGS = new Set([
   'repo',
   'node',
   'languages',
+  'workspace',
 ]);
 
 function toCamel(name) {
@@ -116,7 +125,7 @@ export function parseArgs(argv) {
   const options = { command: 'review' };
   let index = 0;
   if (argv[0] && !argv[0].startsWith('-')) {
-    if (!['review', 'serve', 'annotate', 'hub', 'stop'].includes(argv[0])) {
+    if (!['review', 'serve', 'annotate', 'hub', 'stop', 'workspace'].includes(argv[0])) {
       throw new Error(`未知命令：${argv[0]}`);
     }
     options.command = argv[0];
@@ -169,11 +178,16 @@ function dataPathFor(repo, options) {
 
 // Keep the generated data file out of `git status`. Writing to .git/info/exclude
 // avoids touching the user's .gitignore, so nothing shows up in their diff.
+// Node payloads live in a sibling directory, which needs the same treatment.
 function hideDataFile(repo, dataPath) {
   const relative = path.relative(repo.root, dataPath);
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return;
   try {
     ensureGitExcluded(repo.root, relative);
+    const nodesRelative = path.relative(repo.root, reviewLayout(dataPath).nodesDir);
+    if (nodesRelative && !nodesRelative.startsWith('..') && !path.isAbsolute(nodesRelative)) {
+      ensureGitExcluded(repo.root, `${nodesRelative}/`);
+    }
   } catch {
     /* never fail a review because of an unwritable exclude file */
   }
@@ -207,28 +221,71 @@ function printSummary(data, dataPath) {
   process.stdout.write(`  数据        ${dataPath}\n`);
 }
 
-async function uploadReview(hubUrl, { root, data, reviewId }) {
-  let response;
+async function callHub(hubUrl, endpoint, body) {
   try {
-    response = await fetch(new URL('api/import', hubUrl), {
+    return await fetch(new URL(endpoint, hubUrl), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ root, data, reviewId }),
+      body: JSON.stringify(body),
     });
   } catch (error) {
     throw new Error(`无法连接 diff-viz hub：${error instanceof Error ? error.message : String(error)}`);
   }
-  if (!response.ok) {
-    let detail = `HTTP ${response.status}`;
-    try {
-      const payload = await response.json();
-      if (payload?.error) detail = payload.error;
-    } catch {
-      /* ignore */
-    }
-    throw new Error(`注册 Review 到 hub 失败：${detail}`);
+}
+
+async function hubError(response, prefix) {
+  let detail = `HTTP ${response.status}`;
+  try {
+    const payload = await response.json();
+    if (payload?.error) detail = payload.error;
+  } catch {
+    /* ignore */
   }
+  return new Error(`${prefix}：${detail}`);
+}
+
+// Importing by path lets the hub copy node files instead of receiving one huge
+// JSON body. Paths outside the repository fall back to an explicit upload, and
+// so does an older hub that predates dataPath imports.
+async function uploadReview(hubUrl, { root, data, dataPath, reviewId }) {
+  const request = (body) => callHub(hubUrl, 'api/import', body);
+  let response = await request(dataPath ? { root, dataPath, reviewId } : { root, data, reviewId });
+  if (!response.ok && dataPath) {
+    // Only retry when the hub rejected the request shape, not when it genuinely
+    // failed to read our split files (that would silently lose node content).
+    let detail = '';
+    try {
+      detail = String((await response.clone().json())?.error ?? '');
+    } catch {
+      /* not JSON; keep the status-only decision */
+    }
+    const shapeRejected = response.status === 405 || /数据格式不正确|未知参数|dataPath/.test(detail);
+    if (shapeRejected) {
+      const full = data ?? readReviewStore(dataPath).toFullData();
+      response = await request({ root, data: full, reviewId });
+    }
+  }
+  if (!response.ok) throw await hubError(response, '注册 Review 到 hub 失败');
   return response.json();
+}
+
+async function syncAnnotations(hubUrl, { root, reviewId, annotations, onlyPaths, summary }) {
+  const response = await callHub(hubUrl, 'api/annotate', {
+    root,
+    reviewId,
+    annotations,
+    onlyPaths,
+    summary,
+  });
+  return response;
+}
+
+// Keep the hub-assigned ids on disk without rewriting node payloads.
+function applyReviewIds(dataPath, { reviewId, projectId }) {
+  const store = readReviewStore(dataPath);
+  store.manifest.meta.reviewId = reviewId;
+  if (projectId !== undefined) store.manifest.meta.projectId = projectId;
+  store.save();
 }
 
 async function keepAlive(server) {
@@ -367,30 +424,77 @@ export async function main(argv = process.argv.slice(2)) {
     if (!options.annotations) throw new Error('annotate 需要 --annotations <file|->。');
     const repo = repoFromOptions(options);
     const dataPath = dataPathFor(repo, options);
-    const data = readJsonSafe(dataPath);
-    if (!data) throw new Error(`找不到数据文件：${dataPath}，请先运行 diff-viz。`);
+    let store;
+    try {
+      store = readReviewStore(dataPath);
+    } catch {
+      throw new Error(`找不到数据文件：${dataPath}，请先运行 diff-viz。`);
+    }
+    // Only the manifest is loaded here: summaries and todos live in node
+    // metadata, so a 100 MB review does not have to be read or rewritten.
+    const data = store.manifest;
     const annotations = readAnnotations(options.annotations);
-    applyAnnotations(data, annotations, { onlyPaths: options.node ? [String(options.node)] : null });
+    const onlyPaths = options.node ? [String(options.node)] : null;
+    applyAnnotations(data, annotations, { onlyPaths });
     if (options.summary) data.meta.overallSummary = options.summary;
     data.meta.updatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
-    writeJsonAtomic(dataPath, data);
+    let upgraded = false;
+    if (store.layout === 'legacy') {
+      // One-time migration: the next annotate only touches the manifest.
+      store.upgrade();
+      upgraded = true;
+    } else {
+      store.save();
+    }
     hideDataFile(repo, dataPath);
     const hub = readHubInfo();
+    let syncNote = null;
     if (hub && (await hubIsAlive(hub))) {
       const hubHost = hub.host === '0.0.0.0' || hub.host === '::' ? '127.0.0.1' : hub.host;
+      const hubUrl = `http://${hubHost}:${hub.port}/`;
       try {
-        await uploadReview(`http://${hubHost}:${hub.port}/`, {
+        const response = await syncAnnotations(hubUrl, {
           root: repo.root,
-          data,
           reviewId: data.meta?.reviewId,
+          annotations,
+          onlyPaths,
+          summary: options.summary,
         });
-        process.stdout.write(`  ↳ 已同步到运行中的 hub\n`);
+        if (response.ok) {
+          syncNote = '已把注解同步到运行中的 hub';
+        } else if (response.status === 405) {
+          // An older hub has no /api/annotate. Re-uploading the whole review
+          // would be exactly the large-file cost this format removes, so ask
+          // the user to restart it instead.
+          syncNote = '运行中的 hub 版本过旧，未同步；执行 `diff-viz stop` 后重开 Review 即可看到注解';
+        } else if (response.status === 404) {
+          // The hub has no snapshot for this review (fresh state dir or pruned
+          // history). Import by path when possible so node content is copied
+          // instead of uploaded as one JSON body.
+          const imported = await uploadReview(hubUrl, {
+            root: repo.root,
+            reviewId: data.meta?.reviewId,
+            ...(isInside(repo.root, dataPath)
+              ? { dataPath }
+              : { data: readReviewStore(dataPath).toFullData() }),
+          });
+          if (imported.reviewId) {
+            applyReviewIds(dataPath, { reviewId: imported.reviewId, projectId: imported.project?.id });
+          }
+          syncNote = '已把注解同步到运行中的 hub（重新导入）';
+        } else {
+          throw await hubError(response, '同步 hub 失败');
+        }
+        process.stdout.write(`  ↳ ${syncNote}\n`);
       } catch (error) {
         process.stdout.write(`  ! 注解已写入本地，但同步 hub 失败：${error instanceof Error ? error.message : String(error)}\n`);
       }
     }
     const annotated = data.nodes.filter((node) => node.summarySource === 'agent' || (node.todos || []).some((todo) => todo.source === 'agent')).length;
     process.stdout.write(`✔ 已合并注解：${annotated} 个节点 · ${dataPath}\n`);
+    if (upgraded) {
+      process.stdout.write(`  ↳ 数据文件已升级为拆分存储（节点内容在 ${reviewLayout(dataPath).nodesDir}）\n`);
+    }
     return;
   }
 
@@ -402,28 +506,59 @@ export async function main(argv = process.argv.slice(2)) {
     if (!fs.existsSync(dataPath)) {
       throw new Error(`找不到数据文件：${dataPath}，请先运行 diff-viz。`);
     }
-    const data = readJsonSafe(dataPath);
-    if (!data) throw new Error(`数据文件不是合法 JSON：${dataPath}`);
+    const store = readReviewStore(dataPath, { strict: false });
+    if (!store) throw new Error(`数据文件不是合法 JSON：${dataPath}`);
+    const data = store.manifest;
     const hub = await ensureHub({
       port: Number(options.port) || 5173,
       host: options.host || '127.0.0.1',
     });
     const imported = await uploadReview(hub.url, {
       root: repo.root,
-      data,
       reviewId: data.meta?.reviewId,
+      ...(isInside(repo.root, dataPath) ? { dataPath } : { data: store.toFullData() }),
     });
-    data.meta.reviewId = imported.reviewId;
-    writeJsonAtomic(dataPath, data);
+    applyReviewIds(dataPath, { reviewId: imported.reviewId, projectId: imported.project?.id });
     const reviewUrl = new URL(imported.url, hub.url).toString();
     if (!options.noOpen && !process.env.CI) openInBrowser(reviewUrl);
     process.stdout.write(`\n  Review UI  ${reviewUrl}\n  Hub        ${hub.url}\n\n`);
     return;
   }
 
+  if (options.command === 'workspace' || options.workspace) {
+    const target = options.workspace
+      ? path.resolve(process.cwd(), String(options.workspace))
+      : path.resolve(process.cwd(), 'diff-viz.workspace.json');
+
+    if (options.init) {
+      const template = workspaceTemplate(process.cwd());
+      writeJsonAtomic(target, template);
+      process.stdout.write(`\n  ✔ 已生成 ${path.relative(process.cwd(), target) || target}\n`);
+      process.stdout.write(`    收录 ${template.repos.length} 个仓库：${template.repos.map((repo) => repo.id).join(', ') || '(未发现)'}\n`);
+      process.stdout.write('    用 links 补充 RPC / HTTP 依赖，然后运行 diff-viz workspace\n\n');
+      return;
+    }
+
+    if (!fs.existsSync(target)) {
+      throw new Error(`找不到 workspace 文件：${target}\n  先运行 diff-viz workspace --init 生成模板。`);
+    }
+    const hub = await ensureHub({ port: Number(options.port) || 5173, host: options.host || '127.0.0.1' });
+    const response = await callHub(hub.url, 'api/workspace', { file: target });
+    if (!response.ok) throw await hubError(response, '工作区分析失败');
+    const payload = await response.json();
+    const url = new URL(payload.url, hub.url).toString();
+    if (!options.noOpen && !process.env.CI) openInBrowser(url);
+    process.stdout.write(
+      `\n  ✔ 工作区分析完成  ${payload.stats.changed} 个仓库有改动 · ${payload.stats.impacted} 个受影响\n`,
+    );
+    for (const warning of payload.warnings || []) process.stdout.write(`  ! ${warning}\n`);
+    process.stdout.write(`\n  Workspace  ${url}\n  Hub        ${hub.url}\n\n`);
+    return;
+  }
+
   const repo = repoFromOptions(options);
   const dataPath = dataPathFor(repo, options);
-  const previous = readJsonSafe(dataPath);
+  const previous = readReviewStore(dataPath, { strict: false })?.manifest ?? null;
   const data = buildReviewData(repo, {
     staged: options.staged,
     last: options.last,
@@ -437,6 +572,7 @@ export async function main(argv = process.argv.slice(2)) {
     languages: options.languages || null,
     excludePaths: [
       dataPath,
+      reviewLayout(dataPath).nodesDir,
       options.annotations && options.annotations !== '-'
         ? path.resolve(process.cwd(), options.annotations)
         : null,
@@ -445,7 +581,7 @@ export async function main(argv = process.argv.slice(2)) {
   });
   mergePreviousState(data, previous);
   if (options.summary) data.meta.overallSummary = options.summary;
-  writeJsonAtomic(dataPath, data);
+  writeReviewStore(dataPath, data);
   hideDataFile(repo, dataPath);
 
   if (!options.quiet && !options.jsonOnly) printSummary(data, dataPath);
@@ -473,12 +609,13 @@ export async function main(argv = process.argv.slice(2)) {
   });
   const imported = await uploadReview(hub.url, {
     root: repo.root,
-    data,
     reviewId: data.meta?.reviewId,
+    ...(isInside(repo.root, dataPath) ? { dataPath, data } : { data }),
   });
-  data.meta.reviewId = imported.reviewId;
-  data.meta.projectId = imported.project?.id ?? data.meta.projectId;
-  writeJsonAtomic(dataPath, data);
+  applyReviewIds(dataPath, {
+    reviewId: imported.reviewId,
+    projectId: imported.project?.id ?? data.meta.projectId,
+  });
   const reviewUrl = new URL(imported.url, hub.url).toString();
 
   if (options.quiet) {

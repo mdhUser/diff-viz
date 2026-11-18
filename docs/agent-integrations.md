@@ -91,8 +91,8 @@ Claude Code 没有内置的交互式浏览器面板，CLI 会注册到常驻 hub
 ## Code review visualization
 After finishing code changes, run:
 `npx -y diff-viz-cli --no-open`
-Read `.diff-review-data.json` for machine-readable summaries, then give the user the printed URL.
-Do not commit `.diff-review-data.json` (it contains full source contents).
+Read `.diff-review-data.json` for machine-readable summaries (the `diff` / source of each node lives under `.diff-review-data.json.nodes/`).
+Do not commit `.diff-review-data.json` or `.diff-review-data.json.nodes/` (they contain full source contents).
 ```
 
 ## Cursor
@@ -112,7 +112,7 @@ When the user asks for a visual review, or after a multi-file change:
 2. Write `.diff-review-annotations.json` first when you can summarize the change:
    `{ "meta": { "overallSummary": "..." }, "nodes": { "src/a.ts": { "summary": "...", "impactAnalysis": "...", "todos": ["..."] } } }`.
 3. Give the user the printed `http://127.0.0.1:<port>/` URL.
-4. Never commit `.diff-review-data.json` or the annotations file.
+4. Never commit `.diff-review-data.json`, `.diff-review-data.json.nodes/` or the annotations file.
 ```
 
 然后在 Cursor 的 Agent 中要求「visual review / 变更拓扑」。如果当前 Cursor 版本支持 Agent Skills，运行 `diff-viz skill install --agent cursor --scope project` 注册即可（只链接 `SKILL.md`）。
@@ -132,7 +132,7 @@ After completing a code change, run:
   `summary` / `impactAnalysis` / `todos` before running it.
 - The command registers the review with the local hub and exits after printing the URL.
 - `--json-only --quiet` prints machine-readable JSON if you need to inspect the graph yourself.
-- Never commit `.diff-review-data.json`; it contains full source content.
+- Never commit `.diff-review-data.json` or `.diff-review-data.json.nodes/`; they contain full source content.
 ```
 
 Codex CLI 没有内置网页预览，用户在系统浏览器打开 URL。
@@ -156,7 +156,7 @@ Only annotate added/modified/deleted files. Use --json-only --quiet for a pure J
 ## Agent 与界面的关系
 
 - **交互式界面是给人看的**。Agent 默认看不到页面内容；如果它需要自行检查，可以：
-  - 读 `.diff-review-data.json`（节点、边、摘要、todos、diff 都在里面）；
+  - 读 `.diff-review-data.json`（清单：节点、边、摘要、todos；每个节点的 `diff`/源码在 `<data>.nodes/<payload>.json`，可按需读取）；
   - 或让 Agent 用 Playwright/Puppeteer 截图。
 - Agent 生成注解后，人可以边看拓扑边勾选 TODO；勾选状态会写回 JSON，下一次 Agent 重新生成时保留。
 - 需要让 Agent 修改已有结果时，执行：
