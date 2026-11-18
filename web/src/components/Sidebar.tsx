@@ -8,6 +8,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { useState } from 'react';
 import type { ReviewData, ReviewNode, ReviewTodo } from '../types';
 import { STATUS_META } from '../status';
 import { formatTimestamp } from '../format';
@@ -44,6 +45,11 @@ export function Sidebar({ data, selectedId, query, reviewedMap, isTodoDone, onQu
     0,
   );
   const reviewedCount = changed.filter((node) => reviewedMap[node.id] ?? node.reviewed).length;
+  const agentSummaries = changed.filter((node) => node.summarySource === 'agent').length;
+  const summaryText = (meta.overallSummary || '').trim();
+  // Long overall summaries used to be clipped with no way to read the rest.
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const summaryCollapsible = summaryText.length > 120;
 
   return (
     <aside className="flex h-full w-full min-w-0 flex-col border-r border-line/80 bg-ink-900/55">
@@ -57,7 +63,33 @@ export function Sidebar({ data, selectedId, query, reviewedMap, isTodoDone, onQu
             </span>
             <span className="font-mono text-[9px] text-mist-600">{formatTimestamp(meta.timestamp)}</span>
           </div>
-          <p className="mt-2 line-clamp-5 whitespace-pre-line text-[11.5px] leading-[1.65] text-mist-400">{meta.overallSummary}</p>
+          {summaryText ? (
+            <>
+              <p
+                className={cn(
+                  'mt-2 whitespace-pre-line text-[11.5px] leading-[1.65] text-mist-400',
+                  !summaryOpen && summaryCollapsible ? 'line-clamp-5' : '',
+                )}
+              >
+                {summaryText}
+              </p>
+              {summaryCollapsible ? (
+                <button
+                  type="button"
+                  onClick={() => setSummaryOpen((open) => !open)}
+                  className="mt-1 text-[9.5px] text-accent hover:text-accent-bright"
+                >
+                  {summaryOpen ? '收起摘要' : '展开完整摘要'}
+                </button>
+              ) : null}
+            </>
+          ) : null}
+          {agentSummaries > 0 ? (
+            <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[9px] text-accent-bright">
+              <Sparkles size={9} />
+              Agent 摘要 {agentSummaries}/{changed.length}
+            </div>
+          ) : null}
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-line/70 pt-2.5">
             <div>
               <div className="font-mono text-[13px] font-medium text-mist-100">{meta.stats.changedFiles}</div>
