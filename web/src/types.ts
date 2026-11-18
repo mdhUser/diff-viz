@@ -123,6 +123,7 @@ export interface WorkspaceMeta {
   workspace: true;
   name: string;
   file?: string;
+  overallSummary?: string;
   stats: { repos: number; changed: number; impacted: number };
   repos: WorkspaceRepo[];
   serviceEdges: ServiceEdge[];
