@@ -33,6 +33,7 @@ diff-viz skill install --agent dsh      # dsh | claude | cursor | agents
 - 用户想知道改动的下游影响（哪些未修改文件会被波及）。
 - 需要把 Agent 的改动总结、风险点、待确认 TODO 与代码 Diff 放在同一页面上。
 - 需要快速定位本次新增的 `TODO` / `FIXME` 注释。
+- **改动横跨多个仓库**，或者用户要看服务之间的依赖与影响 → 走「多仓库工作区」。
 
 ## 前置条件
 
@@ -108,6 +109,73 @@ diff-viz \
 - 本次变更的文件数、受影响文件数、待办数（可从 `--json-only --quiet` 的 JSON 输出读取）。
 - 最需要人工确认的 1–3 个风险点。
 
+## 多仓库工作区（跨服务）
+
+一次需求同时改了几个仓库、或者用户想看「服务之间」的牵连时，用工作区模式。普通单仓 Review 不需要它。
+
+**前置**：这些仓库能通过相对路径互相指到（通常是兄弟目录），且都是 Git 仓库。
+
+### 1. 生成 workspace 文件
+
+在仓库的父目录执行：
+
+```bash
+diff-viz workspace --init
+```
+
+会生成 `diff-viz.workspace.json`，自动收录同级的 Git 仓库：
+
+```json
+{
+  "name": "订单链路改造",
+  "repos": [
+    { "id": "order", "path": "./order-service" },
+    { "id": "user", "path": "./user-service" },
+    { "id": "common", "path": "./common-lib" }
+  ],
+  "links": []
+}
+```
+
+- `id` 是后面 `links` 里引用的名字，建议直接用服务名。
+- 少了仓库就手动加一项；`path` 相对 workspace 文件所在目录。
+- 检查一遍 `repos` 再继续，漏掉的仓库不会出现在拓扑里。
+
+### 2. 补跨服务依赖
+
+**包依赖不用写**：工具会读 `package.json` / `pom.xml` / `go.mod` / `build.gradle(.kts)` / `*.csproj` / `composer.json`，把依赖坐标和兄弟仓库的产物坐标对上。
+
+**接口调用必须手补**（静态解析识别不了 RPC/HTTP）：
+
+```json
+"links": [
+  { "from": "order", "to": "user", "kind": "rpc", "via": "UserService/GetUser" }
+]
+```
+
+- `from` 依赖 `to`；`kind` 自定义（`rpc` / `http` / `mq` 都行），`via` 会显示在图上。
+- 指向未声明仓库的 link 会被忽略，并写进 `meta.warnings`，不会中断分析。
+
+### 3. 分析
+
+```bash
+diff-viz workspace             # 分析并打开服务级拓扑
+diff-viz workspace --no-open   # 无浏览器 / CI
+diff-viz --workspace path/to/workspace.json
+```
+
+输出会给出工作区 Review 地址，以及每个仓库各自的 Review。
+
+### 4. 读结果
+
+- 服务卡片：有改动（`changed`）、受影响层级（`depth`，0 表示自身有改动）、影响来源（`impactOrigins`）。
+- `meta.serviceEdges[]`：`from` 依赖 `to`，`kind: "manifest"` 表示自动识别的包依赖。
+- `meta.stats`：`{ repos, changed, impacted }`。
+- 想深入某个服务：界面上点卡片；脚本里用 `meta.repos[].reviewId` 去读该仓库的完整 Review。
+- 没有浏览器时直接读 JSON：`curl "$HUB/api/data?review=<workspace-review-id>"`，看 `meta.repos` 和 `meta.serviceEdges`。
+
+**边界**：只到仓库粒度——共享库被具体哪些文件引用、跨仓库文件级连边都不做。单仓改动别用工作区。
+
 ## 只生成数据（CI / 无浏览器）
 
 ```bash
@@ -167,6 +235,8 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 | `--port <n>` / `--host <addr>` | 本地服务地址 |
 | `--no-open` | 不自动打开浏览器 |
 | `--json-only` | 只生成 JSON |
+| `--workspace <file>` | 多仓库工作区模式（等价于 `diff-viz workspace`） |
+| `--languages <file>` | 额外语言定义 JSON |
 | `--quiet` | 减少日志 |
 
 ## 数据契约（写入 `.diff-review-data.json`）
@@ -226,7 +296,6 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 - Kotlin / C#：`import` / `using`，按声明的包名或命名空间 + 文件名索引解析。
 - Rust：`mod`、`use`（含 `crate::` / `super::` / `self::`）。
 - Ruby：`require_relative` / `require`。
-- 多仓库：`diff-viz workspace` 读取 `diff-viz.workspace.json`，按 manifest 识别包依赖、按 `links` 补充 RPC，生成服务级改动拓扑。
 - 其他语言：在仓库放 `.diff-viz/languages.json`，或用 `--languages <file>` 指定，声明扩展名、import 正则和解析策略即可。
 - 其他文件仍会作为变更节点展示，只是没有依赖边。
 
