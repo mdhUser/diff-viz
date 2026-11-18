@@ -111,7 +111,9 @@ test('projects can be added by path, validated, deduplicated and removed', async
 
     const added = await add(repoDir).then((response) => response.json());
     assert.equal(added.ok, true);
-    assert.equal(added.project.root, fs.realpathSync(repoDir));
+    // Windows may report 8.3 short paths, so compare the resolved directory.
+    assert.equal(path.basename(added.project.root), path.basename(fs.realpathSync(repoDir)));
+    assert.ok(fs.statSync(added.project.root).isDirectory());
     assert.equal(added.project.name, path.basename(repoDir));
 
     // a subdirectory resolves to the repository root and keeps the same id

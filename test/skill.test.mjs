@@ -48,9 +48,15 @@ test('installs a symlinked thin skill and is idempotent', () => {
   try {
     const result = installSkill({ source, dir, cwd: dir });
     assert.equal(result.status, 'installed');
-    assert.equal(result.method, process.platform === 'win32' ? 'copy' : 'symlink');
-    assert.ok(fs.lstatSync(result.target).isSymbolicLink());
-    assert.equal(path.resolve(path.dirname(result.target), fs.readlinkSync(result.target)), source);
+    if (process.platform === 'win32') {
+      // Windows needs developer mode for symlinks, so the installer copies.
+      assert.equal(result.method, 'copy');
+      assert.ok(fs.lstatSync(result.target).isFile());
+    } else {
+      assert.equal(result.method, 'symlink');
+      assert.ok(fs.lstatSync(result.target).isSymbolicLink());
+      assert.equal(path.resolve(path.dirname(result.target), fs.readlinkSync(result.target)), source);
+    }
     assert.equal(
       path.join(dir, 'diff-viz', 'SKILL.md'),
       result.target,
@@ -69,7 +75,7 @@ test('copies the skill when requested', () => {
     const result = installSkill({ source, dir, cwd: dir, copy: true });
     assert.equal(result.method, 'copy');
     assert.ok(fs.lstatSync(result.target).isFile());
-    assert.match(fs.readFileSync(result.target, 'utf8'), /^---\nname: diff-viz/m);
+    assert.match(fs.readFileSync(result.target, 'utf8'), /^---\r?\nname: diff-viz/m);
   } finally {
     cleanup(dir);
   }
@@ -85,7 +91,7 @@ test('refuses to overwrite without force and replaces with force', () => {
     assert.throws(() => installSkill({ source, dir, cwd: dir, copy: true }), /目标已存在/);
     const replaced = installSkill({ source, dir, cwd: dir, copy: true, force: true });
     assert.equal(replaced.status, 'replaced');
-    assert.match(fs.readFileSync(target, 'utf8'), /^---\nname: diff-viz/m);
+    assert.match(fs.readFileSync(target, 'utf8'), /^---\r?\nname: diff-viz/m);
   } finally {
     cleanup(dir);
   }
@@ -113,7 +119,7 @@ test('force can replace an old full skill directory', () => {
     const result = installSkill({ source, dir, cwd: dir, copy: true, force: true });
     assert.equal(result.status, 'replaced');
     assert.ok(!fs.existsSync(path.join(oldSkill, 'bin')));
-    assert.match(fs.readFileSync(result.target, 'utf8'), /^---\nname: diff-viz/m);
+    assert.match(fs.readFileSync(result.target, 'utf8'), /^---\r?\nname: diff-viz/m);
   } finally {
     cleanup(dir);
   }
