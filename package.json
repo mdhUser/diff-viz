@@ -18,7 +18,7 @@
   "scripts": {
     "build": "vite build",
     "dev:web": "vite",
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test",
     "typecheck": "tsc --noEmit",
     "demo": "node scripts/demo.mjs",
     "package:skill": "node scripts/build-skill-package.mjs",

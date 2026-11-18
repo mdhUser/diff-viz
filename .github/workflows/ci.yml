@@ -27,16 +27,7 @@ jobs:
       - run: npm ci
       - run: npm run release:check
       - run: npm run typecheck
-      - name: Test
-        shell: bash
-        run: |
-          set -o pipefail
-          npm test 2>&1 | while IFS= read -r line; do
-            printf '%s\n' "$line"
-            case "$line" in
-              *"✖"*|*"not ok"*) echo "::error::$(printf '%s' "$line" | head -c 600)";;
-            esac
-          done
+      - run: npm test
       # dist is build output for the published tarball; building once is enough.
       - if: matrix.os == 'ubuntu-latest' && matrix.node == 20
         run: npm run build
