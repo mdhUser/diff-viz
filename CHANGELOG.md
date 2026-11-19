@@ -8,14 +8,16 @@
 
 ## [Unreleased]
 
-### Fixed
-
-- Agent 注解在提交 / 切换 Review 后丢失：注解原来只存在写入时的那条 Review 快照里，提交后版本链里的 commit Review 是新的 reviewId（且 worktree Review 可能被自动重算成空改动），所以总结全部消失。现在 hub 会按「项目 + 文件路径 + 改动内容（去掉 index 行后的 diff）」记住最后一次 Agent 总结/影响分析/待办，存放在 `~/.diff-viz/annotations/<projectId>.json`；打开或重新生成相同改动的 Review（worktree → commit → range）时自动复用，并对旧的已注解快照做一次回填。**Review 顶部的整体概览（`meta.overallSummary`）也会按「变更文件集合 + 各自 diff」记住并复用**，重新生成 Review 不会再退回自动生成的一句话。内容不同的改动不会复用旧总结。
+## [0.10.0] - 2026-11-19
 
 ### Added
 
 - `diff-viz annotate --review <id> --annotations <file>`：直接给 hub 里已有的 Review 写 Agent 注解，不需要重新分析或生成数据文件。适用于界面版本链里点开的 commit Review——之前这类 Review 只能显示自动生成摘要，现在可以让 Agent 补上总结/影响/待办后刷新页面即可看到。
 - 侧栏「变更概览」始终显示 **Agent 摘要 N/M** 覆盖度：为 0 时用弱化样式提示还没有 Agent 注解，不再是「看起来全是自动生成」却不知道去哪补。
+
+### Fixed
+
+- Agent 注解在提交 / 切换 Review 后丢失：注解原来只存在写入时的那条 Review 快照里，提交后版本链里的 commit Review 是新的 reviewId（且 worktree Review 可能被自动重算成空改动），所以总结全部消失。现在 hub 会按「项目 + 文件路径 + 改动内容（去掉 index 行后的 diff）」记住最后一次 Agent 总结/影响分析/待办，存放在 `~/.diff-viz/annotations/<projectId>.json`；打开或重新生成相同改动的 Review（worktree → commit → range）时自动复用，并对旧的已注解快照做一次回填。**Review 顶部的整体概览（`meta.overallSummary`）也会按「变更文件集合 + 各自 diff」记住并复用**，重新生成 Review 不会再退回自动生成的一句话。内容不同的改动不会复用旧总结。
 
 ## [0.9.2] - 2026-11-18
 
