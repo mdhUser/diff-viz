@@ -347,7 +347,7 @@ diff-viz skill install --dir ~/.config/my-agent/skills --copy
 - `imports` / `importedBy` 是该文件**完整**的直接依赖列表，包含没有画进图里的上游文件；详情抽屉会把这些文件标成「图外」。
 - `meta.reviewOrder` 是依赖优先的 Review 顺序；`meta.warnings` 记录扫描上限等提示。
 - 额外字段（`summarySource`、`reviewed`、`impactOrigins`、`depth`、`binary` 等）用于界面增强，不属于必需字段。
-- Agent 注解会按「项目 + 文件路径 + 改动内容」记在 hub 状态目录的 `~/.diff-viz/annotations/<projectId>.json`：同一次改动从工作区变成 commit、或从 commit 换到 range Review 时，Agent 总结/影响分析/待办会自动复用；文件内容再变则不会套用旧总结。
+- Agent 注解会按「项目 + 文件路径 + 改动内容」记在 hub 状态目录的 `~/.diff-viz/annotations/<projectId>.json`：同一次改动从工作区变成 commit、或从 commit 换到 range Review 时，Agent 整体概览、文件总结/影响分析/待办都会自动复用；文件内容再变则不会套用旧总结。
 
 ## 依赖解析与影响模型
 

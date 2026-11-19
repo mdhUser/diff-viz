@@ -438,6 +438,9 @@ test('agent annotations survive commit and are reused in another Review of the s
     assert.equal(openedNode.summary, 'Agent 改的是常量');
     assert.equal(openedNode.summarySource, 'agent');
     assert.equal(openedNode.impactSource, 'agent');
+    // The review-level overview is remembered too (same change set after commit).
+    assert.equal(opened.meta.overallSummary, '工作区总结');
+    assert.equal(opened.meta.summarySource, 'agent');
 
     // Regenerating the same commit Review keeps the annotation from the store.
     const regenerated = await fetch(`${server.url}api/review`, {
@@ -449,6 +452,8 @@ test('agent annotations survive commit and are reused in another Review of the s
       response.json(),
     );
     assert.equal(regeneratedData.nodes.find((node) => node.path === 'a.ts').summarySource, 'agent');
+    assert.equal(regeneratedData.meta.overallSummary, '工作区总结');
+    assert.equal(regeneratedData.meta.summarySource, 'agent');
 
     // Different content must not inherit the stale annotation.
     write(repoDir, 'a.ts', 'export const a = 3;\n');
@@ -463,6 +468,7 @@ test('agent annotations survive commit and are reused in another Review of the s
     const changedNode = changedData.nodes.find((node) => node.path === 'a.ts');
     assert.notEqual(changedNode.summarySource, 'agent');
     assert.notEqual(changedNode.summary, 'Agent 改的是常量');
+    assert.notEqual(changedData.meta.summarySource, 'agent');
   } finally {
     await server.close();
     cleanup(repoDir);

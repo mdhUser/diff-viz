@@ -220,7 +220,7 @@ diff-viz annotate \
 
 写入后刷新页面；文件摘要右上角会从「自动生成」变成「Agent 总结」，侧栏「变更概览」下的 **Agent 摘要 N/M** 计数也会更新。
 
-注解会按「项目 + 文件路径 + 改动内容」记在 hub 状态目录 `~/.diff-viz/annotations/<projectId>.json`：同一次改动从工作区变成 commit、或换一个 commit/range Review 打开时，Agent 总结会自动复用；改动内容变了就不会套用旧总结。
+注解（含 `meta.overallSummary` 整体概览）会按「项目 + 文件路径 + 改动内容」记在 hub 状态目录 `~/.diff-viz/annotations/<projectId>.json`：同一次改动从工作区变成 commit、或换一个 commit/range Review 打开时，Agent 总结和顶部的整体概览会自动复用；改动内容变了就不会套用旧总结。
 
 ## hub 管理
 

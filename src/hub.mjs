@@ -427,9 +427,29 @@ export async function startHub({
 
   // `index` lines carry blob hashes that differ between an uncommitted file and
   // the same content after a commit; strip them so the key is content-based.
-  const annotationKey = (nodePath, diff) => {
-    const normalized = String(diff ?? '').replace(/^index [0-9a-f]+\.\.[0-9a-f]+.*$/gm, '');
-    return shortId(`${nodePath}\u0000${normalized}`, 24);
+  const normalizeDiffForKey = (diff) => String(diff ?? '').replace(/^index [0-9a-f]+\.\.[0-9a-f]+.*$/gm, '');
+
+  const annotationKey = (nodePath, diff) => shortId(`${nodePath}\u0000${normalizeDiffForKey(diff)}`, 24);
+
+  // Review-level key for the overall agent summary: the exact set of changed
+  // files and their normalized diffs. Same change committed or still in the
+  // worktree keeps the key; any content change breaks it. This needs the diffs,
+  // so opening an old manifest-only Review has to read the node payloads (the
+  // caller may pass `readDiff`); very large Reviews skip the reuse instead.
+  const MAX_OVERALL_KEY_READS = 800;
+  const reviewContentKey = (nodes, readDiff = null) => {
+    const changed = (nodes || []).filter((node) => node && node.status !== 'impacted_only');
+    if (changed.length === 0) return null;
+    const needsReads = typeof readDiff === 'function' && changed.some((node) => typeof node.diff !== 'string');
+    if (needsReads && changed.length > MAX_OVERALL_KEY_READS) return null;
+    const parts = [];
+    for (const node of changed) {
+      const diff = typeof node.diff === 'string' ? node.diff : needsReads ? readDiff(node) : undefined;
+      if (typeof diff !== 'string') return null;
+      parts.push(`${node.path}\u0000${normalizeDiffForKey(diff)}`);
+    }
+    parts.sort();
+    return shortId(parts.join('\u0001'), 24);
   };
 
   const agentTodosOf = (node) =>
@@ -446,6 +466,7 @@ export async function startHub({
   const harvestAnnotations = (projectId, source) => {
     const nodes = source?.nodes ?? source?.data?.nodes;
     if (!projectId || !Array.isArray(nodes)) return 0;
+    const meta = source?.meta ?? source?.manifest?.meta ?? source?.data?.meta ?? null;
     const readPayload = typeof source?.readPayload === 'function' ? source.readPayload.bind(source) : null;
     const store = readAnnotationStore(projectId);
     let changed = 0;
@@ -473,6 +494,27 @@ export async function startHub({
       store.nodes[node.path] = { ...next, updatedAt: formatTimestamp() };
       changed += 1;
     }
+    // Overall summaries are review-scoped, so key them by the exact change set.
+    const readDiff = readPayload ? (node) => nodeDiffOf(node, readPayload) : null;
+    const overallKey = meta && meta.summarySource === 'agent' ? reviewContentKey(nodes, readDiff) : null;
+    const overallText = overallKey ? String(meta.overallSummary || '').trim() : '';
+    if (overallKey && overallText) {
+      store.overalls = store.overalls && typeof store.overalls === 'object' ? store.overalls : {};
+      const currentOverall = store.overalls[overallKey];
+      if (!currentOverall || currentOverall.summary !== overallText) {
+        store.overalls[overallKey] = { summary: overallText, updatedAt: formatTimestamp() };
+        changed += 1;
+      }
+      const overallKeys = Object.keys(store.overalls);
+      if (overallKeys.length > MAX_ANNOTATION_ENTRIES) {
+        overallKeys.sort((a, b) =>
+          String(store.overalls[a].updatedAt).localeCompare(String(store.overalls[b].updatedAt)),
+        );
+        for (const oldKey of overallKeys.slice(0, overallKeys.length - MAX_ANNOTATION_ENTRIES)) {
+          delete store.overalls[oldKey];
+        }
+      }
+    }
     if (changed > 0) {
       const paths = Object.keys(store.nodes);
       if (paths.length > MAX_ANNOTATION_ENTRIES) {
@@ -487,6 +529,18 @@ export async function startHub({
   const applyAnnotationsFromStore = (projectId, data, { readPayload = null } = {}) => {
     const store = readAnnotationStore(projectId);
     let applied = 0;
+    // Review-level overall summary: only fill it when the current Review does
+    // not already carry an agent-written overview and the change set matches.
+    if (data?.meta && !(data.meta.summarySource === 'agent' && String(data.meta.overallSummary || '').trim())) {
+      const readDiff = readPayload ? (node) => nodeDiffOf(node, readPayload) : null;
+      const overallKey = reviewContentKey(data.nodes, readDiff);
+      const remembered = overallKey && store.overalls ? store.overalls[overallKey] : null;
+      if (remembered?.summary) {
+        data.meta.overallSummary = remembered.summary;
+        data.meta.summarySource = 'agent';
+        applied += 1;
+      }
+    }
     for (const node of data?.nodes ?? []) {
       if (!node || node.status === 'impacted_only') continue;
       if (hasAgentContent(node)) continue;
