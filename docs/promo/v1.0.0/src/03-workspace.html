@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>diff-viz workspace</title>
+<link rel="stylesheet" href="base.css">
+<style>
+.ws{background:
+  radial-gradient(800px 600px at 8% 10%,rgba(233,168,76,.13),transparent 64%),
+  radial-gradient(820px 620px at 92% 88%,rgba(124,108,240,.16),transparent 66%),
+  radial-gradient(600px 500px at 65% 0%,rgba(42,167,155,.10),transparent 62%),
+  #0a1016;
+}
+.ws .bg-grid{
+  background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);
+  background-size:44px 44px;opacity:.55;mask-image:linear-gradient(125deg,#000 5%,rgba(0,0,0,.2) 58%,#000 95%);
+}
+.ws .brand .word{color:#faf6ef}
+.left{position:absolute;left:80px;top:136px;width:540px;z-index:3}
+.left .eyebrow{color:#e9a84c;margin-bottom:18px}
+.left h1{font-size:58px;line-height:1.12;font-weight:880;letter-spacing:-2.4px;color:#fbf7f0}
+.left h1 span{color:#ffb45f}
+.left .lead{margin-top:22px;font-size:16.5px;line-height:1.75;color:#96a4b2}
+.left .lead code{font-family:"SFMono-Regular","Menlo",monospace;font-size:13px;color:#ffcf8e;background:rgba(255,190,110,.08);border:1px solid rgba(255,190,110,.16);border-radius:5px;padding:1px 5px}
+.bullets{list-style:none;margin:26px 0 0;padding:0;display:flex;flex-direction:column;gap:13px}
+.bullets li{display:flex;align-items:center;gap:12px;font-size:15.5px;color:#c9d4df;font-weight:500}
+.bullets .tick{width:21px;height:21px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(88,211,155,.10);border:1px solid rgba(88,211,155,.28);color:#58d39b;font-size:12px;font-weight:800;flex:none}
+.term{position:absolute;left:80px;bottom:106px;width:540px;border-radius:15px;overflow:hidden;border:1px solid rgba(255,255,255,.12);background:#0e151d;box-shadow:0 26px 70px rgba(0,0,0,.38)}
+.term-bar{height:34px;display:flex;align-items:center;gap:6px;padding:0 12px;background:#141c26;border-bottom:1px solid rgba(255,255,255,.08)}
+.term-bar i{width:7px;height:7px;border-radius:50%;display:block}
+.term-bar i:nth-child(1){background:#ff5f57}.term-bar i:nth-child(2){background:#febc2e}.term-bar i:nth-child(3){background:#28c840}
+.term-bar span{margin-left:8px;color:#6f7d8c;font-size:10.5px;font-family:"SFMono-Regular","Menlo",monospace}
+.term pre{margin:0;padding:16px 18px 17px;font-family:"SFMono-Regular","Menlo",monospace;font-size:12.5px;line-height:1.72;color:#c6d2dd}
+.term .p{color:#58d39b}.term .ok{color:#ffb45f}.term .dim{color:#6f7d8c}
+.board{position:absolute;right:80px;top:118px;width:870px;height:664px;border-radius:24px;border:1px solid rgba(255,255,255,.10);background:linear-gradient(180deg,rgba(18,27,38,.92),rgba(12,18,26,.96));box-shadow:0 40px 110px rgba(0,0,0,.45);overflow:hidden;z-index:2}
+.board:before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.10) 1px,transparent 1px);background-size:26px 26px;opacity:.16;mask-image:linear-gradient(160deg,#000,transparent 72%)}
+.board-head{position:absolute;left:28px;top:22px;right:28px;display:flex;align-items:center;justify-content:space-between;z-index:5}
+.board-title{font-size:11px;letter-spacing:.2em;color:#7f8d9c;font-weight:800}
+.board-stats{display:flex;gap:8px}
+.stat{font-size:10.5px;color:#8e9ba9;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.03);border-radius:999px;padding:5px 9px;font-weight:600}
+.stat b{color:#e9a84c;font-weight:800}
+.board svg.wires{position:absolute;inset:0;width:100%;height:100%;z-index:2;overflow:visible}
+.svc{position:absolute;width:230px;height:112px;border-radius:15px;border:1px solid rgba(255,255,255,.12);background:linear-gradient(160deg,#17222d,#111922);padding:14px 16px 12px;z-index:3;box-shadow:0 18px 40px rgba(0,0,0,.28)}
+.svc:before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:var(--status,#e9a84c)}
+.svc.modified{box-shadow:0 18px 44px rgba(233,168,76,.12),0 0 0 1px rgba(233,168,76,.10) inset}
+.svc.affected{opacity:.92;border-style:dashed;border-color:rgba(124,108,240,.35);background:linear-gradient(160deg,#161b2b,#101622)}
+.svc.affected:before{background:#7c6cf0}
+.svc-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.svc-name{font-size:15.5px;font-weight:750;color:#f1f6fb;letter-spacing:-.2px}
+.badge{font-size:9.5px;font-weight:750;border-radius:5px;padding:3px 6px;letter-spacing:.02em}
+.modified .badge{color:#ffd18f;background:rgba(233,168,76,.12);border:1px solid rgba(233,168,76,.24)}
+.affected .badge{color:#c3b9ff;background:rgba(124,108,240,.12);border:1px solid rgba(124,108,240,.26)}
+.svc-path{margin-top:4px;font-size:10.5px;color:#768594;font-family:"SFMono-Regular","Menlo",monospace}
+.svc-stats{margin-top:12px;display:flex;align-items:center;gap:10px;font-family:"SFMono-Regular","Menlo",monospace;font-size:11.5px}
+.svc-stats b{color:#58d39b;font-weight:700}.svc-stats i{color:#ef8b7a;font-style:normal;font-weight:700}
+.svc-stats span{color:#6f7d8c;font-size:10px;font-family:inherit}
+.svc .meta{margin-top:5px;font-size:10px;color:#687686}
+.svc-a{left:46px;top:90px}
+.svc-b{left:330px;top:244px}
+.svc-c{left:626px;top:132px;width:212px}
+.svc-d{left:330px;top:486px;width:230px}
+.svc-e{left:650px;top:470px;width:190px}
+.edge-label{position:absolute;z-index:4;background:#121b25;border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:3px 7px;font-size:9px;font-family:"SFMono-Regular","Menlo",monospace;color:#9ba8b6;letter-spacing:.02em}
+.el-1{left:288px;top:206px;color:#ffd18f;border-color:rgba(233,168,76,.24)}
+.el-2{left:574px;top:236px;color:#c3b9ff;border-color:rgba(124,108,240,.28)}
+.el-3{left:462px;top:414px;color:#ffd18f;border-color:rgba(233,168,76,.24)}
+.el-4{left:578px;top:540px;color:#c3b9ff;border-color:rgba(124,108,240,.28)}
+.legend{position:absolute;left:28px;bottom:20px;display:flex;gap:16px;align-items:center;font-size:10px;color:#7f8d9c;z-index:4}
+.legend i{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}
+.legend .m i{background:#e9a84c}.legend .a i{background:#7c6cf0}.legend .d i{background:#58d39b}
+.legend .k{display:flex;align-items:center}
+.ws .footer{color:#6f7b88}
+</style>
+</head>
+<body>
+<div class="canvas ws">
+  <div class="bg-grid"></div>
+
+  <header class="brand">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round">
+        <circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="9" r="2.5"/><circle cx="9" cy="18" r="2.5"/>
+        <path d="M8.3 7.0 15.6 8.4M7.3 8.3 8.6 15.5M16.3 11.1 10.5 16.4"/>
+      </svg>
+    </div>
+    <div class="word">diff-viz</div>
+    <div class="pill"><span class="dot" style="background:#e9a84c;box-shadow:0 0 12px #e9a84c"></span>WORKSPACE MODE · v1.0</div>
+  </header>
+
+  <div class="left">
+    <div class="eyebrow">MULTI-REPO WORKSPACE</div>
+    <h1>一次改动，<br><span>跨服务</span>传播。</h1>
+    <p class="lead"><code>diff-viz workspace</code> 把多个仓库一起分析：自动读 manifest，按产物坐标连成服务依赖；RPC / HTTP 调用用 <code>links</code> 补边，影响按层级向外传播。</p>
+    <ul class="bullets">
+      <li><span class="tick">✓</span>package.json / pom.xml / go.mod / build.gradle 自动识别</li>
+      <li><span class="tick">✓</span>服务级图 + 文件级拓扑，点卡片就能下钻</li>
+      <li><span class="tick">✓</span>跨仓库比较同一目标分支，不用逐仓跑 range</li>
+    </ul>
+  </div>
+
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i><span>~/code/platform</span></div>
+      <pre><span class="p">$</span> diff-viz workspace --init
+<span class="ok">✓</span> 4 repos · 6 manifests · 12 edges
+
+<span class="p">$</span> diff-viz workspace
+<span class="ok">↗</span> http://127.0.0.1:5173/#/workspace</pre>
+    </div>
+
+  <div class="board">
+    <div class="board-head">
+      <div class="board-title">SERVICE TOPOLOGY</div>
+      <div class="board-stats"><span class="stat"><b>4</b> repos</span><span class="stat"><b>12</b> edges</span><span class="stat"><b>2</b> affected</span></div>
+    </div>
+
+    <svg class="wires" viewBox="0 0 870 664" fill="none">
+      <defs>
+        <marker id="arrow-amber" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0 0.8 8 4.5 0 8.2Z" fill="#e9a84c"/></marker>
+        <marker id="arrow-violet" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto"><path d="M0 0.8 8 4.5 0 8.2Z" fill="#7c6cf0"/></marker>
+      </defs>
+      <path d="M276 154 C302 154, 310 292, 330 292" stroke="#e9a84c" stroke-width="1.8" stroke-opacity=".75" marker-end="url(#arrow-amber)"/>
+      <path d="M570 288 C598 288, 592 192, 626 192" stroke="#7c6cf0" stroke-width="1.8" stroke-opacity=".8" marker-end="url(#arrow-violet)"/>
+      <path d="M445 356 L445 486" stroke="#e9a84c" stroke-width="1.8" stroke-opacity=".75" marker-end="url(#arrow-amber)"/>
+      <path d="M560 534 C596 534, 610 526, 650 526" stroke="#7c6cf0" stroke-width="1.8" stroke-opacity=".8" marker-end="url(#arrow-violet)"/>
+    </svg>
+
+    <div class="svc svc-a modified">
+      <div class="svc-top"><span class="svc-name">web-bff</span><span class="badge">修改</span></div>
+      <div class="svc-path">apps/web</div>
+      <div class="svc-stats"><b>+128</b><i>−42</i><span>6 files</span></div>
+    </div>
+    <div class="svc svc-b modified">
+      <div class="svc-top"><span class="svc-name">order-service</span><span class="badge">修改</span></div>
+      <div class="svc-path">services/order</div>
+      <div class="svc-stats"><b>+96</b><i>−18</i><span>4 files</span></div>
+    </div>
+    <div class="svc svc-c affected">
+      <div class="svc-top"><span class="svc-name">user-service</span><span class="badge">受影响</span></div>
+      <div class="svc-path">services/user</div>
+      <div class="svc-stats"><span>依赖 1 个改动服务</span></div>
+    </div>
+    <div class="svc svc-d affected">
+      <div class="svc-top"><span class="svc-name">common-lib</span><span class="badge">受影响</span></div>
+      <div class="svc-path">libs/common</div>
+      <div class="svc-stats"><span>被 2 个服务引用</span></div>
+    </div>
+    <div class="svc svc-e modified">
+      <div class="svc-top"><span class="svc-name">worker</span><span class="badge">修改</span></div>
+      <div class="svc-path">services/worker</div>
+      <div class="svc-stats"><b>+24</b><i>−6</i><span>2 files</span></div>
+    </div>
+
+    <div class="edge-label el-1">manifest</div>
+    <div class="edge-label el-2">rpc · GetUser</div>
+    <div class="edge-label el-3">manifest</div>
+    <div class="edge-label el-4">rpc · notify</div>
+
+    <div class="legend">
+      <span class="k m"><i></i>修改</span>
+      <span class="k a"><i></i>受影响</span>
+      <span class="k d"><i></i>依赖边</span>
+    </div>
+  </div>
+
+  <footer class="footer"><span>github.com/mdhUser/diff-viz</span><span>v1.0.0 · multi-repo workspace</span></footer>
+</div>
+</body>
+</html>

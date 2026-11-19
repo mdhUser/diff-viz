@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>diff-viz agent annotations</title>
+<link rel="stylesheet" href="base.css">
+<style>
+.agent{background:
+  radial-gradient(820px 620px at 100% 0%,rgba(124,108,240,.10),transparent 62%),
+  radial-gradient(760px 520px at 0% 100%,rgba(233,168,76,.11),transparent 66%),
+  var(--paper);
+}
+.agent .bg-grid{background-image:radial-gradient(circle,rgba(36,28,22,.12) 1px,transparent 1px);opacity:.2;mask-image:linear-gradient(120deg,#000,transparent 65%)}
+.agent .brand .word{color:var(--text)}
+.agent .brand .pill{border-color:#d9c9b2;background:#fffaf0;color:#7b4b2a}
+.agent .brand .pill .dot{background:var(--violet);box-shadow:0 0 12px var(--violet)}
+.left-4{position:absolute;left:80px;top:148px;width:660px;z-index:3}
+.left-4 .eyebrow{color:#7c6cf0;margin-bottom:16px}
+.left-4 h1{font-size:59px;line-height:1.12;font-weight:880;letter-spacing:-2.4px;color:#241c16}
+.left-4 h1 em{font-style:normal;color:var(--ember)}
+.left-4 .lead{margin-top:22px;font-size:17px;line-height:1.72;color:#6f6355;width:620px}
+.left-4 .lead b{color:#241c16;font-weight:750;white-space:nowrap}
+.feature-list{margin-top:26px;display:flex;flex-direction:column;gap:13px;width:610px}
+.feature{display:flex;align-items:flex-start;gap:12px;font-size:15px;line-height:1.5;color:#5f5346}
+.feature .f-icon{width:24px;height:24px;border-radius:7px;background:#efe7d9;border:1px solid #e1d4c0;display:flex;align-items:center;justify-content:center;flex:none;color:#8a6a3f;font-size:12px;font-weight:800}
+.feature b{color:#241c16;font-weight:750}
+.feature code{font-family:"SFMono-Regular","Menlo",monospace;font-size:12px;background:#efe6d8;border:1px solid #e2d5c1;border-radius:5px;padding:1px 5px;color:#6d4a2c}
+.quote{margin-top:28px;padding-left:18px;border-left:3px solid #d9603f;color:#7d6f5f;font-size:15px;line-height:1.65;width:590px}
+.quote b{color:#241c16}
+.mock-wrap{position:absolute;right:74px;top:62px;width:646px;height:786px;z-index:4}
+.mock-shadow{position:absolute;inset:30px 0 0;background:radial-gradient(closest-side,rgba(94,64,30,.18),transparent 72%);filter:blur(22px)}
+.mock{position:absolute;inset:0;border-radius:20px;background:#fffdf8;border:1px solid #dfd3c2;box-shadow:0 34px 80px rgba(72,50,26,.16),0 2px 0 rgba(255,255,255,.9) inset;overflow:hidden}
+.mock-bar{height:38px;background:#f1e9dd;border-bottom:1px solid #e2d6c4;display:flex;align-items:center;gap:6px;padding:0 14px}
+.mock-bar i{width:7px;height:7px;border-radius:50%;display:block}
+.mock-bar i:nth-child(1){background:#df6b55}.mock-bar i:nth-child(2){background:#e4b14f}.mock-bar i:nth-child(3){background:#76b58a}
+.mock-bar .url{margin-left:9px;flex:1;height:22px;border-radius:5px;background:#fffaf2;border:1px solid #e6dac9;color:#9a8a77;font-family:"SFMono-Regular","Menlo",monospace;font-size:10px;display:flex;align-items:center;padding:0 9px}
+.mock-body{padding:18px 20px 16px;display:flex;flex-direction:column;gap:9px;height:calc(100% - 38px)}
+.file-head{display:flex;align-items:center;gap:11px;flex:none}
+.file-icon{width:34px;height:34px;border-radius:9px;background:#3178c6;color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.02em}
+.file-name{font-size:19px;font-weight:800;letter-spacing:-.4px;color:#2a211a;display:flex;align-items:center;gap:8px}
+.file-path{font-size:10.5px;color:#9a8b78;font-family:"SFMono-Regular","Menlo",monospace;margin-top:2px}
+.badge-mod{font-size:9px;font-weight:750;color:#a66a1d;background:#f8e7c8;border:1px solid #edd6ad;border-radius:4px;padding:2px 5px}
+.file-stats{margin-left:auto;font-family:"SFMono-Regular","Menlo",monospace;font-size:11px}
+.file-stats b{color:#2f9e6f}.file-stats i{color:#cf7466;font-style:normal}
+.tabs{display:flex;gap:22px;border-bottom:1px solid #e9ddcc;padding-bottom:8px;flex:none}
+.tabs span{font-size:12.5px;font-weight:650;color:#9c8d7a;position:relative;padding-bottom:8px;margin-bottom:-9px}
+.tabs .active{color:#2a211a;font-weight:800;border-bottom:2px solid #d9603f}
+.tabs b{font-size:9px;background:#f2e3cf;color:#8a5a28;border-radius:4px;padding:1px 4px;margin-left:2px}
+.agent-note{display:flex;align-items:center;gap:7px;background:#f1edff;border:1px solid #ded6fb;border-radius:8px;padding:7px 10px;font-size:11px;font-weight:700;color:#6a56d8;flex:none}
+.agent-note .spark{font-size:13px}
+.agent-note .coverage{margin-left:auto;font-family:"SFMono-Regular","Menlo",monospace;font-size:10px;background:#e7e1ff;border-radius:4px;padding:2px 6px;color:#5a45c7}
+.section{background:#fbf7ef;border:1px solid #eaddcb;border-radius:11px;padding:11px 13px;flex:none}
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.sec-head .title{font-size:11.5px;font-weight:800;color:#4d4032;letter-spacing:.02em}
+.tag{font-size:8.5px;font-weight:800;letter-spacing:.08em;border-radius:4px;padding:2px 5px}
+.tag.agent{color:#6a56d8;background:#ece8ff;border:1px solid #ddd5fb}
+.tag.chain{color:#a66a1d;background:#f8e7c8;border:1px solid #edd6ad;letter-spacing:0;font-size:9px}
+.muted{font-size:9.5px;color:#a29483;font-family:"SFMono-Regular","Menlo",monospace}
+.section p{font-size:12.3px;line-height:1.55;color:#6c5e4e}
+.section p b{color:#2a211a;font-weight:750}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips span{font-family:"SFMono-Regular","Menlo",monospace;font-size:9.5px;color:#7a5a3c;background:#f4e9d8;border:1px solid #e7d7c0;border-radius:4px;padding:3px 6px}
+.todo{display:flex;align-items:flex-start;gap:8px;font-size:11.5px;line-height:1.45;color:#5f5346;margin-top:5px}
+.todo .box{width:12px;height:12px;border-radius:3px;border:1.4px solid #c9b9a2;background:#fffdf8;flex:none;margin-top:1px}
+.todo .box.done{background:#2f9e6f;border-color:#2f9e6f;position:relative}
+.todo .box.done:after{content:"";position:absolute;left:3px;top:0px;width:3px;height:6px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.todo em{font-style:normal;font-size:8px;font-weight:800;color:#b24d3c;background:#fbe7e1;border:1px solid #f3cfc5;border-radius:3px;padding:1px 4px;margin-left:4px}
+.reuse{margin-top:auto;display:flex;align-items:center;gap:7px;background:#eaf6ef;border:1px solid #cfe9d9;border-radius:7px;padding:7px 10px;font-size:10.5px;color:#317a58;font-weight:650;flex:none}
+.reuse span{font-size:12px}
+.floating{position:absolute;z-index:5;background:#fffdf8;border:1px solid #e0d4c2;border-radius:11px;padding:10px 13px;box-shadow:0 14px 34px rgba(80,56,28,.13);display:flex;flex-direction:column;gap:3px}
+.floating b{font-size:12px;color:#2a211a}.floating span{font-size:10px;color:#8e7f6c}
+.float-agent{right:-28px;top:-24px;background:#f4f1ff;border-color:#dcd4fb}
+.float-agent b{color:#5f4bcb}
+.float-reuse{left:-34px;bottom:74px;background:#eff9f3;border-color:#d2ebdc}
+.float-reuse b{color:#2f7a58}
+.agent .footer{color:#9b8d7c;border-top-color:#e1d5c4}
+.coverage{background:#fbf7ef;border:1px solid #eaddcb;border-radius:11px;padding:10px 13px;flex:none}
+.cov-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cov-head .title{font-size:11.5px;font-weight:800;color:#4d4032}
+.cov-head .count{font-family:"SFMono-Regular","Menlo",monospace;font-size:10px;color:#6a56d8;background:#ece8ff;border:1px solid #ddd5fb;border-radius:4px;padding:2px 6px}
+.cov-bar{height:6px;border-radius:99px;background:#e9ddcc;margin-top:8px;overflow:hidden}
+.cov-bar i{display:block;height:100%;width:100%;border-radius:99px;background:linear-gradient(90deg,#7c6cf0,#2f9e6f)}
+.cov-note{margin-top:6px;font-size:9.5px;color:#9b8d7c}
+</style>
+</head>
+<body>
+<div class="canvas agent">
+  <div class="bg-grid"></div>
+
+  <header class="brand">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round">
+        <circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="9" r="2.5"/><circle cx="9" cy="18" r="2.5"/>
+        <path d="M8.3 7.0 15.6 8.4M7.3 8.3 8.6 15.5M16.3 11.1 10.5 16.4"/>
+      </svg>
+    </div>
+    <div class="word">diff-viz</div>
+    <div class="pill"><span class="dot"></span>AGENT-NATIVE REVIEW · v1.0</div>
+  </header>
+
+  <div class="left-4">
+    <div class="eyebrow">AGENT-NATIVE REVIEW</div>
+    <h1>Agent 写的总结，<br>这次<em>不会再丢</em>。</h1>
+    <p class="lead">界面版本链里点开的历史 commit，也能让 Agent 补总结、影响分析和待办；<b>相同改动</b>在 worktree → commit → range 之间自动复用。</p>
+
+    <div class="feature-list">
+      <div class="feature"><span class="f-icon">→</span><span><code>annotate --review &lt;id&gt;</code> 任意 Review 可写注解，包括历史 commit</span></div>
+      <div class="feature"><span class="f-icon">↻</span><span><b>跨 Review 复用</b>：按「文件 + 归一化 diff」记住，重新生成不用重写</span></div>
+      <div class="feature"><span class="f-icon">◉</span><span><b>Agent 摘要 N/M</b> 覆盖度一眼可见，不再猜哪些文件是自动生成的</span></div>
+    </div>
+
+    <div class="quote">人只看重点：Agent 把总结、影响和风险写进 Review，<b>提交、切分支、重新分析之后都还在</b>。</div>
+  </div>
+
+  <div class="mock-wrap">
+    <div class="mock-shadow"></div>
+    <div class="mock">
+      <div class="mock-bar"><i></i><i></i><i></i><div class="url">127.0.0.1:5173/?review=92131449ad53-commit-db0bee519d3e</div></div>
+      <div class="mock-body">
+        <div class="file-head">
+          <div class="file-icon">TS</div>
+          <div>
+            <div class="file-name">jwt.ts <span class="badge-mod">修改</span></div>
+            <div class="file-path">src/auth/jwt.ts</div>
+          </div>
+          <div class="file-stats"><b>+12</b> <i>−0</i></div>
+        </div>
+
+        <div class="tabs"><span class="active">摘要与影响</span><span>代码 Diff</span><span>待确认 <b>2</b></span></div>
+
+        <div class="agent-note"><span class="spark">✦</span> Agent 注解 <span class="coverage">摘要 12/12</span></div>
+
+        <div class="section">
+          <div class="sec-head"><span class="title">改动总结</span><span class="tag agent">AGENT</span></div>
+          <p>新增 <b>refreshToken()</b>，verifyToken() 增加 exp 类型校验；refresh 字段缺失时返回 null，保持旧客户端兼容。</p>
+        </div>
+
+        <div class="section">
+          <div class="sec-head"><span class="title">影响评估</span><span class="tag chain">影响链路 1 → 2</span></div>
+          <p>直接受影响的下游是 <b>src/middleware/authGuard.ts</b>；另外 2 个文件只在本次变更中，建议按依赖顺序回归。</p>
+        </div>
+
+        <div class="section">
+          <div class="sec-head"><span class="title">依赖关系</span><span class="muted">1 导入 · 3 被依赖</span></div>
+          <div class="chips"><span>format.ts</span><span>routes.ts</span><span>refresh.ts</span><span>authGuard.ts</span></div>
+        </div>
+
+        <div class="section">
+          <div class="sec-head"><span class="title">待确认</span><span class="muted">2 项</span></div>
+          <div class="todo"><span class="box"></span><span>确认 Redis 中 refresh token 的 TTL 与 JWT 过期时间一致 <em>HIGH</em></span></div>
+          <div class="todo"><span class="box done"></span><span>补一个过期边界的单测</span></div>
+        </div>
+
+        <div class="coverage">
+          <div class="cov-head"><span class="title">Agent 覆盖度</span><span class="count">12 / 12 files</span></div>
+          <div class="cov-bar"><i></i></div>
+          <div class="cov-note">全部变更文件都有 Agent 总结 · 0 个自动生成</div>
+        </div>
+
+        <div class="reuse"><span>↻</span> 相同改动在 worktree → commit → range 自动复用</div>
+      </div>
+    </div>
+    <div class="floating float-agent"><b>Agent 摘要 12/12</b><span>每个文件都有总结</span></div>
+    <div class="floating float-reuse"><b>跨 Review 复用</b><span>提交后也不会消失</span></div>
+  </div>
+
+  <footer class="footer"><span>github.com/mdhUser/diff-viz</span><span>v1.0.0 · agent-native review</span></footer>
+</div>
+</body>
+</html>

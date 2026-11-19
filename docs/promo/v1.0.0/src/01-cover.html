@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>diff-viz 1.0 cover</title>
+<link rel="stylesheet" href="base.css">
+<style>
+.cover{background:
+  radial-gradient(900px 620px at 8% 6%,rgba(233,168,76,.17),transparent 62%),
+  radial-gradient(760px 620px at 92% 86%,rgba(124,108,240,.18),transparent 64%),
+  radial-gradient(700px 500px at 60% 0%,rgba(217,96,63,.12),transparent 62%),
+  #0b0f14;
+}
+.glow-a{width:620px;height:620px;left:-220px;top:-280px;background:radial-gradient(circle,rgba(233,168,76,.20),transparent 68%)}
+.glow-b{width:720px;height:720px;right:-260px;bottom:-380px;background:radial-gradient(circle,rgba(124,108,240,.22),transparent 68%)}
+.hero{position:absolute;left:80px;top:146px;width:760px;z-index:4}
+.hero .eyebrow{margin-bottom:16px}
+.version{
+  font-size:196px;line-height:.8;font-weight:900;letter-spacing:-12px;
+  background:linear-gradient(103deg,#fffdf8 2%,#ffe1b0 42%,#f08a5d 72%,#d9603f 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  margin-left:-10px;filter:drop-shadow(0 18px 46px rgba(217,96,63,.18));
+}
+.hero h1{margin-top:24px;font-size:54px;line-height:1.13;font-weight:850;letter-spacing:-1.4px;color:#fbf7f0}
+.hero h1 span{color:#ffb45f}
+.hero .sub{margin-top:24px;font-size:22px;line-height:1.72;color:#9aa7b4;font-weight:450}
+.hero .cta{margin-top:34px;display:flex;align-items:center;gap:14px}
+.hero .meta{margin-top:20px;font-size:12px;letter-spacing:.18em;color:#64717f;font-weight:650}
+.stage{position:absolute;right:54px;top:96px;width:828px;height:620px;transform:rotate(-2.2deg);z-index:3}
+.stage-glow{position:absolute;inset:-40px -30px -60px -40px;background:radial-gradient(closest-side,rgba(233,168,76,.18),transparent 72%);filter:blur(20px)}
+.stage .browser{left:0;top:0;width:828px;height:568px}
+.float-a{right:-36px;top:-26px}
+.float-b{left:-44px;bottom:18px}
+.float-c{right:36px;bottom:-22px}
+.float-b b{color:#8ef0c1}
+.float-c b{color:#ffc078;font-family:"SFMono-Regular","Menlo",monospace;letter-spacing:-.5px}
+.corner{position:absolute;right:54px;bottom:104px;z-index:6;display:flex;align-items:center;gap:10px;color:#6f7b88;font-size:12px;letter-spacing:.12em;font-weight:650}
+.corner .line{width:46px;height:1px;background:linear-gradient(90deg,transparent,#5c6875)}
+</style>
+</head>
+<body>
+<div class="canvas cover">
+  <div class="bg-grid"></div>
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+
+  <header class="brand">
+    <div class="mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round">
+        <circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="9" r="2.5"/><circle cx="9" cy="18" r="2.5"/>
+        <path d="M8.3 7.0 15.6 8.4M7.3 8.3 8.6 15.5M16.3 11.1 10.5 16.4"/>
+      </svg>
+    </div>
+    <div class="word">diff-viz</div>
+    <div class="pill"><span class="dot"></span>v1.0.0 · 正式版</div>
+  </header>
+
+  <main class="hero">
+    <div class="eyebrow">THE REVIEW LAYER FOR AI CODE</div>
+    <div class="version">1.0</div>
+    <h1>AI 改完代码，<br><span>先看影响</span>再 Review</h1>
+    <p class="sub">把一次 Git 改动摊成一张依赖拓扑图。<br>多仓库 · 多语言 · Agent 注解，一次讲清。</p>
+    <div class="cta"><div class="chip"><span class="prompt">$</span> npx diff-viz-cli</div></div>
+    <div class="meta">LOCAL FIRST · ZERO RUNTIME DEPS · MIT</div>
+  </main>
+
+  <div class="stage">
+    <div class="stage-glow"></div>
+    <div class="browser">
+      <div class="browser-bar"><i></i><i></i><i></i><div class="url">127.0.0.1:5173/?review=7dfae4ec</div></div>
+      <img src="assets/overview.png" alt="diff-viz topology screenshot">
+    </div>
+    <div class="float float-a"><b>跨仓库影响</b><span>2 个服务被牵连</span></div>
+    <div class="float float-b"><b>Agent 摘要 12/12</b><span>每个文件都有总结</span></div>
+    <div class="float float-c"><b>57s → 1s</b><span>历史 Review 秒开</span></div>
+  </div>
+
+  <div class="corner"><span class="line"></span>LOCAL · PRIVATE · BY DEFAULT</div>
+  <footer class="footer"><span>github.com/mdhUser/diff-viz</span><span>2026.11.19 · v1.0.0</span></footer>
+</div>
+</body>
+</html>
