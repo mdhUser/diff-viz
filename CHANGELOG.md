@@ -19,6 +19,12 @@
 
 - Agent 注解在提交 / 切换 Review 后丢失：注解原来只存在写入时的那条 Review 快照里，提交后版本链里的 commit Review 是新的 reviewId（且 worktree Review 可能被自动重算成空改动），所以总结全部消失。现在 hub 会按「项目 + 文件路径 + 改动内容（去掉 index 行后的 diff）」记住最后一次 Agent 总结/影响分析/待办，存放在 `~/.diff-viz/annotations/<projectId>.json`；打开或重新生成相同改动的 Review（worktree → commit → range）时自动复用，并对旧的已注解快照做一次回填。**Review 顶部的整体概览（`meta.overallSummary`）也会按「变更文件集合 + 各自 diff」记住并复用**，重新生成 Review 不会再退回自动生成的一句话。内容不同的改动不会复用旧总结。
 
+## [0.10.1] - 2026-11-19
+
+### Fixed
+
+- 整体概览（`meta.overallSummary`）原来只在改动集合完全一致时复用：同一分支提交后换一条 commit Review，只要文件多一个或少一个，页面就退回自动生成的一句话（文件级 Agent 摘要却能复用）。现在按每个变更文件的「路径 + 归一化 diff」计算重合度，当前 Review 与某条已注解概览的改动重合 ≥50%（且至少 3 个文件、覆盖该概览 ≥50%）时也复用整体概览；改动完全不同的 Review 仍不会套用旧概览。
+
 ## [0.9.2] - 2026-11-18
 
 ### Fixed

@@ -476,6 +476,64 @@ test('agent annotations survive commit and are reused in another Review of the s
   }
 });
 
+test('overviews are reused when a new Review change set heavily overlaps', async () => {
+  const repoDir = makeTempRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-viz-hub-overlap-'));
+  const files = ['a.ts', 'b.ts', 'c.ts', 'd.ts'];
+  for (const file of files) write(repoDir, file, `export const ${file[0]} = 1;\n`);
+  commitAll(repoDir, 'init');
+  const base = run(repoDir, 'git', ['rev-parse', 'HEAD']).trim();
+  for (const file of files) write(repoDir, file, `export const ${file[0]} = 2;\n`);
+
+  const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
+  try {
+    const project = await fetch(`${server.url}api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: repoDir }),
+    }).then((response) => response.json());
+    const projectId = project.project.id;
+
+    const worktree = await fetch(`${server.url}api/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, scope: 'worktree' }),
+    }).then((response) => response.json());
+    await fetch(`${server.url}api/annotate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reviewId: worktree.reviewId,
+        annotations: {
+          meta: { overallSummary: '整个 feature 的 Agent 概览' },
+          nodes: { 'a.ts': { summary: 'a 的 Agent 摘要' } },
+        },
+      }),
+    });
+
+    // Commit the annotated work, then add one more commit touching a new file.
+    commitAll(repoDir, 'commit annotated work');
+    write(repoDir, 'e.ts', 'export const e = 1;\n');
+    commitAll(repoDir, 'commit extra file');
+
+    // The range Review now has 5 changed files: 4 identical to the annotated
+    // worktree plus e.ts, so its overview is reused via change-set overlap.
+    const range = await fetch(`${server.url}api/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, scope: 'range', range: `${base}..HEAD` }),
+    }).then((response) => response.json());
+    const data = await fetch(`${server.url}api/data?review=${range.reviewId}`).then((response) => response.json());
+    assert.equal(data.meta.overallSummary, '整个 feature 的 Agent 概览');
+    assert.equal(data.meta.summarySource, 'agent');
+    assert.equal(data.nodes.find((node) => node.path === 'a.ts').summarySource, 'agent');
+  } finally {
+    await server.close();
+    cleanup(repoDir);
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('hub prunes old reviews and keeps state private', async () => {
   const repoDir = makeTempRepo();
   write(repoDir, 'a.ts', 'export const a = 1;\n');

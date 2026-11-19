@@ -437,20 +437,26 @@ export async function startHub({
   // so opening an old manifest-only Review has to read the node payloads (the
   // caller may pass `readDiff`); very large Reviews skip the reuse instead.
   const MAX_OVERALL_KEY_READS = 800;
-  const reviewContentKey = (nodes, readDiff = null) => {
+  // One pass builds both the review-level hash and the path -> content-key map
+  // used for overlap matching (payloads are read at most once when needed).
+  const buildChangeInfo = (nodes, readDiff = null) => {
     const changed = (nodes || []).filter((node) => node && node.status !== 'impacted_only');
     if (changed.length === 0) return null;
     const needsReads = typeof readDiff === 'function' && changed.some((node) => typeof node.diff !== 'string');
     if (needsReads && changed.length > MAX_OVERALL_KEY_READS) return null;
     const parts = [];
+    const changes = {};
     for (const node of changed) {
       const diff = typeof node.diff === 'string' ? node.diff : needsReads ? readDiff(node) : undefined;
       if (typeof diff !== 'string') return null;
-      parts.push(`${node.path}\u0000${normalizeDiffForKey(diff)}`);
+      const normalized = normalizeDiffForKey(diff);
+      parts.push(`${node.path}\u0000${normalized}`);
+      changes[node.path] = annotationKey(node.path, diff);
     }
     parts.sort();
-    return shortId(parts.join('\u0001'), 24);
+    return { hash: shortId(parts.join('\u0001'), 24), changes };
   };
+  const reviewContentKey = (nodes, readDiff = null) => buildChangeInfo(nodes, readDiff)?.hash ?? null;
 
   const agentTodosOf = (node) =>
     Array.isArray(node?.todos) ? node.todos.filter((todo) => todo?.source === 'agent') : [];
@@ -496,13 +502,21 @@ export async function startHub({
     }
     // Overall summaries are review-scoped, so key them by the exact change set.
     const readDiff = readPayload ? (node) => nodeDiffOf(node, readPayload) : null;
-    const overallKey = meta && meta.summarySource === 'agent' ? reviewContentKey(nodes, readDiff) : null;
+    // Keep a path -> content-key map so a later Review with a heavily
+    // overlapping change set (same branch, a few extra/removed files) can
+    // still reuse its overview.
+    const changeInfo = meta && meta.summarySource === 'agent' ? buildChangeInfo(nodes, readDiff) : null;
+    const overallKey = changeInfo?.hash ?? null;
     const overallText = overallKey ? String(meta.overallSummary || '').trim() : '';
     if (overallKey && overallText) {
       store.overalls = store.overalls && typeof store.overalls === 'object' ? store.overalls : {};
+      const changes = changeInfo.changes;
       const currentOverall = store.overalls[overallKey];
       if (!currentOverall || currentOverall.summary !== overallText) {
-        store.overalls[overallKey] = { summary: overallText, updatedAt: formatTimestamp() };
+        store.overalls[overallKey] = { summary: overallText, changes, updatedAt: formatTimestamp() };
+        changed += 1;
+      } else if (changes && !currentOverall.changes) {
+        currentOverall.changes = changes;
         changed += 1;
       }
       const overallKeys = Object.keys(store.overalls);
@@ -533,8 +547,32 @@ export async function startHub({
     // not already carry an agent-written overview and the change set matches.
     if (data?.meta && !(data.meta.summarySource === 'agent' && String(data.meta.overallSummary || '').trim())) {
       const readDiff = readPayload ? (node) => nodeDiffOf(node, readPayload) : null;
-      const overallKey = reviewContentKey(data.nodes, readDiff);
-      const remembered = overallKey && store.overalls ? store.overalls[overallKey] : null;
+      const overalls = store.overalls && typeof store.overalls === 'object' ? store.overalls : {};
+      const changeInfo = buildChangeInfo(data.nodes, readDiff);
+      const currentChanges = changeInfo?.changes ?? null;
+      const overallKey = changeInfo?.hash ?? null;
+      let remembered = overallKey ? overalls[overallKey] : null;
+      if (!remembered?.summary && currentChanges) {
+        // Fall back to the stored overview whose change set overlaps the current
+        // one the most: same branch with a few added/removed files still counts,
+        // a mostly different change set does not.
+        const currentCount = Object.keys(currentChanges).length;
+        const minimum = Math.max(3, Math.ceil(currentCount * 0.5));
+        let best = null;
+        for (const entry of Object.values(overalls)) {
+          if (!entry?.summary || !entry.changes) continue;
+          const storedPaths = Object.keys(entry.changes);
+          if (storedPaths.length === 0) continue;
+          let matched = 0;
+          for (const [nodePath, key] of Object.entries(entry.changes)) {
+            if (currentChanges[nodePath] === key) matched += 1;
+          }
+          if (matched < minimum) continue;
+          if (matched < Math.ceil(storedPaths.length * 0.5)) continue;
+          if (!best || matched > best.matched) best = { entry, matched };
+        }
+        remembered = best?.entry ?? null;
+      }
       if (remembered?.summary) {
         data.meta.overallSummary = remembered.summary;
         data.meta.summarySource = 'agent';
