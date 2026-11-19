@@ -101,6 +101,11 @@ diff-viz stop
 diff-viz annotate \
   --data .diff-review-data.json \
   --annotations .diff-review-annotations.json
+
+# 直接给 hub 里某条 Review 写注解（例如界面版本链里点开的 commit Review）
+diff-viz annotate \
+  --review 92131449ad53-commit-db0bee519d3e \
+  --annotations .diff-review-annotations.json
 ```
 
 完整参数：
@@ -114,6 +119,7 @@ diff-viz annotate \
 | `--data <file>` | 清单文件路径，默认 `<repo>/.diff-review-data.json`；节点内容写入同级 `<file>.nodes/` |
 | `--annotations <file>` | 生成时合并注解 JSON |
 | `--node <path>` | 仅用于 `annotate`：只更新指定节点的注解 |
+| `--review <id>` | 仅用于 `annotate`：直接写入 hub 里指定 id 的 Review（含历史 commit Review），不需要本地数据文件 |
 | `--languages <file>` | 额外语言定义 JSON，默认读取 `<repo>/.diff-viz/languages.json` |
 | `--workspace <file>` | 分析多仓库工作区并生成服务级拓扑 |
 | `--init` | 配合 `workspace` 命令，扫描同级仓库生成模板 |
@@ -341,6 +347,7 @@ diff-viz skill install --dir ~/.config/my-agent/skills --copy
 - `imports` / `importedBy` 是该文件**完整**的直接依赖列表，包含没有画进图里的上游文件；详情抽屉会把这些文件标成「图外」。
 - `meta.reviewOrder` 是依赖优先的 Review 顺序；`meta.warnings` 记录扫描上限等提示。
 - 额外字段（`summarySource`、`reviewed`、`impactOrigins`、`depth`、`binary` 等）用于界面增强，不属于必需字段。
+- Agent 注解会按「项目 + 文件路径 + 改动内容」记在 hub 状态目录的 `~/.diff-viz/annotations/<projectId>.json`：同一次改动从工作区变成 commit、或从 commit 换到 range Review 时，Agent 总结/影响分析/待办会自动复用；文件内容再变则不会套用旧总结。
 
 ## 依赖解析与影响模型
 

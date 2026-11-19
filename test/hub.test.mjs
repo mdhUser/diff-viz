@@ -323,6 +323,153 @@ test('commit history defaults to the checked-out branch and all=1 includes every
   }
 });
 
+test('annotate API writes agent summaries into an existing hub review', async () => {
+  const repoDir = makeTempRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-viz-hub-ann-'));
+  write(repoDir, 'a.ts', 'export const a = 1;\n');
+  commitAll(repoDir, 'init');
+  write(repoDir, 'a.ts', 'export const a = 2;\n');
+  const data = buildReviewData(new GitRepo(repoDir), { worktree: true });
+
+  const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
+  try {
+    const imported = await fetch(`${server.url}api/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: repoDir, data, reviewId: 'ann-review' }),
+    }).then((response) => response.json());
+
+    const before = await fetch(`${server.url}api/data?review=${imported.reviewId}`).then((response) =>
+      response.json(),
+    );
+    const payload = before.nodes[0].payload;
+    const payloadFile = path.join(home, 'reviews', imported.reviewId, 'nodes', `${payload}.json`);
+    const payloadBody = fs.readFileSync(payloadFile, 'utf8');
+
+    const annotated = await fetch(`${server.url}api/annotate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reviewId: imported.reviewId,
+        annotations: {
+          meta: { overallSummary: 'Agent 整体总结' },
+          nodes: { 'a.ts': { summary: 'Agent 文件总结', impactAnalysis: 'Agent 影响说明', todos: ['人工确认'] } },
+        },
+      }),
+    }).then((response) => response.json());
+    assert.equal(annotated.ok, true);
+    assert.equal(annotated.annotated, 1);
+
+    const after = await fetch(`${server.url}api/data?review=${imported.reviewId}`).then((response) =>
+      response.json(),
+    );
+    assert.equal(after.meta.overallSummary, 'Agent 整体总结');
+    assert.equal(after.meta.summarySource, 'agent');
+    const node = after.nodes.find((item) => item.path === 'a.ts');
+    assert.equal(node.summary, 'Agent 文件总结');
+    assert.equal(node.summarySource, 'agent');
+    assert.equal(node.impactSource, 'agent');
+    assert.ok(node.todos.some((todo) => todo.source === 'agent' && todo.text === '人工确认'));
+    assert.equal(fs.readFileSync(payloadFile, 'utf8'), payloadBody, 'annotate must not touch node payloads');
+
+    const missing = await fetch(`${server.url}api/annotate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reviewId: 'nope', annotations: { nodes: {} } }),
+    });
+    assert.equal(missing.status, 404);
+  } finally {
+    await server.close();
+    cleanup(repoDir);
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('agent annotations survive commit and are reused in another Review of the same change', async () => {
+  const repoDir = makeTempRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-viz-hub-memory-'));
+  write(repoDir, 'a.ts', 'export const a = 1;\n');
+  commitAll(repoDir, 'init');
+  write(repoDir, 'a.ts', 'export const a = 2;\n');
+
+  const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
+  try {
+    const project = await fetch(`${server.url}api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: repoDir }),
+    }).then((response) => response.json());
+    const projectId = project.project.id;
+
+    // Worktree Review with an agent summary.
+    const worktree = await fetch(`${server.url}api/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, scope: 'worktree' }),
+    }).then((response) => response.json());
+    await fetch(`${server.url}api/annotate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reviewId: worktree.reviewId,
+        annotations: {
+          meta: { overallSummary: '工作区总结' },
+          nodes: { 'a.ts': { summary: 'Agent 改的是常量', impactAnalysis: '无下游' } },
+        },
+      }),
+    });
+
+    // A commit Review generated before the annotation must pick the annotation
+    // up when it is opened (reuse on read).
+    run(repoDir, 'git', ['add', '-A']);
+    commitAll(repoDir, 'commit change');
+    const sha = run(repoDir, 'git', ['rev-parse', 'HEAD']).trim();
+    const commitReview = await fetch(`${server.url}api/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, scope: 'commit', commit: sha }),
+    }).then((response) => response.json());
+    assert.equal(commitReview.reviewId, `${projectId}-commit-${sha.slice(0, 12)}`);
+
+    const opened = await fetch(`${server.url}api/data?review=${commitReview.reviewId}`).then((response) =>
+      response.json(),
+    );
+    const openedNode = opened.nodes.find((node) => node.path === 'a.ts');
+    assert.equal(openedNode.summary, 'Agent 改的是常量');
+    assert.equal(openedNode.summarySource, 'agent');
+    assert.equal(openedNode.impactSource, 'agent');
+
+    // Regenerating the same commit Review keeps the annotation from the store.
+    const regenerated = await fetch(`${server.url}api/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, scope: 'commit', commit: sha }),
+    }).then((response) => response.json());
+    const regeneratedData = await fetch(`${server.url}api/data?review=${regenerated.reviewId}`).then((response) =>
+      response.json(),
+    );
+    assert.equal(regeneratedData.nodes.find((node) => node.path === 'a.ts').summarySource, 'agent');
+
+    // Different content must not inherit the stale annotation.
+    write(repoDir, 'a.ts', 'export const a = 3;\n');
+    const changed = await fetch(`${server.url}api/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId, scope: 'worktree' }),
+    }).then((response) => response.json());
+    const changedData = await fetch(`${server.url}api/data?review=${changed.reviewId}`).then((response) =>
+      response.json(),
+    );
+    const changedNode = changedData.nodes.find((node) => node.path === 'a.ts');
+    assert.notEqual(changedNode.summarySource, 'agent');
+    assert.notEqual(changedNode.summary, 'Agent 改的是常量');
+  } finally {
+    await server.close();
+    cleanup(repoDir);
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
 test('hub prunes old reviews and keeps state private', async () => {
   const repoDir = makeTempRepo();
   write(repoDir, 'a.ts', 'export const a = 1;\n');

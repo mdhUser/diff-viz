@@ -394,6 +394,164 @@ export async function startHub({
 
   const loadReview = (reviewId) => loadStore(reviewId)?.manifest ?? null;
 
+  /* ---------------- agent annotation memory ----------------
+   * Agent summaries used to live only in the Review snapshot they were
+   * applied to. Committing creates a new commit Review with a different id,
+   * and a watch re-analysis can overwrite the worktree Review with an empty
+   * diff, so those summaries disappeared from the page. Remember the latest
+   * agent summary per file+diff-content in a project-scoped store and reuse
+   * it whenever the same change shows up in another Review.
+   */
+  const annotationsDir = path.join(home, 'annotations');
+  ensurePrivateDir(annotationsDir);
+  const annotationStores = new Map();
+  const MAX_ANNOTATION_ENTRIES = 5000;
+
+  const annotationStoreFile = (projectId) => path.join(annotationsDir, `${safeReviewId(projectId, 'project')}.json`);
+
+  const readAnnotationStore = (projectId) => {
+    if (annotationStores.has(projectId)) return annotationStores.get(projectId);
+    const raw = readJsonSafe(annotationStoreFile(projectId));
+    const store =
+      raw && typeof raw === 'object' && raw.nodes && typeof raw.nodes === 'object'
+        ? raw
+        : { version: 1, updatedAt: null, nodes: {} };
+    annotationStores.set(projectId, store);
+    return store;
+  };
+
+  const saveAnnotationStore = (projectId, store) => {
+    store.updatedAt = formatTimestamp();
+    writeJsonAtomic(annotationStoreFile(projectId), store);
+  };
+
+  // `index` lines carry blob hashes that differ between an uncommitted file and
+  // the same content after a commit; strip them so the key is content-based.
+  const annotationKey = (nodePath, diff) => {
+    const normalized = String(diff ?? '').replace(/^index [0-9a-f]+\.\.[0-9a-f]+.*$/gm, '');
+    return shortId(`${nodePath}\u0000${normalized}`, 24);
+  };
+
+  const agentTodosOf = (node) =>
+    Array.isArray(node?.todos) ? node.todos.filter((todo) => todo?.source === 'agent') : [];
+  const hasAgentContent = (node) =>
+    Boolean(node) && (node.summarySource === 'agent' || node.impactSource === 'agent' || agentTodosOf(node).length > 0);
+
+  const nodeDiffOf = (node, readPayload) => {
+    if (typeof node.diff === 'string') return node.diff;
+    if (typeof readPayload !== 'function' || !node.payload) return undefined;
+    return readPayload(node)?.diff;
+  };
+
+  const harvestAnnotations = (projectId, source) => {
+    const nodes = source?.nodes ?? source?.data?.nodes;
+    if (!projectId || !Array.isArray(nodes)) return 0;
+    const readPayload = typeof source?.readPayload === 'function' ? source.readPayload.bind(source) : null;
+    const store = readAnnotationStore(projectId);
+    let changed = 0;
+    for (const node of nodes) {
+      if (!hasAgentContent(node)) continue;
+      const diff = nodeDiffOf(node, readPayload);
+      if (typeof diff !== 'string') continue;
+      const key = annotationKey(node.path, diff);
+      const next = {
+        key,
+        summary: node.summarySource === 'agent' ? String(node.summary || '') : '',
+        impactAnalysis: node.impactSource === 'agent' ? String(node.impactAnalysis || '') : '',
+        todos: agentTodosOf(node).map((todo) => ({ ...todo })),
+      };
+      const current = store.nodes[node.path];
+      if (
+        current &&
+        current.key === key &&
+        current.summary === next.summary &&
+        current.impactAnalysis === next.impactAnalysis &&
+        JSON.stringify(current.todos || []) === JSON.stringify(next.todos)
+      ) {
+        continue;
+      }
+      store.nodes[node.path] = { ...next, updatedAt: formatTimestamp() };
+      changed += 1;
+    }
+    if (changed > 0) {
+      const paths = Object.keys(store.nodes);
+      if (paths.length > MAX_ANNOTATION_ENTRIES) {
+        paths.sort((a, b) => String(store.nodes[a].updatedAt).localeCompare(String(store.nodes[b].updatedAt)));
+        for (const oldPath of paths.slice(0, paths.length - MAX_ANNOTATION_ENTRIES)) delete store.nodes[oldPath];
+      }
+      saveAnnotationStore(projectId, store);
+    }
+    return changed;
+  };
+
+  const applyAnnotationsFromStore = (projectId, data, { readPayload = null } = {}) => {
+    const store = readAnnotationStore(projectId);
+    let applied = 0;
+    for (const node of data?.nodes ?? []) {
+      if (!node || node.status === 'impacted_only') continue;
+      if (hasAgentContent(node)) continue;
+      const entry = store.nodes[node.path];
+      if (!entry) continue;
+      const diff = nodeDiffOf(node, readPayload);
+      if (typeof diff !== 'string' || entry.key !== annotationKey(node.path, diff)) continue;
+      if (entry.summary) {
+        node.summary = entry.summary;
+        node.summarySource = 'agent';
+      }
+      if (entry.impactAnalysis) {
+        node.impactAnalysis = entry.impactAnalysis;
+        node.impactSource = 'agent';
+      }
+      const todos = Array.isArray(node.todos) ? node.todos : (node.todos = []);
+      const texts = new Set(todos.map((todo) => todo?.text));
+      for (const todo of entry.todos || []) {
+        if (!todo?.text || texts.has(todo.text)) continue;
+        todos.push({ ...todo, id: todo.id || `a-${shortId(`${node.path}::${todo.text}`, 10)}` });
+        texts.add(todo.text);
+      }
+      applied += 1;
+    }
+    return applied;
+  };
+
+  // Seed the store from reviews written before this feature existed. Runs at
+  // most once per project per hub process, oldest snapshots first so the most
+  // recent annotation wins.
+  const backfilledProjects = new Set();
+  const backfillProjectAnnotations = (projectId) => {
+    if (!projectId || backfilledProjects.has(projectId)) return;
+    backfilledProjects.add(projectId);
+    const snapshots = listReviewSnapshots(reviewsDir)
+      .filter((snapshot) => snapshot.id.startsWith(`${projectId}-`))
+      .sort((a, b) => a.mtime - b.mtime);
+    for (const snapshot of snapshots) {
+      try {
+        const source = readReviewStore(snapshot.path, { strict: false });
+        if (source) harvestAnnotations(projectId, source);
+      } catch {
+        /* a broken old snapshot must not break Review generation */
+      }
+    }
+  };
+
+  const projectIdOfReview = (data, reviewId) =>
+    data?.meta?.projectId ||
+    (typeof reviewId === 'string' && /^[0-9a-f]{12}-/.test(reviewId) ? reviewId.slice(0, 12) : null);
+
+  // Give an already-stored Review the agent annotations remembered for the same
+  // file contents; used when opening a historical Review from the version chain.
+  const reuseStoredAnnotations = (store, reviewId) => {
+    const data = store?.manifest;
+    const projectId = projectIdOfReview(data, reviewId);
+    if (!projectId) return 0;
+    backfillProjectAnnotations(projectId);
+    const applied = applyAnnotationsFromStore(projectId, data, {
+      readPayload: (node) => store.readPayload(node),
+    });
+    if (applied > 0) store.save();
+    return applied;
+  };
+
   const saveReview = (reviewId, data, projectId) => {
     const dir = reviewPath(reviewId);
     ensurePrivateDir(dir);
@@ -405,6 +563,7 @@ export async function startHub({
       /* ignore */
     }
     reviews.set(reviewId, readReviewStore(dir));
+    if (projectId) harvestAnnotations(projectId, data);
     const project = projectId ? projects.get(projectId) : null;
     if (project) {
       project.lastReviewId = reviewId;
@@ -496,7 +655,11 @@ export async function startHub({
     data.meta.projectId = project.id;
     data.meta.reviewId = reviewId;
     data.meta.scopeLabel = scope;
-    const previous = loadReview(reviewId);
+    const previousStore = loadStore(reviewId);
+    if (previousStore) harvestAnnotations(project.id, previousStore);
+    backfillProjectAnnotations(project.id);
+    applyAnnotationsFromStore(project.id, data);
+    const previous = previousStore?.manifest ?? null;
     if (previous) mergePreviousState(data, previous);
     saveReview(reviewId, data, project.id);
     lastPayloads.set(project.id, { ...payload, scope });
@@ -616,7 +779,12 @@ export async function startHub({
     const dir = reviewPath(reviewId);
     ensurePrivateDir(dir);
 
-    const previous = loadReview(reviewId);
+    backfillProjectAnnotations(project.id);
+    if (sourceStore) harvestAnnotations(project.id, sourceStore);
+    if (data) applyAnnotationsFromStore(project.id, data);
+    const previousStore = loadStore(reviewId);
+    if (previousStore) harvestAnnotations(project.id, previousStore);
+    const previous = previousStore?.manifest ?? null;
     let manifest;
     if (sourceStore) {
       if (previous) mergePreviousState(sourceStore.manifest, previous);
@@ -631,7 +799,9 @@ export async function startHub({
     } catch {
       /* ignore */
     }
-    reviews.set(reviewId, readReviewStore(dir));
+    const importedStore = readReviewStore(dir);
+    reviews.set(reviewId, importedStore);
+    harvestAnnotations(project.id, importedStore);
     project.lastReviewId = reviewId;
     project.updatedAt = formatTimestamp();
     saveProjects();
@@ -822,8 +992,13 @@ export async function startHub({
         if (payload.summary) data.meta.overallSummary = String(payload.summary);
         data.meta.updatedAt = formatTimestamp();
         store.save();
+        const annotatedProjectId = projectIdOfReview(data, reviewId);
+        if (annotatedProjectId) harvestAnnotations(annotatedProjectId, store);
         reviews.delete(reviewId);
-        sendJson(res, 200, { ok: true });
+        const annotated = data.nodes.filter(
+          (node) => node.summarySource === 'agent' || (node.todos || []).some((todo) => todo.source === 'agent'),
+        ).length;
+        sendJson(res, 200, { ok: true, reviewId, annotated, nodes: data.nodes.length });
         return;
       }
 
@@ -837,6 +1012,13 @@ export async function startHub({
         if (!store) {
           sendJson(res, 404, { error: '找不到该 Review。' });
           return;
+        }
+        // Historical reviews may not carry agent annotations themselves; reuse
+        // what was remembered for the same file contents (worktree → commit).
+        try {
+          reuseStoredAnnotations(store, reviewId);
+        } catch {
+          /* annotation memory is best effort; never fail a review load for it */
         }
         // Default payload is the manifest (node metadata only); `?full=1` keeps
         // the old whole-review shape for scripts that still need it.

@@ -35,6 +35,7 @@ diff-viz · 本地代码变更可视化 Review 工具
   --data <file>           清单文件路径 (默认 <repo>/.diff-review-data.json，节点内容存 <file>.nodes/)
   --annotations <file>    生成时合并注解文件 (JSON，见 SKILL.md)
   --node <path>           annotate 时只更新指定节点
+  --review <id>           annotate 时直接写入 hub 里指定 id 的 Review（含历史 commit Review）
   --languages <file>      额外语言定义 JSON（也可放 <repo>/.diff-viz/languages.json）
   --summary <text>        覆盖整体摘要
   --json-only             仅生成 JSON，不启动界面
@@ -115,6 +116,7 @@ const VALUE_FLAGS = new Set([
   'node',
   'languages',
   'workspace',
+  'review',
 ]);
 
 function toCamel(name) {
@@ -280,6 +282,11 @@ async function syncAnnotations(hubUrl, { root, reviewId, annotations, onlyPaths,
   return response;
 }
 
+function hubUrlFor(info) {
+  const host = info.host === '0.0.0.0' || info.host === '::' ? '127.0.0.1' : info.host;
+  return `http://${host}:${info.port}/`;
+}
+
 // Keep the hub-assigned ids on disk without rewriting node payloads.
 function applyReviewIds(dataPath, { reviewId, projectId }) {
   const store = readReviewStore(dataPath);
@@ -422,6 +429,37 @@ export async function main(argv = process.argv.slice(2)) {
 
   if (options.command === 'annotate') {
     if (!options.annotations) throw new Error('annotate 需要 --annotations <file|->。');
+    const annotations = readAnnotations(options.annotations);
+    const onlyPaths = options.node ? [String(options.node)] : null;
+
+    // Annotate a Review that already lives in the hub (for example a commit
+    // Review opened from the version chain) without regenerating anything.
+    if (options.review) {
+      const reviewId = String(options.review);
+      const hub = readHubInfo();
+      if (!hub || !(await hubIsAlive(hub))) {
+        throw new Error('--review 需要 hub 正在运行；请先运行 diff-viz hub，或用不带 --review 的 annotate 写本地数据文件。');
+      }
+      const hubUrl = hubUrlFor(hub);
+      const response = await syncAnnotations(hubUrl, {
+        reviewId,
+        annotations,
+        onlyPaths,
+        summary: options.summary,
+      });
+      if (response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        const count = Number.isFinite(payload.annotated) ? `，${payload.annotated} 个节点有 Agent 注解` : '';
+        process.stdout.write(`✔ 已把注解写入 hub Review ${reviewId}${count}\n`);
+        return;
+      }
+      if (response.status === 404) throw new Error(`hub 里找不到 Review：${reviewId}`);
+      if (response.status === 405) {
+        throw new Error('运行中的 hub 版本过旧，不支持 /api/annotate；请运行 `diff-viz stop` 后重新打开 Review 再试。');
+      }
+      throw await hubError(response, '写入 hub Review 失败');
+    }
+
     const repo = repoFromOptions(options);
     const dataPath = dataPathFor(repo, options);
     let store;
@@ -433,8 +471,6 @@ export async function main(argv = process.argv.slice(2)) {
     // Only the manifest is loaded here: summaries and todos live in node
     // metadata, so a 100 MB review does not have to be read or rewritten.
     const data = store.manifest;
-    const annotations = readAnnotations(options.annotations);
-    const onlyPaths = options.node ? [String(options.node)] : null;
     applyAnnotations(data, annotations, { onlyPaths });
     if (options.summary) data.meta.overallSummary = options.summary;
     data.meta.updatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
@@ -450,8 +486,7 @@ export async function main(argv = process.argv.slice(2)) {
     const hub = readHubInfo();
     let syncNote = null;
     if (hub && (await hubIsAlive(hub))) {
-      const hubHost = hub.host === '0.0.0.0' || hub.host === '::' ? '127.0.0.1' : hub.host;
-      const hubUrl = `http://${hubHost}:${hub.port}/`;
+      const hubUrl = hubUrlFor(hub);
       try {
         const response = await syncAnnotations(hubUrl, {
           root: repo.root,

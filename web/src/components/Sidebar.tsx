@@ -84,8 +84,20 @@ export function Sidebar({ data, selectedId, query, reviewedMap, isTodoDone, onQu
               ) : null}
             </>
           ) : null}
-          {agentSummaries > 0 ? (
-            <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[9px] text-accent-bright">
+          {changed.length > 0 ? (
+            <div
+              className={cn(
+                'mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px]',
+                agentSummaries > 0
+                  ? 'bg-accent-soft text-accent-bright'
+                  : 'border border-line bg-ink-850/60 text-mist-600',
+              )}
+              title={
+                agentSummaries > 0
+                  ? `本 Review 有 ${agentSummaries} 个文件带 Agent 注解`
+                  : '还没有 Agent 注解：先让 Agent 写注解，再用 diff-viz annotate --review <id> 写入这条 Review'
+              }
+            >
               <Sparkles size={9} />
               Agent 摘要 {agentSummaries}/{changed.length}
             </div>

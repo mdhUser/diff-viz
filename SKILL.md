@@ -210,6 +210,18 @@ diff-viz annotate \
 
 `annotate` 只重写清单（`--node` 时也不碰节点内容文件），所以对大仓库反复写摘要不会变慢；运行中的 hub 会通过 `/api/annotate` 增量同步，无需重新上传整份 Review。
 
+要给**界面里已经打开的 Review**（例如版本链里点开的某次 commit Review）补注解，不需要本地数据文件，直接指定 review id 即可（review id 在页面 URL 的 `?review=` 后面）：
+
+```bash
+diff-viz annotate \
+  --review 92131449ad53-commit-db0bee519d3e \
+  --annotations .diff-review-annotations.json
+```
+
+写入后刷新页面；文件摘要右上角会从「自动生成」变成「Agent 总结」，侧栏「变更概览」下的 **Agent 摘要 N/M** 计数也会更新。
+
+注解会按「项目 + 文件路径 + 改动内容」记在 hub 状态目录 `~/.diff-viz/annotations/<projectId>.json`：同一次改动从工作区变成 commit、或换一个 commit/range Review 打开时，Agent 总结会自动复用；改动内容变了就不会套用旧总结。
+
 ## hub 管理
 
 ```bash

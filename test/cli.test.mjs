@@ -2,10 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { GitRepo } from '../src/git.mjs';
+import { buildReviewData } from '../src/collect.mjs';
+import { startHub } from '../src/hub.mjs';
 import { cleanup, commitAll, makeTempRepo, run, write } from './helpers.mjs';
 
 const bin = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'diff-viz.mjs');
+const execFileAsync = promisify(execFile);
 
 test('CLI generates JSON-only output and merges annotations', () => {
   const dir = makeTempRepo();
@@ -166,5 +173,68 @@ test('annotate upgrades a legacy single-file review to split storage', () => {
     assert.equal(payload.newContent, 'new\n');
   } finally {
     cleanup(dir);
+  }
+});
+
+test('CLI annotate --review writes annotations into a running hub review', async () => {
+  const dir = makeTempRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-viz-cli-ann-review-'));
+  try {
+    write(dir, 'src/a.ts', 'export const a = 1;\n');
+    commitAll(dir, 'init');
+    write(dir, 'src/a.ts', 'export const a = 2;\n');
+    const data = buildReviewData(new GitRepo(dir), { worktree: true });
+    const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
+    try {
+      const imported = await fetch(`${server.url}api/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ root: dir, data, reviewId: 'cli-review-target' }),
+      }).then((response) => response.json());
+      assert.ok(imported.reviewId);
+
+      const annotationsPath = path.join(dir, 'ann.json');
+      fs.writeFileSync(
+        annotationsPath,
+        JSON.stringify({
+          meta: { overallSummary: 'CLI --review 总结' },
+          nodes: { 'src/a.ts': { summary: 'CLI --review 文件摘要', todos: ['人工确认'] } },
+        }),
+        'utf8',
+      );
+
+      // The hub runs in this test process, so the CLI must be spawned async:
+      // a blocking execFileSync would stall the event loop and the health
+      // probe would time out before the hub could answer.
+      const { stdout: output } = await execFileAsync(
+        process.execPath,
+        [bin, 'annotate', '--review', imported.reviewId, '--annotations', annotationsPath],
+        { cwd: dir, env: { ...process.env, DIFF_VIZ_HOME: home }, encoding: 'utf8' },
+      );
+      assert.match(output, /已把注解写入 hub Review/);
+
+      const review = await fetch(`${server.url}api/data?review=${imported.reviewId}`).then((response) =>
+        response.json(),
+      );
+      assert.equal(review.meta.overallSummary, 'CLI --review 总结');
+      const node = review.nodes.find((item) => item.path === 'src/a.ts');
+      assert.equal(node.summary, 'CLI --review 文件摘要');
+      assert.equal(node.summarySource, 'agent');
+
+      const missing = await execFileAsync(
+        process.execPath,
+        [bin, 'annotate', '--review', 'nope', '--annotations', annotationsPath],
+        { cwd: dir, env: { ...process.env, DIFF_VIZ_HOME: home }, encoding: 'utf8' },
+      ).then(
+        () => '',
+        (error) => String(error.stderr || error.stdout || error.message),
+      );
+      assert.match(missing, /找不到 Review/);
+    } finally {
+      await server.close();
+    }
+  } finally {
+    cleanup(dir);
+    fs.rmSync(home, { recursive: true, force: true });
   }
 });
