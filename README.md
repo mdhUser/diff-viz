@@ -349,6 +349,19 @@ diff-viz skill install --dir ~/.config/my-agent/skills --copy
 - 额外字段（`summarySource`、`reviewed`、`impactOrigins`、`depth`、`binary` 等）用于界面增强，不属于必需字段。
 - Agent 注解会按「项目 + 文件路径 + 改动内容」记在 hub 状态目录的 `~/.diff-viz/annotations/<projectId>.json`：同一次改动从工作区变成 commit、或从 commit 换到 range Review 时，Agent 整体概览、文件总结/影响分析/待办都会自动复用；文件内容再变则不会套用旧总结。
 
+## 版本与兼容性（1.x）
+
+项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)：`0.y.z` 阶段 minor 版本递增（0.7 → 0.8 → 0.9 → 0.10），**1.0.0 表示对外契约冻结**，不是「0.9 的下一个数字」。
+
+1.x 内以下接口保持兼容，破坏性变更进入 2.0.0：
+
+- **CLI**：`diff-viz` / `serve` / `annotate` / `hub` / `stop` / `workspace` / `skill install` 及现有参数（新增参数不算破坏）。
+- **数据**：`.diff-review-data.json`（`storage.format: 2` 清单）+ `<data>.nodes/` 节点内容；新增字段保持向后兼容。
+- **hub API**：`/api/health`、`/api/hub`、`/api/projects`、`/api/commits`、`/api/review`、`/api/import`、`/api/data`（含 `?full=1`）、`/api/node`、`/api/state`、`/api/annotate`、`/api/events`、`/api/workspace`。
+- **Agent 注解 JSON**：`{ meta: { overallSummary }, nodes: { "<path>": { summary, impactAnalysis, todos } } }`。
+
+兼容旧版本：v1 单文件 Review 仍可读取，第一次写回时自动升级为拆分格式；旧版 hub 进程仍在运行时，`review` / `serve` 会自动回退到整份导入，`annotate` 会提示重启 hub。
+
 ## 依赖解析与影响模型
 
 | 语言 | 解析内容 | 解析范围 |
@@ -510,6 +523,11 @@ npm run package:skill:standalone  # 可选：离线自包含包（含 bin/src/di
 
 | 版本 | 主要内容 |
 | --- | --- |
+| `v1.0.0` | 冻结对外契约（CLI / 数据格式 v2 / hub API / Agent 注解），兼容旧数据与旧 hub；汇总 0.7–0.10 能力 |
+| `v0.10.x` | Agent 注解可写入任意已有 Review；hub 按「项目 + 文件 + 归一化 diff」跨 Review 复用总结/影响/待办与整体概览 |
+| `v0.9.x` | 版本链默认当前分支；历史 Review 批量读取（2,900 文件单 commit 57–69 s → ~1 s）；工作区 per-repo 比较范围；概览展开与 Agent 覆盖徽章 |
+| `v0.8.x` | 多仓库工作区拓扑；Review 拆分存储（84 MB 级 annotate 2.9 s / 670 MB → 0.06 s / 60 MB）与节点内容按需加载 |
+| `v0.7.x` | Rust / Kotlin / C# / Ruby 依赖解析、自定义语言、CI 三平台矩阵 |
 | `v0.6.1` | 薄 skill 安装（`diff-viz skill install`）、SKILL.md 与 CLI 解耦、thin/standalone 打包 |
 | `v0.6.0` | 首次发布到 npm；文件监听 + SSE 自动刷新、解析缓存、影响链路、节点忽略、Review 清理与权限收紧 |
 | `v0.5.0` | 界面内添加/移除仓库、生成文件自动进 `.git/info/exclude` |

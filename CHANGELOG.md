@@ -19,6 +19,19 @@
 
 - Agent 注解在提交 / 切换 Review 后丢失：注解原来只存在写入时的那条 Review 快照里，提交后版本链里的 commit Review 是新的 reviewId（且 worktree Review 可能被自动重算成空改动），所以总结全部消失。现在 hub 会按「项目 + 文件路径 + 改动内容（去掉 index 行后的 diff）」记住最后一次 Agent 总结/影响分析/待办，存放在 `~/.diff-viz/annotations/<projectId>.json`；打开或重新生成相同改动的 Review（worktree → commit → range）时自动复用，并对旧的已注解快照做一次回填。**Review 顶部的整体概览（`meta.overallSummary`）也会按「变更文件集合 + 各自 diff」记住并复用**，重新生成 Review 不会再退回自动生成的一句话。内容不同的改动不会复用旧总结。
 
+## [1.0.0] - 2026-11-19
+
+**1.0 = 对外契约冻结。** 此前 0.x 的 minor 版本（0.7 / 0.8 / 0.9 / 0.10）按 semver 规则逐个递增；从 1.0.0 起，下列接口视为稳定，1.x 内不做破坏性改动，破坏性变更进入 2.0.0。
+
+### Changed
+
+- **CLI 契约**：`review` / `serve` / `annotate` / `hub` / `stop` / `workspace` / `skill install` 命令与现有参数保持兼容；新增参数不算破坏性变更。
+- **数据契约**：`.diff-review-data.json`（`storage.format: 2` 清单）+ `<data>.nodes/` 节点内容，字段见 README「数据契约」；新增字段保持向后兼容。
+- **hub HTTP API**：`/api/health`、`/api/hub`、`/api/projects`、`/api/commits`、`/api/review`、`/api/import`、`/api/data`（含 `?full=1`）、`/api/node`、`/api/state`、`/api/annotate`、`/api/events`、`/api/workspace`。
+- **Agent 注解契约**：`{ meta: { overallSummary }, nodes: { "<path>": { summary, impactAnalysis, todos } } }`。
+- 兼容旧版本：v1 单文件 Review 仍可读取并在第一次写回时自动升级为拆分格式；旧版 hub 进程仍在运行时，CLI 的 `review` / `serve` 会自动回退到整份导入，`annotate` 会提示重启 hub。
+- 汇总 0.7–0.10 的能力：多语言依赖解析（含自定义语言）、解析/状态缓存、watch + SSE 自动刷新、影响链路、多仓库工作区拓扑、拆分存储与节点内容按需加载、历史 Review 批量读取（2,900 文件仓库单 commit 57–69 s → ~1 s）、任意 Review 可写 Agent 注解并按「项目 + 文件 + 归一化 diff」跨 Review 复用（含整体概览）。
+
 ## [0.10.1] - 2026-11-19
 
 ### Fixed
