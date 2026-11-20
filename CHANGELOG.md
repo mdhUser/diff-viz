@@ -8,12 +8,6 @@
 
 ## [Unreleased]
 
-### Fixed
-
-- `--max-scan-files` 被 hub 的自动重算重置：CLI 把上限随 Review 一起导入后，hub 会记住它；由文件监听或裸 hub URL 触发的 worktree 重算不再退回默认 15,000。之前页面会在打开后几秒内把「已截断」的图悄悄变回全量（或反过来）。
-- `ensureHub` 启动的后台 hub 不再自己打开一个裸 hub 页签：那个页签会 `POST /api/review` 用默认参数再分析一次，既覆盖刚导入的 Review，也让 `--no-open` 失效；最终 Review URL 仍由 CLI 打开。
-- 扫描截断的提示不再在页面顶部横幅和侧栏「分析提示」里各说一遍；顶部横幅改成一整行可换行排版，长数字不再挤在一起。
-
 ## [1.3.0] - 2026-11-20
 
 ### Added
@@ -26,7 +20,8 @@
 
 ### Fixed
 
-- 重新分析（文件监听、裸 hub 页面刷新）会保留 `--max-scan-files` 上限，不再悄悄恢复默认 15000；侧栏不再重复页面顶部的扫描截断警告。
+- 重新分析（文件监听、裸 hub 页面刷新）会保留 `--max-scan-files` 上限，不再悄悄恢复默认 15000；侧栏不再重复页面顶部的扫描截断警告，横幅改成一整行可换行排版。
+- `ensureHub` 启动的后台 hub 不再额外打开一个裸 hub 页签：那个页签会 `POST /api/review` 用默认参数重算、覆盖刚导入的 Review，也让 `--no-open` 失效；最终 Review 链接仍由 CLI 打开。
 
 ## [1.2.0] - 2026-11-20
 
@@ -60,35 +55,9 @@
 
 - 大仓库依赖扫描被 15000 文件上限截断时不再静默降级：页面顶部显示「共 N 个文件，只分析了前 n 个」的警告，并提示用 `--max-scan-files` 调高上限。
 
-## [1.0.2] - 2026-11-20
-### Added
-
-- 页面顶部新增「依赖扫描已截断」横幅：超过扫描上限时明确写出「仓库共有 N 个代码文件，本次只分析了前 15,000 个」，并提示用 `--max-scan-files` 调高上限。之前这条信息只写在侧栏底部的 `meta.warnings` 里，大仓库用户很容易以为残缺的拓扑就是全部。
-- `--max-scan-files <n>`：依赖扫描的代码文件上限（默认 15,000）。数据里新增 `meta.scanLimit = { limit, codeFiles, scanned, truncated }`，`codeFiles` 是仓库真实的代码文件数（此前只统计到上限为止）。
-
-### Security
-
-- hub 增加 Host 白名单：`Host` 必须是 `127.0.0.1` / `localhost` / `::1` 或显式绑定/放行的主机，否则返回 403。只绑 loopback 挡不住 DNS rebinding——恶意页面把自己的域名解析到 `127.0.0.1` 后，浏览器会把响应当成同源内容读走。
-- hub 的 `/api/*` 现在要求访问令牌（`GET /api/health` 除外）：令牌首次启动时生成到 `~/.diff-viz/token`（0600），重启后复用；`diff-viz` / `diff-viz hub` 打印的链接自动带上 `?token=`，页面打开后换成 HttpOnly Cookie，刷新和书签不用再带 token。
-- 页面响应补上 `Referrer-Policy: no-referrer` 与 `X-Content-Type-Options: nosniff`，避免带 token 的 URL 通过 Referer 外泄。
-
 ### Changed
 
-- 直接用 `curl` 等脚本调 hub `/api/*` 时需要加 `X-Diff-Viz-Token` 头（或 `?token=` 参数）；CLI 自己会带上，Agent 通过 `diff-viz` 打印的链接访问也不受影响。`DIFF_VIZ_TOKEN` 可固定令牌，`DIFF_VIZ_NO_AUTH=1` 可关闭鉴权，`DIFF_VIZ_ALLOWED_HOSTS` 可追加允许的 Host。
-
-- 文档：README 重写为「用途 + 快速开始 + 常用操作」优先的结构（549 → 145 行）；完整 CLI 参数、数据/HTTP 契约、语言解析、开发与发布流程拆分到 `docs/cli-reference.md`、`docs/data-contract.md`、`docs/languages.md`、`docs/development.md`。
-
-
-## [0.10.0] - 2026-11-19
-
-### Added
-
-- `diff-viz annotate --review <id> --annotations <file>`：直接给 hub 里已有的 Review 写 Agent 注解，不需要重新分析或生成数据文件。适用于界面版本链里点开的 commit Review——之前这类 Review 只能显示自动生成摘要，现在可以让 Agent 补上总结/影响/待办后刷新页面即可看到。
-- 侧栏「变更概览」始终显示 **Agent 摘要 N/M** 覆盖度：为 0 时用弱化样式提示还没有 Agent 注解，不再是「看起来全是自动生成」却不知道去哪补。
-
-### Fixed
-
-- Agent 注解在提交 / 切换 Review 后丢失：注解原来只存在写入时的那条 Review 快照里，提交后版本链里的 commit Review 是新的 reviewId（且 worktree Review 可能被自动重算成空改动），所以总结全部消失。现在 hub 会按「项目 + 文件路径 + 改动内容（去掉 index 行后的 diff）」记住最后一次 Agent 总结/影响分析/待办，存放在 `~/.diff-viz/annotations/<projectId>.json`；打开或重新生成相同改动的 Review（worktree → commit → range）时自动复用，并对旧的已注解快照做一次回填。**Review 顶部的整体概览（`meta.overallSummary`）也会按「变更文件集合 + 各自 diff」记住并复用**，重新生成 Review 不会再退回自动生成的一句话。内容不同的改动不会复用旧总结。
+- 直接用 `curl` 等脚本调 hub `/api/*` 需要加 `X-Diff-Viz-Token` 头（或 `?token=` 参数）；CLI 与页面会自动带上，Agent 用 `diff-viz` 打印的链接访问不受影响。`DIFF_VIZ_TOKEN` 可固定令牌，`DIFF_VIZ_NO_AUTH=1` 可关闭鉴权，`DIFF_VIZ_ALLOWED_HOSTS` 可追加允许的 Host。
 
 ## [1.0.2] - 2026-11-20
 
@@ -121,6 +90,17 @@
 ### Fixed
 
 - 整体概览（`meta.overallSummary`）原来只在改动集合完全一致时复用：同一分支提交后换一条 commit Review，只要文件多一个或少一个，页面就退回自动生成的一句话（文件级 Agent 摘要却能复用）。现在按每个变更文件的「路径 + 归一化 diff」计算重合度，当前 Review 与某条已注解概览的改动重合 ≥50%（且至少 3 个文件、覆盖该概览 ≥50%）时也复用整体概览；改动完全不同的 Review 仍不会套用旧概览。
+
+## [0.10.0] - 2026-11-19
+
+### Added
+
+- `diff-viz annotate --review <id> --annotations <file>`：直接给 hub 里已有的 Review 写 Agent 注解，不需要重新分析或生成数据文件。适用于界面版本链里点开的 commit Review——之前这类 Review 只能显示自动生成摘要，现在可以让 Agent 补上总结/影响/待办后刷新页面即可看到。
+- 侧栏「变更概览」始终显示 **Agent 摘要 N/M** 覆盖度：为 0 时用弱化样式提示还没有 Agent 注解，不再是「看起来全是自动生成」却不知道去哪补。
+
+### Fixed
+
+- Agent 注解在提交 / 切换 Review 后丢失：注解原来只存在写入时的那条 Review 快照里，提交后版本链里的 commit Review 是新的 reviewId（且 worktree Review 可能被自动重算成空改动），所以总结全部消失。现在 hub 会按「项目 + 文件路径 + 改动内容（去掉 index 行后的 diff）」记住最后一次 Agent 总结/影响分析/待办，存放在 `~/.diff-viz/annotations/<projectId>.json`；打开或重新生成相同改动的 Review（worktree → commit → range）时自动复用，并对旧的已注解快照做一次回填。**Review 顶部的整体概览（`meta.overallSummary`）也会按「变更文件集合 + 各自 diff」记住并复用**，重新生成 Review 不会再退回自动生成的一句话。内容不同的改动不会复用旧总结。
 
 ## [0.9.2] - 2026-11-18
 
