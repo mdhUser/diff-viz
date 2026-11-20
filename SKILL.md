@@ -299,7 +299,7 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 - `impacted_only` 是未改动、但依赖链上受影响的文件；不要给它写 `summary`。
 - `nodes[].imports` / `importedBy` 是完整直接依赖列表（可能包含未画进图里的文件），详情抽屉会标「图外」。
 - 清单里没有 `diff` / `oldContent` / `newContent`：`nodes[].payload` 指向内容文件，浏览器打开详情时才加载（`GET /api/node?review=<id>&id=<path>`）。
-- 完整字段定义见 `README.md`。
+- 完整字段定义见 [docs/data-contract.md](https://github.com/mdhUser/diff-viz/blob/main/docs/data-contract.md)。
 
 ## 支持的语言
 

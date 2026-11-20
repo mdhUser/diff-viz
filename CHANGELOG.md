@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 文档：README 重写为「用途 + 快速开始 + 常用操作」优先的结构（549 → 145 行）；完整 CLI 参数、数据/HTTP 契约、语言解析、开发与发布流程拆分到 `docs/cli-reference.md`、`docs/data-contract.md`、`docs/languages.md`、`docs/development.md`。
+
+
 ## [0.10.0] - 2026-11-19
 
 ### Added
