@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { GitRepo } from '../src/git.mjs';
 import { buildReviewData } from '../src/collect.mjs';
-import { startHub } from '../src/hub.mjs';
+import { resolveHubPort, startHub } from '../src/hub.mjs';
 import { writeReviewStore } from '../src/review-store.mjs';
 import { cleanup, commitAll, makeTempRepo, run, write } from './helpers.mjs';
 
@@ -703,4 +703,13 @@ test('workspace honors per-repo and workspace-level comparison scopes', async ()
     fs.rmSync(home, { recursive: true, force: true });
     fs.rmSync(wsDir, { recursive: true, force: true });
   }
+});
+
+test('a restarted hub keeps the remembered port unless --port is explicit', () => {
+  assert.equal(resolveHubPort({ port: 5174 }, undefined), 5174);
+  assert.equal(resolveHubPort({ port: '5180' }, undefined), 5180);
+  assert.equal(resolveHubPort({ port: 5174 }, 6000), 6000);
+  assert.equal(resolveHubPort(null, undefined), 5173);
+  assert.equal(resolveHubPort({}, undefined), 5173);
+  assert.equal(resolveHubPort({ port: 0 }, undefined), 5173);
 });

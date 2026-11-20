@@ -1240,16 +1240,27 @@ export async function startHub({
   };
 }
 
-export async function ensureHub({ port = 5173, host = '127.0.0.1', home = hubHome() } = {}) {
+// Keep the previous port when restarting a dead hub so existing Review URLs
+// (and anything an agent printed earlier) stay valid. An explicit --port wins.
+export function resolveHubPort(existing, requested) {
+  const explicit = Number(requested);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const remembered = Number(existing?.port);
+  if (Number.isFinite(remembered) && remembered > 0) return remembered;
+  return 5173;
+}
+
+export async function ensureHub({ port, host = '127.0.0.1', home = hubHome() } = {}) {
   const existing = readHubInfo(home);
   if (existing && (await hubIsAlive(existing))) {
     const infoHost = existing.host === '0.0.0.0' || existing.host === '::' ? '127.0.0.1' : existing.host;
     return { url: `http://${infoHost}:${existing.port}/`, port: existing.port, info: existing, started: false };
   }
 
+  const targetPort = resolveHubPort(existing, port);
   const child = spawn(
     process.execPath,
-    [BIN_PATH, 'hub', '--port', String(port), '--host', host, '--quiet'],
+    [BIN_PATH, 'hub', '--port', String(targetPort), '--host', host, '--quiet'],
     {
       detached: true,
       stdio: 'ignore',

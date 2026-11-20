@@ -36,7 +36,7 @@ diff-viz skill install          # 把薄 SKILL.md 注册到 Agent 技能目录
 | `--review <id>` | 仅用于 `annotate`：直接写入 hub 里指定 id 的 Review（含历史 commit Review），不需要本地数据文件 |
 | `--summary <text>` | 覆盖整体摘要 |
 | `--json-only` | 只写 JSON，不注册 hub、不启动服务 |
-| `--port <n>` | hub 端口，默认 5173（被占用自动递增） |
+| `--port <n>` | hub 端口，默认 5173（被占用自动递增）；不传时 hub 重启会复用上一次记住的端口 |
 | `--host <addr>` | 监听地址，默认 `127.0.0.1` |
 | `--no-open` | 不自动打开浏览器 |
 | `--quiet` | 减少日志输出 |

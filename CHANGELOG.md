@@ -24,6 +24,12 @@
 
 - Agent 注解在提交 / 切换 Review 后丢失：注解原来只存在写入时的那条 Review 快照里，提交后版本链里的 commit Review 是新的 reviewId（且 worktree Review 可能被自动重算成空改动），所以总结全部消失。现在 hub 会按「项目 + 文件路径 + 改动内容（去掉 index 行后的 diff）」记住最后一次 Agent 总结/影响分析/待办，存放在 `~/.diff-viz/annotations/<projectId>.json`；打开或重新生成相同改动的 Review（worktree → commit → range）时自动复用，并对旧的已注解快照做一次回填。**Review 顶部的整体概览（`meta.overallSummary`）也会按「变更文件集合 + 各自 diff」记住并复用**，重新生成 Review 不会再退回自动生成的一句话。内容不同的改动不会复用旧总结。
 
+## [1.0.2] - 2026-11-20
+
+### Fixed
+
+- hub 重启后端口变化导致之前的 Review URL 直接「拒绝连接」：`ensureHub` 现在会复用注册表里记住的端口（除非显式传 `--port`），`diff-viz` / `serve` / `workspace` / 前台 `hub` 都遵循这个规则，Agent 之前打印的链接不会因为一次重启失效。
+
 ## [1.0.1] - 2026-11-20
 
 ### Fixed

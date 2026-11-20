@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureGitExcluded, findRepoRoot, GitRepo } from './git.mjs';
 import { applyAnnotations, buildReviewData, mergePreviousState } from './collect.mjs';
-import { ensureHub, hubIsAlive, readHubInfo, startHub, stopHub } from './hub.mjs';
+import { ensureHub, hubIsAlive, readHubInfo, resolveHubPort, startHub, stopHub } from './hub.mjs';
 import { workspaceTemplate } from './workspace.mjs';
 import { isInside, readReviewStore, reviewLayout, writeReviewStore } from './review-store.mjs';
 import { openInBrowser } from './server.mjs';
@@ -161,6 +161,14 @@ export function parseArgs(argv) {
     throw new Error(`未知参数：${name}`);
   }
   return options;
+}
+
+// No explicit --port means "reuse the remembered port" (see resolveHubPort).
+function hubPortOption(options) {
+  if (options.port === undefined) return undefined;
+  const port = Number(options.port);
+  if (!Number.isFinite(port) || port <= 0) throw new Error(`端口不合法：${options.port}`);
+  return port;
 }
 
 function repoFromOptions(options) {
@@ -412,7 +420,7 @@ export async function main(argv = process.argv.slice(2)) {
       return;
     }
     const server = await startHub({
-      port: Number(options.port) || 5173,
+      port: resolveHubPort(existing, hubPortOption(options)),
       host: options.host || '127.0.0.1',
       open: !options.noOpen && !process.env.CI,
       quiet: options.quiet,
@@ -545,7 +553,7 @@ export async function main(argv = process.argv.slice(2)) {
     if (!store) throw new Error(`数据文件不是合法 JSON：${dataPath}`);
     const data = store.manifest;
     const hub = await ensureHub({
-      port: Number(options.port) || 5173,
+      port: hubPortOption(options),
       host: options.host || '127.0.0.1',
     });
     const imported = await uploadReview(hub.url, {
@@ -577,7 +585,7 @@ export async function main(argv = process.argv.slice(2)) {
     if (!fs.existsSync(target)) {
       throw new Error(`找不到 workspace 文件：${target}\n  先运行 diff-viz workspace --init 生成模板。`);
     }
-    const hub = await ensureHub({ port: Number(options.port) || 5173, host: options.host || '127.0.0.1' });
+    const hub = await ensureHub({ port: hubPortOption(options), host: options.host || '127.0.0.1' });
     const response = await callHub(hub.url, 'api/workspace', { file: target });
     if (!response.ok) throw await hubError(response, '工作区分析失败');
     const payload = await response.json();
@@ -639,7 +647,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   const hub = await ensureHub({
-    port: Number(options.port) || 5173,
+    port: hubPortOption(options),
     host: options.host || '127.0.0.1',
   });
   const imported = await uploadReview(hub.url, {
