@@ -48,6 +48,8 @@ export interface ReviewNode {
   impactSource?: string;
   reviewNotes?: string[];
   // 1.1 additive: module/package grouping for the swimlane view.
+  kind?: 'code' | 'config';
+  resourceKind?: string;
   moduleId?: string;
   moduleLabel?: string;
   modulePath?: string;
@@ -83,6 +85,12 @@ export interface ReviewMeta {
   updatedAt?: string;
   // Set when the dependency scan hit its file cap; `truncated` drives the
   // top-of-page warning so a partial graph is never silently presented.
+  resourceStats?: {
+    limit: number;
+    files: number;
+    scanned: number;
+    truncated: boolean;
+  };
   scanLimit?: {
     limit: number;
     codeFiles: number;
@@ -101,6 +109,7 @@ export interface ReviewMeta {
     todos: number;
     edges?: number;
     scannedFiles?: number;
+    configFiles?: number;
   };
 }
 

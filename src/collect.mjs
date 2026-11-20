@@ -5,6 +5,7 @@ import { parseUnifiedDiff, extractTodosFromAddedLines } from './diff-parse.mjs';
 import { createResolver, languageOf, scanRepository } from './deps.mjs';
 import { loadLanguageSpecs, registryFor } from './languages.mjs';
 import { detectModules, limitModules, orderModules, packagePathOf } from './modules.mjs';
+import { isResourceFile, resolveResourceImport } from './resources.mjs';
 import {
   clampText,
   formatTimestamp,
@@ -476,6 +477,10 @@ export function buildReviewData(repo, options = {}) {
     maxFiles: maxScanFiles,
     gitRef: scanRef,
     registry,
+    extraResourcePaths: [
+      ...parsedFiles.map((file) => file.path),
+      ...parsedFiles.map((file) => file.oldPath),
+    ].filter((file) => file && isResourceFile(file)),
   });
   warnings.push(...scan.warnings);
 
@@ -486,6 +491,35 @@ export function buildReviewData(repo, options = {}) {
   }
   for (const file of parsedFiles) {
     if (file.oldPath) fileSet.add(file.oldPath);
+  }
+  for (const resourcePath of scan.resources.keys()) fileSet.add(resourcePath);
+
+  const resourceLanguage = (resource) => {
+    if (!resource) return null;
+    if (resource.resourceKind === 'xml-mybatis' || resource.resourceKind === 'xml-spring' || resource.resourceKind === 'xml-generic') return 'xml';
+    if (resource.resourceKind === 'properties') return 'properties';
+    if (resource.resourceKind === 'yaml') return 'yaml';
+    if (resource.resourceKind === 'sql') return 'sql';
+    return null;
+  };
+  const configLabel = (resource) => {
+    switch (resource?.resourceKind) {
+      case 'xml-mybatis': return 'MyBatis Mapper';
+      case 'xml-spring': return 'Spring XML';
+      case 'xml-generic': return 'XML 配置';
+      case 'properties': return 'Properties 配置';
+      case 'yaml': return 'YAML 配置';
+      case 'sql': return 'SQL 脚本';
+      default: return '配置';
+    }
+  };
+  for (const node of changedFiles) {
+    const resource = scan.resources.get(node.path);
+    if (!resource) continue;
+    node.kind = 'config';
+    node.resourceKind = resource.resourceKind;
+    const language = resourceLanguage(resource);
+    if (language) node.language = language;
   }
 
   const moduleDetection = detectModules(repo.root, [...fileSet]);
@@ -539,6 +573,55 @@ export function buildReviewData(repo, options = {}) {
     for (const target of targets) {
       if (!dependents.has(target)) dependents.set(target, new Set());
       dependents.get(target).add(filePath);
+    }
+  }
+
+  // Resource bindings: MyBatis interface <-> mapper XML, Spring bean class
+  // references and Spring <import resource>. Direction is "source depends on
+  // target" so the existing reverse-BFS impact analysis works unchanged.
+  const resourceEdges = new Map();
+  const addResourceEdge = (source, target, relation) => {
+    if (!source || !target || source === target) return;
+    if (!resourceEdges.has(source)) resourceEdges.set(source, new Map());
+    resourceEdges.get(source).set(target, relation);
+  };
+  for (const [resourcePath, resource] of scan.resources) {
+    if (resource.resourceKind === 'xml-mybatis' && resource.mapperInterface) {
+      const interfaceFile = scan.javaIndex.classes.get(resource.mapperInterface);
+      if (interfaceFile) addResourceEdge(interfaceFile, resourcePath, 'binds');
+      continue;
+    }
+    if (resource.resourceKind !== 'xml-spring') continue;
+    for (const className of resource.classRefs || []) {
+      const target = scan.javaIndex.classes.get(className);
+      if (target) addResourceEdge(resourcePath, target, 'class-ref');
+    }
+    const resourceRoots = [];
+    const rootMatch = /^(.+\/(?:src\/main\/|src\/test\/)?resources\/)/.exec(resourcePath);
+    if (rootMatch) resourceRoots.push(rootMatch[1]);
+    for (const reference of resource.imports || []) {
+      const candidates = resolveResourceImport(resourcePath, reference);
+      let target = candidates.find((candidate) => scan.resources.has(candidate));
+      if (!target) {
+        // `classpath:` paths are relative to the resources root, which can be
+        // src/main/resources in a Maven layout.
+        for (const candidate of candidates) {
+          for (const root of resourceRoots) {
+            if (scan.resources.has(root + candidate)) {
+              target = root + candidate;
+              break;
+            }
+          }
+          if (target) break;
+        }
+      }
+      if (target) addResourceEdge(resourcePath, target, 'config');
+    }
+  }
+  for (const [source, targets] of resourceEdges) {
+    for (const target of targets.keys()) {
+      if (!dependents.has(target)) dependents.set(target, new Set());
+      dependents.get(target).add(source);
     }
   }
 
@@ -616,6 +699,14 @@ export function buildReviewData(repo, options = {}) {
       impactOrigins: [...(impactOrigins.get(id) || [])].sort(naturalCompare),
       impactChain: chainFor(id),
     });
+    const impactedResource = scan.resources.get(id);
+    if (impactedResource) {
+      const node = impacted[impacted.length - 1];
+      node.kind = 'config';
+      node.resourceKind = impactedResource.resourceKind;
+      const language = resourceLanguage(impactedResource);
+      if (language) node.language = language;
+    }
   }
 
   const includedIds = new Set([...changedIds, ...impacted.map((node) => node.path)]);
@@ -625,6 +716,10 @@ export function buildReviewData(repo, options = {}) {
       if (!includedIds.has(target) || target === node.path) continue;
       edges.push({ id: `e-${shortId(`${node.path}->${target}`, 12)}`, source: node.path, target, relation: 'imports' });
     }
+    for (const [target, relation] of resourceEdges.get(node.path) || []) {
+      if (!includedIds.has(target) || target === node.path) continue;
+      edges.push({ id: `e-${shortId(`${node.path}->${target}:${relation}`, 12)}`, source: node.path, target, relation });
+    }
   }
   const finalNodes = [...changedFiles, ...impacted];
   const totalTodos = finalNodes.reduce((sum, node) => sum + node.todos.length, 0);
@@ -633,19 +728,35 @@ export function buildReviewData(repo, options = {}) {
   // relationships inside the visible subgraph; the drawer should still show
   // upstream modules that were intentionally left out of the graph.
   for (const node of finalNodes) {
-    node.imports = [...(resolvedImports.get(node.path) || [])].sort(naturalCompare);
+    const configTargets = [...(resourceEdges.get(node.path)?.keys() ?? [])];
+    node.imports = [...new Set([...(resolvedImports.get(node.path) || []), ...configTargets])].sort(naturalCompare);
     node.importedBy = [...(dependents.get(node.path) || [])].sort(naturalCompare);
   }
 
   for (const node of impacted) {
-    node.impactAnalysis = heuristicImpact(node);
+    if (node.kind === 'config') {
+      node.summary = `${configLabel(scan.resources.get(node.path))} 被本次变更的代码/配置引用。`;
+      node.impactAnalysis = `该配置未直接修改，但它的引用链上出现了变更；检查配置键、namespace 或 bean 定义是否仍然匹配。`;
+    } else {
+      node.impactAnalysis = heuristicImpact(node);
+    }
   }
   for (const node of changedFiles) {
-    node.summary = heuristicSummary(node);
-    node.impactAnalysis = heuristicImpact(
-      node,
-      impactDetailsFor(node.path, changedIds, dependents, impactDepth),
-    );
+    const resource = scan.resources.get(node.path);
+    if (resource) {
+      const dependentsCount = (dependents.get(node.path) || new Set()).size;
+      node.summary = `${configLabel(resource)} 配置变更（+${node.stats.additions} / −${node.stats.deletions}）${dependentsCount > 0 ? `，被 ${dependentsCount} 个代码文件引用` : ''}。`;
+      node.impactAnalysis =
+        dependentsCount > 0
+          ? `该配置被 ${dependentsCount} 个文件引用；相关 Mapper 接口 / Bean / SQL 表可能需要同步确认。`
+          : '没有静态解析到引用该配置的代码文件；如果它由运行时加载，请人工确认。';
+    } else {
+      node.summary = heuristicSummary(node);
+      node.impactAnalysis = heuristicImpact(
+        node,
+        impactDetailsFor(node.path, changedIds, dependents, impactDepth),
+      );
+    }
     node.summarySource = 'auto';
     delete node._hunks;
   }
@@ -713,6 +824,7 @@ export function buildReviewData(repo, options = {}) {
     modules: orderedModules,
     stats: {
       changedFiles: changedFiles.length,
+      configFiles: changedFiles.filter((node) => node.kind === 'config').length,
       impactedFiles: impacted.length,
       additions: changedFiles.reduce((sum, node) => sum + node.stats.additions, 0),
       deletions: changedFiles.reduce((sum, node) => sum + node.stats.deletions, 0),
@@ -723,6 +835,7 @@ export function buildReviewData(repo, options = {}) {
     // Structured copy of the scan cap so the UI can warn at the top of the page
     // instead of burying it in `warnings` at the bottom of the sidebar.
     scanLimit: scan.scanLimit,
+    resourceStats: scan.resourceStats,
     warnings: [...new Set(warnings)],
     durationMs: Date.now() - startedAt,
   };

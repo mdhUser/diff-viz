@@ -192,7 +192,8 @@ function GraphCanvas({
       const isImpact = impactMode && !importerChanged && importedChanged;
       const source = impactMode ? edge.target : edge.source;
       const target = impactMode ? edge.source : edge.target;
-      const relation = impactMode ? (isImpact ? 'impact' : 'dependency') : 'import';
+      const edgeRelation = edge.relation || 'imports';
+      const relation = impactMode ? (isImpact ? 'impact' : edgeRelation === 'imports' ? 'dependency' : edgeRelation) : edgeRelation;
       const key = `${source}->${target}:${relation}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -201,6 +202,7 @@ function GraphCanvas({
       const dimmed = Boolean(selectedId && !connected);
       const bothChanged = importerChanged && importedChanged;
 
+      const isResourceEdge = edgeRelation !== 'imports';
       let stroke = '#8b9a9d';
       let dash: string | undefined = '3 5';
       let strokeWidth = 1.25;
@@ -208,6 +210,10 @@ function GraphCanvas({
         stroke = '#8b5fbf';
         dash = '7 5';
         strokeWidth = 1.9;
+      } else if (isResourceEdge) {
+        stroke = '#2f8f8f';
+        dash = edgeRelation === 'config' ? '2 4' : '4 3';
+        strokeWidth = 1.6;
       } else if (bothChanged) {
         stroke = '#4f7fb3';
         dash = undefined;
@@ -225,7 +231,18 @@ function GraphCanvas({
         target,
         type: 'smoothstep',
         animated: connected,
-        label: relation === 'impact' ? '影响' : relation === 'dependency' ? '上游' : 'import',
+        label:
+          relation === 'impact'
+            ? '影响'
+            : relation === 'dependency'
+              ? '上游'
+              : relation === 'binds'
+                ? '绑定'
+                : relation === 'config'
+                  ? '配置'
+                  : relation === 'class-ref'
+                    ? '引用'
+                    : 'import',
         labelStyle: {
           fill: connected
             ? '#26353a'
@@ -233,7 +250,9 @@ function GraphCanvas({
               ? '#7a4fa8'
               : relation === 'dependency'
                 ? '#3c6b9c'
-                : '#66797c',
+                : ['binds', 'config', 'class-ref'].includes(relation)
+                  ? '#2f7373'
+                  : '#66797c',
           fontSize: 11,
           fontFamily: 'var(--font-mono)',
           fontWeight: 600,

@@ -20,6 +20,26 @@ export function SummaryTab({ node, data, reviewed, onToggleReviewed, onSelectNod
   const upstream = [...new Set(upstreamPaths)].sort().map((path) => ({ path, node: nodeById.get(path) }));
   const downstream = [...new Set(downstreamPaths)].sort().map((path) => ({ path, node: nodeById.get(path) }));
 
+  const RELATION_LABEL: Record<string, string> = {
+    binds: '绑定',
+    config: '配置',
+    'class-ref': '引用',
+    reads_table: '读取',
+    writes_table: '写入',
+  };
+  const configLinks = data.edges
+    .filter(
+      (edge) =>
+        edge.relation &&
+        edge.relation !== 'imports' &&
+        (edge.source === node.id || edge.target === node.id),
+    )
+    .map((edge) => ({
+      relation: edge.relation as string,
+      outgoing: edge.source === node.id,
+      path: edge.source === node.id ? edge.target : edge.source,
+    }));
+
   const impactChain = (node.impactChain ?? []).filter(Boolean);
   const changedOrigins = (node.impactOrigins ?? [])
     .map((id) => nodeById.get(id))
@@ -107,6 +127,29 @@ export function SummaryTab({ node, data, reviewed, onToggleReviewed, onSelectNod
             empty="没有被本项目内的文件直接引用"
             onSelectNode={onSelectNode}
           />
+          {configLinks.length > 0 ? (
+            <div className="px-3.5 py-2.5">
+              <div className="flex items-baseline gap-2">
+                <span className="text-[10px] font-medium text-[#2f7373]">配置关联</span>
+                <span className="text-[9px] text-mist-600">Mapper XML / Spring 配置 / Bean 引用</span>
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {configLinks.map((link) => (
+                  <button
+                    key={`${link.relation}:${link.path}:${link.outgoing ? 'out' : 'in'}`}
+                    type="button"
+                    onClick={() => onSelectNode(link.path)}
+                    className="flex max-w-full items-center gap-1 rounded-md border border-[rgba(47,143,143,0.30)] bg-[rgba(47,143,143,0.06)] px-1.5 py-1 text-[9.5px] text-[#2f7373] transition hover:bg-[rgba(47,143,143,0.12)]"
+                    title={link.path}
+                  >
+                    <span className="font-medium">{RELATION_LABEL[link.relation] ?? link.relation}</span>
+                    <span className="text-mist-600">{link.outgoing ? '→' : '←'}</span>
+                    <span className="truncate font-mono">{link.path.split('/').slice(-2).join('/')}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {impactChain.length > 1 ? (
             <div className="rounded-lg border border-line/70 bg-ink-850/40 px-3 py-2">
               <div className="mb-1.5 text-[9px] font-medium uppercase tracking-[0.12em] text-mist-600">影响链路</div>

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isProbablyBinary, naturalCompare, readJsonSafe, toPosix } from './util.mjs';
 import { readScanCache, writeScanCache } from './cache.mjs';
+import { analyzeResource, isResourceFile } from './resources.mjs';
 import {
   EMPTY_REGISTRY,
   buildPackageIndexes,
@@ -44,6 +45,8 @@ const SKIP_DIRS = new Set([
 
 const MAX_SCAN_FILES = 15000;
 const MAX_SOURCE_BYTES = 1024 * 1024;
+const MAX_RESOURCE_FILES = 2000;
+const MAX_RESOURCE_BYTES = 512 * 1024;
 
 export function extensionOf(filePath) {
   return path.extname(filePath).toLowerCase();
@@ -76,6 +79,10 @@ export function languageOf(filePath) {
       return 'java';
     case '.json':
       return 'json';
+    case '.xml':
+      return 'xml';
+    case '.properties':
+      return 'properties';
     case '.md':
       return 'markdown';
     case '.css':
@@ -722,6 +729,8 @@ export function scanRepository(
     gitRef = null,
     useCache = true,
     registry = EMPTY_REGISTRY,
+    maxResourceFiles = MAX_RESOURCE_FILES,
+    extraResourcePaths = [],
   } = {},
 ) {
   const warnings = [];
@@ -766,6 +775,36 @@ export function scanRepository(
     );
   }
 
+  // Config/resource files (XML/MyBatis mappers, properties, yaml, SQL) take part
+  // in the graph through explicit bindings. Changed resources are always
+  // parsed even when the resource cap is hit, so a mapper edit never disappears.
+  const resourceCandidates = [];
+  const resourceSeen = new Set();
+  let resourceFiles = 0;
+  for (const filePath of allFiles) {
+    const posixPath = toPosix(filePath);
+    if (isSkippedPath(posixPath) || !isResourceFile(posixPath)) continue;
+    resourceFiles += 1;
+    if (resourceCandidates.length < maxResourceFiles || extraResourcePaths.includes(posixPath)) {
+      if (!resourceSeen.has(posixPath)) {
+        resourceSeen.add(posixPath);
+        resourceCandidates.push(posixPath);
+      }
+    }
+  }
+  for (const extra of extraResourcePaths) {
+    const posixPath = toPosix(extra);
+    if (!posixPath || resourceSeen.has(posixPath) || !isResourceFile(posixPath)) continue;
+    resourceSeen.add(posixPath);
+    resourceCandidates.push(posixPath);
+  }
+  const resourceTruncated = resourceFiles > resourceCandidates.length;
+  if (resourceTruncated) {
+    warnings.push(
+      `配置文件较多，仅解析前 ${resourceCandidates.length} 个（共 ${resourceFiles} 个）；变更过的配置始终会解析。`,
+    );
+  }
+
   const tsconfig = loadTsconfig(absoluteRoot, readTextAt);
   const goModule = loadGoModule(absoluteRoot, readTextAt);
   const workspacePackages = gitRef ? new Map() : loadWorkspacePackages(absoluteRoot);
@@ -773,8 +812,9 @@ export function scanRepository(
   // Parsing is a pure function of file content, so an mtime+size key is enough
   // to skip re-reading unchanged files between runs.
   const caching = useCache && !gitRef && process.env.DIFF_VIZ_NO_CACHE !== '1';
-  const cached = caching ? readScanCache(repo.root) : { files: {} };
+  const cached = caching ? readScanCache(repo.root) : { files: {}, resources: {} };
   const nextCache = {};
+  const nextResourceCache = {};
 
   // Blob contents at a git ref arrive via `cat-file --batch` in chunks: one
   // git process per few hundred files instead of one per file. Memory stays
@@ -848,6 +888,57 @@ export function scanRepository(
     if (caching && key) nextCache[filePath] = { key, entry };
   }
 
+  const resources = new Map();
+  const RESOURCE_REF_CHUNK = 200;
+  let resourceRefContents = new Map();
+  let resourceRefStart = -1;
+  for (let resourceIndex = 0; resourceIndex < resourceCandidates.length; resourceIndex += 1) {
+    const filePath = resourceCandidates[resourceIndex];
+    const absolute = path.join(absoluteRoot, filePath);
+    let key = null;
+    if (gitRef && (resourceRefStart === -1 || resourceIndex - resourceRefStart >= RESOURCE_REF_CHUNK)) {
+      resourceRefStart = resourceIndex;
+      resourceRefContents = repo.readFilesAt(
+        gitRef,
+        resourceCandidates.slice(resourceIndex, resourceIndex + RESOURCE_REF_CHUNK),
+      );
+    }
+    if (!gitRef) {
+      try {
+        const stat = fs.statSync(absolute);
+        if (!stat.isFile() || stat.size > MAX_RESOURCE_BYTES) continue;
+        key = `${Math.round(stat.mtimeMs)}:${stat.size}`;
+      } catch {
+        continue;
+      }
+      if (caching) {
+        const hit = cached.resources[filePath];
+        if (hit && hit.key === key && hit.entry) {
+          resources.set(filePath, { ...hit.entry });
+          nextResourceCache[filePath] = hit;
+          continue;
+        }
+      }
+    }
+    let buffer;
+    if (gitRef) {
+      buffer = resourceRefContents.get(filePath);
+      if (!buffer || buffer.length > MAX_RESOURCE_BYTES) continue;
+    } else {
+      try {
+        buffer = fs.readFileSync(absolute);
+      } catch {
+        continue;
+      }
+    }
+    if (isProbablyBinary(buffer)) continue;
+    let source = buffer.toString('utf8');
+    if (source.length > MAX_RESOURCE_BYTES) source = source.slice(0, MAX_RESOURCE_BYTES);
+    const entry = analyzeResource(filePath, source);
+    resources.set(filePath, entry);
+    if (caching && key) nextResourceCache[filePath] = { key, entry };
+  }
+
   const javaIndex = { classes: new Map(), packages: new Map() };
   for (const [filePath, entry] of files) {
     if (!filePath.endsWith('.java')) continue;
@@ -876,7 +967,7 @@ export function scanRepository(
     entry.javaSamePackageTargets = samePackage.slice(0, 40);
   }
 
-  if (caching) writeScanCache(repo.root, { files: nextCache });
+  if (caching) writeScanCache(repo.root, { files: nextCache, resources: nextResourceCache });
 
   const packageIndexes = buildPackageIndexes(registry, files);
 
@@ -884,6 +975,7 @@ export function scanRepository(
 
   return {
     files,
+    resources,
     tsconfig,
     goModule,
     workspacePackages,
@@ -902,6 +994,12 @@ export function scanRepository(
       codeFiles,
       scanned: files.size,
       truncated: scanTruncated,
+    },
+    resourceStats: {
+      limit: maxResourceFiles,
+      files: resourceFiles,
+      scanned: resources.size,
+      truncated: resourceTruncated,
     },
   };
 }

@@ -8,6 +8,20 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-20
+
+### Added
+
+- **配置/资源节点入图**：扫描 `.xml` / `.properties` / `.yml` / `.yaml` / `.sql`（最多 2000 个文件、单文件 512KB，变更过的配置始终解析）。MyBatis Mapper 的 `namespace` 绑定到 Java Mapper 接口（`binds`），Spring XML 的 `<bean class>` / `<import resource>` 生成 `class-ref` / `config` 边；改动 Mapper XML 会让接口与调用方进入「受影响」，影响链继续沿代码依赖传播。
+- 数据契约增量字段：节点 `kind: "config"` / `resourceKind`，`meta.stats.configFiles`、`meta.resourceStats`，边新增 `binds` / `config` / `class-ref`；XML / Properties 支持语法标签与 Diff 高亮。
+- UI：配置节点专属图标与青色「配置」徽章、工具栏「配置 N」开关、图例与抽屉「配置关联」区块；配置变更使用专属自动摘要（说明被多少文件引用）。
+- 扫描缓存 schema 升到 v2，配置解析同样按 `mtime + size` 复用缓存。
+- 新增 [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md) 说明配置入图模型与边界。
+
+### Fixed
+
+- `languageOf` 增加 `xml` / `properties`，配置节点不再显示为纯文本；未识别的 XML 只展示节点、不产生猜测边。
+
 ## [1.1.1] - 2026-11-20
 
 ### Fixed

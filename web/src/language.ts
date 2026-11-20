@@ -11,6 +11,8 @@ const LABELS: Record<string, string> = {
   ruby: 'Ruby',
   java: 'Java',
   json: 'JSON',
+  xml: 'XML',
+  properties: 'Properties',
   markdown: 'Markdown',
   css: 'CSS',
   scss: 'SCSS',

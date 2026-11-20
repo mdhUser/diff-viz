@@ -74,6 +74,7 @@ interface PanelWidths {
   drawerWidth: number;
   viewMode: 'auto' | 'flow' | 'lane';
   groupBy: LaneGroupBy;
+  showConfig: boolean;
 }
 
 function readPanelWidths(): PanelWidths {
@@ -82,6 +83,7 @@ function readPanelWidths(): PanelWidths {
     drawerWidth: DEFAULT_DRAWER_WIDTH,
     viewMode: 'auto',
     groupBy: 'module',
+    showConfig: true,
   };
   try {
     const raw = window.localStorage.getItem(UI_PREFS_KEY);
@@ -97,6 +99,7 @@ function readPanelWidths(): PanelWidths {
       groupBy: ['module', 'directory', 'package'].includes(String(parsed.groupBy))
         ? (parsed.groupBy as LaneGroupBy)
         : 'module',
+      showConfig: parsed.showConfig !== false,
     };
   } catch {
     return fallback;
@@ -377,6 +380,11 @@ export function App() {
     [data],
   );
 
+  const configCount = useMemo(
+    () => changedNodes.filter((node) => node.kind === 'config').length,
+    [changedNodes],
+  );
+
   const reviewIds = useMemo(() => {
     if (!data) return [];
     const changedIds = new Set(changedNodes.map((node) => node.id));
@@ -385,10 +393,13 @@ export function App() {
     return [...order, ...changedNodes.map((node) => node.id).filter((id) => !seen.has(id))];
   }, [data, changedNodes]);
 
+  const showConfig = panelWidths.showConfig;
   const visibleNodes = useMemo(() => {
     if (!data) return [];
-    return showImpacted ? data.nodes : data.nodes.filter((node) => node.status !== 'impacted_only');
-  }, [data, showImpacted]);
+    let nodes = showImpacted ? data.nodes : data.nodes.filter((node) => node.status !== 'impacted_only');
+    if (!showConfig) nodes = nodes.filter((node) => node.kind !== 'config');
+    return nodes;
+  }, [data, showImpacted, showConfig]);
 
   const visibleEdges = useMemo(() => {
     if (!data) return [];
@@ -810,17 +821,25 @@ export function App() {
                 showImpacted={showImpacted}
                 changedCount={changedCount}
                 impactedCount={data.nodes.length - changedCount}
+                showConfig={showConfig}
+                configCount={configCount}
                 onEdgeModeChange={setEdgeMode}
                 onDirectionChange={setDirection}
                 onViewModeChange={setViewMode}
                 onGroupByChange={setGroupBy}
+                onToggleConfig={() =>
+                  setPanelWidths((current) => ({ ...current, showConfig: !current.showConfig }))
+                }
                 onToggleImpacted={() => {
                   const next = !showImpacted;
                   if (!next && selectedNode?.status === 'impacted_only') selectNode(null);
                   setShowImpacted(next);
                 }}
               />
-              <Legend edgeMode={edgeMode} />
+              <Legend
+                edgeMode={edgeMode}
+                hasConfigEdges={(data?.edges ?? []).some((edge) => edge.relation && edge.relation !== 'imports')}
+              />
               {!selectedNode ? (
                 <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-line/80 bg-ink-900/80 px-3 py-1.5 text-[9.5px] text-mist-500 backdrop-blur">
                   点击节点查看摘要、Diff 与待确认项 · ← → 切换 Review

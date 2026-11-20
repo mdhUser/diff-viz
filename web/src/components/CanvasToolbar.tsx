@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ArrowRightLeft, GitFork, Layers } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowRightLeft, FileCog, GitFork, Layers } from 'lucide-react';
 import type { EdgeMode, LayoutDirection } from '../types';
 import type { LaneGroupBy } from '../lanes';
 import { cn } from '../cn';
@@ -9,13 +9,16 @@ interface CanvasToolbarProps {
   viewMode: 'flow' | 'lane';
   groupBy: LaneGroupBy;
   showImpacted: boolean;
+  showConfig: boolean;
   changedCount: number;
   impactedCount: number;
+  configCount: number;
   onEdgeModeChange: (mode: EdgeMode) => void;
   onDirectionChange: (direction: LayoutDirection) => void;
   onViewModeChange: (mode: 'flow' | 'lane') => void;
   onGroupByChange: (groupBy: LaneGroupBy) => void;
   onToggleImpacted: () => void;
+  onToggleConfig: () => void;
 }
 
 export function CanvasToolbar({
@@ -24,13 +27,16 @@ export function CanvasToolbar({
   viewMode,
   groupBy,
   showImpacted,
+  showConfig,
   changedCount,
   impactedCount,
+  configCount,
   onEdgeModeChange,
   onDirectionChange,
   onViewModeChange,
   onGroupByChange,
   onToggleImpacted,
+  onToggleConfig,
 }: CanvasToolbarProps) {
   return (
     <div className="absolute left-3.5 top-3.5 z-20 flex items-center gap-1 rounded-xl border border-line/90 bg-ink-850/90 p-1 shadow-[0_14px_30px_-24px_rgba(60,50,30,0.35)] backdrop-blur-md">
@@ -139,6 +145,25 @@ export function CanvasToolbar({
       )}
 
       <div className="mx-0.5 h-4 w-px bg-line" />
+
+      {configCount > 0 ? (
+        <>
+          <button
+            type="button"
+            onClick={onToggleConfig}
+            className={cn(
+              'flex h-7 items-center gap-1.5 rounded-md px-2 text-[10.5px] transition',
+              showConfig ? 'text-[#2f7373]' : 'text-mist-600',
+            )}
+            title={showConfig ? '隐藏配置文件节点' : '显示配置文件节点'}
+          >
+            <FileCog size={11.5} />
+            配置
+            <span className="font-mono text-[9px] text-mist-600">{configCount}</span>
+          </button>
+          <div className="mx-0.5 h-4 w-px bg-line" />
+        </>
+      ) : null}
 
       <button
         type="button"

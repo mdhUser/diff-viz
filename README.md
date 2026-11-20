@@ -77,6 +77,16 @@ diff-viz stop                      # 停止后台 hub
 
 完整命令与参数见 **[docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md)**。
 
+## 配置与数据库
+
+配置文件和 SQL 也在拓扑图里：
+
+- `.xml`：MyBatis Mapper（`namespace` 绑定到 Java Mapper 接口）、Spring XML（`<bean class>` / `<import resource>`），未知 XML 只保留节点不猜边。
+- `.properties` / `.yml` / `.yaml` / `.sql`：作为配置节点参与分层；SQL 语句与表分析见后续版本。
+- 改 Mapper XML 会让接口和调用方进入「受影响」；工具栏可整体开关「配置」层。
+
+模型、边方向和上限见 [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md)。
+
 ## 多仓库 / 微服务
 
 一次改动横跨几个服务时，单仓视图看不到服务之间的牵连：
@@ -132,6 +142,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor
 | [docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md) | 全部命令、参数、环境变量、workspace 配置 |
 | [docs/data-contract.md](https://github.com/mdhUser/diff-viz/blob/main/docs/data-contract.md) | 数据文件格式、字段语义、HTTP API、注解格式 |
 | [docs/languages.md](https://github.com/mdhUser/diff-viz/blob/main/docs/languages.md) | 支持的语言、自定义语言、影响分析模型 |
+| [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md) | 配置/资源文件入图、MyBatis/Spring 绑定与影响方向 |
 | [docs/agent-integrations.md](https://github.com/mdhUser/diff-viz/blob/main/docs/agent-integrations.md) | Claude Code / Cursor / Codex 等 Agent 接入方式 |
 | [docs/development.md](https://github.com/mdhUser/diff-viz/blob/main/docs/development.md) | 本地开发、测试、目录结构、发布流程 |
 

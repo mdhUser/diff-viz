@@ -44,6 +44,8 @@ const HIGHLIGHT_LANGUAGE: Record<string, string | undefined> = {
   ruby: 'ruby',
   java: 'java',
   json: 'json',
+  xml: 'markup',
+  properties: undefined,
   markdown: 'markdown',
   css: 'css',
   scss: 'scss',

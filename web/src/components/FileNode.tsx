@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import { CheckCircle2, CornerUpRight, ListTodo } from 'lucide-react';
+import { CheckCircle2, CornerUpRight, FileCog, ListTodo } from 'lucide-react';
 import type { LayoutDirection, ReviewNode } from '../types';
 import { STATUS_META } from '../status';
 import { dirname } from '../format';
@@ -20,7 +20,22 @@ export type FileFlowNode = Node<FileNodeData, 'file'>;
 function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
   const { node, direction, selected, openTodos, reviewed, ignored, laneMode } = data;
   const meta = STATUS_META[node.status];
-  const Icon = meta.icon;
+  const isConfig = node.kind === 'config';
+  const Icon = isConfig ? FileCog : meta.icon;
+  const configLabel =
+    node.resourceKind === 'xml-mybatis'
+      ? 'MyBatis Mapper'
+      : node.resourceKind === 'xml-spring'
+        ? 'Spring XML'
+        : node.resourceKind === 'xml-generic'
+          ? 'XML 配置'
+          : node.resourceKind === 'properties'
+            ? 'Properties'
+            : node.resourceKind === 'yaml'
+              ? 'YAML'
+              : node.resourceKind === 'sql'
+                ? 'SQL'
+                : '配置';
   const impacted = node.status === 'impacted_only';
   const vertical = direction === 'TB';
   const contextPath = node.packagePath || dirname(node.path) || '仓库根目录';
@@ -38,7 +53,13 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
       style={{
         width,
         height: impacted ? 74 : 94,
-        borderColor: selected ? 'rgba(86,111,208,0.65)' : impacted ? 'rgba(107,124,140,0.28)' : 'rgba(221,213,196,0.95)',
+        borderColor: selected
+          ? 'rgba(86,111,208,0.65)'
+          : isConfig
+            ? 'rgba(47,143,143,0.38)'
+            : impacted
+              ? 'rgba(107,124,140,0.28)'
+              : 'rgba(221,213,196,0.95)',
         borderStyle: impacted ? 'dashed' : 'solid',
         opacity: ignored ? 0.42 : impacted ? 0.88 : 1,
         boxShadow: selected ? undefined : '0 8px 20px -18px rgba(60,50,30,0.35)',
@@ -77,11 +98,22 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
             {contextLine}
           </div>
         </div>
-        <span
-          className="mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium tracking-wide"
-          style={{ background: meta.soft, color: meta.color, border: `1px solid ${meta.border}` }}
-        >
-          {meta.label}
+        <span className="mt-0.5 flex shrink-0 items-center gap-1">
+          {isConfig ? (
+            <span
+              className="rounded px-1.5 py-0.5 text-[9px] font-medium tracking-wide"
+              style={{ background: 'rgba(47,143,143,0.10)', color: '#2f7373', border: '1px solid rgba(47,143,143,0.30)' }}
+              title={configLabel}
+            >
+              配置
+            </span>
+          ) : null}
+          <span
+            className="rounded px-1.5 py-0.5 text-[9px] font-medium tracking-wide"
+            style={{ background: meta.soft, color: meta.color, border: `1px solid ${meta.border}` }}
+          >
+            {meta.label}
+          </span>
         </span>
       </div>
 
@@ -90,6 +122,10 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
           <span className="truncate text-[10px] text-mist-600">
             未改动
             {node.impactOrigins?.length ? ` · 依赖 ${node.impactOrigins.length} 处变更` : ' · 依赖链影响'}
+          </span>
+        ) : isConfig ? (
+          <span className="truncate font-mono text-[10px] text-mist-500" title={configLabel}>
+            {configLabel}
           </span>
         ) : (
           <span className="flex items-center gap-2 font-mono text-[10.5px]">

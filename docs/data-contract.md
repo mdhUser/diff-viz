@@ -76,6 +76,7 @@
 - `meta.scanLimit`：依赖扫描的文件上限与仓库真实规模，形如 `{ limit, codeFiles, scanned, truncated }`。`truncated: true` 表示还有代码文件没被扫描，界面会在页面顶部显式警告，而不是只在侧栏底部写一行提示；旧 Review 没有该字段时按 `meta.warnings` 里的文案回退识别。
 - 额外字段（`summarySource`、`impactOrigins`、`depth`、`binary`、`diffTruncated` 等）用于界面增强，不属于必需字段。
 - 1.1 起节点可带泳道信息（可选）：`moduleId` / `moduleLabel` / `modulePath` / `packagePath`；`meta.modules` 为 `[{ id, label, path, kind, order, fileCount, changedFiles, impactedFiles }]`，按依赖深度排序（入口模块在前）。旧 Review 没有这些字段时，界面按路径一级目录回退推断泳道。
+- 1.2 起配置节点带 `kind: "config"` 与 `resourceKind`（`xml-mybatis` / `xml-spring` / `xml-generic` / `properties` / `yaml` / `sql`）；边关系新增 `binds` / `config` / `class-ref`，方向仍是「source 依赖 target」，见 [resources.md](resources.md)。`meta.stats.configFiles` 统计变更配置数，`meta.resourceStats` 记录资源扫描上限与截断状态。
 
 ## Agent 注解
 
