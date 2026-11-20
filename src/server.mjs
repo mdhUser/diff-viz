@@ -156,6 +156,17 @@ function createRequestHandler({ dataPath, host = '127.0.0.1' }) {
         return;
       }
 
+      if (pathname === '/api/table') {
+        const store = readReviewStore(dataPath);
+        const table = store.readTable(url.searchParams.get('table') || url.searchParams.get('id'));
+        if (!table) {
+          sendJson(res, 404, { error: '数据表不存在。' });
+          return;
+        }
+        sendJson(res, 200, table);
+        return;
+      }
+
       if (pathname === '/api/state') {
         if (req.method !== 'POST') {
           sendJson(res, 405, { error: 'Method not allowed' });

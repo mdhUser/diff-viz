@@ -6,6 +6,7 @@ import { createResolver, languageOf, scanRepository } from './deps.mjs';
 import { loadLanguageSpecs, registryFor } from './languages.mjs';
 import { detectModules, limitModules, orderModules, packagePathOf } from './modules.mjs';
 import { isResourceFile, resolveResourceImport } from './resources.mjs';
+import { buildTables, detectDatabaseEngine, engineLabel, tableEdgeRelations } from './db.mjs';
 import {
   clampText,
   formatTimestamp,
@@ -782,6 +783,53 @@ export function buildReviewData(repo, options = {}) {
     );
   }
 
+  // Database view: group the SQL extracted from included files into tables and
+  // attach read/write edges. Tables are display-only nodes (not files), so they
+  // do not affect changed/impacted statistics.
+  const statementsForTables = [];
+  for (const node of finalNodes) {
+    const resource = scan.resources.get(node.path);
+    if (resource?.statements?.length) {
+      for (const statement of resource.statements) statementsForTables.push({ ...statement, file: node.path });
+    }
+    const javaStatements = scan.files.get(node.path)?.javaSqlStatements;
+    if (javaStatements?.length) {
+      for (const statement of javaStatements) statementsForTables.push({ ...statement, file: node.path });
+    }
+  }
+  const databaseEngine = detectDatabaseEngine(scan.resources);
+  const databaseModel = buildTables(statementsForTables, {
+    changedFiles: new Set(changedFiles.map((node) => node.path)),
+    impactedFiles: new Set(impacted.map((node) => node.path)),
+  });
+  warnings.push(...databaseModel.warnings);
+  if (databaseModel.tables.length > 0) {
+    if (databaseModel.components.length > 0) {
+      databaseModel.components[0].engine = databaseEngine.engine;
+      databaseModel.components[0].label = databaseEngine.label;
+    }
+    const tableEdges = [];
+    for (const table of databaseModel.tables) {
+      for (const relation of tableEdgeRelations(table.operations)) {
+        for (const source of table.sources) {
+          tableEdges.push({
+            id: `e-${shortId(`${source}->${table.id}:${relation}`, 12)}`,
+            source,
+            target: table.id,
+            relation,
+          });
+        }
+      }
+    }
+    dedupedEdges.push(...uniqueBy(tableEdges, (edge) => `${edge.source}->${edge.target}:${edge.relation}`));
+    dedupedEdges.sort(
+      (a, b) =>
+        naturalCompare(a.source, b.source) ||
+        naturalCompare(a.target, b.target) ||
+        String(a.relation).localeCompare(String(b.relation)),
+    );
+  }
+
   const moduleCounts = new Map(
     laneModules.map((module) => [module.id, { changedFiles: 0, impactedFiles: 0 }]),
   );
@@ -822,9 +870,19 @@ export function buildReviewData(repo, options = {}) {
     version: options.version || '0.1.0',
     reviewOrder,
     modules: orderedModules,
+    ...(databaseModel.tables.length > 0
+      ? {
+          db: {
+            engine: databaseEngine.engine,
+            label: engineLabel(databaseEngine.engine),
+            tables: databaseModel.tables.length,
+          },
+        }
+      : {}),
     stats: {
       changedFiles: changedFiles.length,
       configFiles: changedFiles.filter((node) => node.kind === 'config').length,
+      tables: databaseModel.tables.length,
       impactedFiles: impacted.length,
       additions: changedFiles.reduce((sum, node) => sum + node.stats.additions, 0),
       deletions: changedFiles.reduce((sum, node) => sum + node.stats.deletions, 0),
@@ -840,7 +898,14 @@ export function buildReviewData(repo, options = {}) {
     durationMs: Date.now() - startedAt,
   };
 
-  const data = { meta, nodes: finalNodes, edges: dedupedEdges };
+  const data = {
+    meta,
+    nodes: finalNodes,
+    edges: dedupedEdges,
+    ...(databaseModel.tables.length > 0
+      ? { tables: databaseModel.tables, components: databaseModel.components }
+      : {}),
+  };
 
   const annotations =
     options.annotations ?? (options.annotationFile ? readJsonSafe(options.annotationFile) : null);

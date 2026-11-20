@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, GitCommitHorizontal, Loader2, RefreshCw } from 'lucide-react';
 import type {
   CommitInfo,
+  ReviewTable,
   DrawerTab,
   EdgeMode,
   HubProject,
@@ -16,11 +17,12 @@ import { GraphView } from './components/GraphView';
 import { CanvasToolbar } from './components/CanvasToolbar';
 import { Legend } from './components/Legend';
 import { DetailDrawer } from './components/DetailDrawer';
+import { TableDetail } from './components/TableDetail';
 import { ResizeHandle } from './components/ResizeHandle';
 import { RepoPanel } from './components/RepoPanel';
 import { ScanLimitBanner } from './components/ScanLimitBanner';
 import { WorkspaceView } from './components/WorkspaceView';
-import { computeLaneLayout, computeLayout } from './layout';
+import { computeLaneLayout, computeLayout, itemForNode, itemForTable, type GraphItem, type LaneSpec } from './layout';
 import { buildLaneSpecs, makeLaneKeyFn, type LaneGroupBy } from './lanes';
 import { apiEventUrl, apiFetch, describeResponseFailure, responseErrorDetail } from './api';
 import { cn } from './cn';
@@ -75,6 +77,7 @@ interface PanelWidths {
   viewMode: 'auto' | 'flow' | 'lane';
   groupBy: LaneGroupBy;
   showConfig: boolean;
+  showDb: boolean;
 }
 
 function readPanelWidths(): PanelWidths {
@@ -84,6 +87,7 @@ function readPanelWidths(): PanelWidths {
     viewMode: 'auto',
     groupBy: 'module',
     showConfig: true,
+    showDb: true,
   };
   try {
     const raw = window.localStorage.getItem(UI_PREFS_KEY);
@@ -100,6 +104,7 @@ function readPanelWidths(): PanelWidths {
         ? (parsed.groupBy as LaneGroupBy)
         : 'module',
       showConfig: parsed.showConfig !== false,
+      showDb: parsed.showDb !== false,
     };
   } catch {
     return fallback;
@@ -130,6 +135,8 @@ export function App() {
   const [reviewedOverrides, setReviewedOverrides] = useState<Record<string, boolean>>({});
   const [ignoredOverrides, setIgnoredOverrides] = useState<Record<string, boolean>>({});
   const [extraTodos, setExtraTodos] = useState<Record<string, ReviewTodo[]>>({});
+  const [tableDetails, setTableDetails] = useState<Record<string, ReviewTable>>({});
+  const tableRequests = useRef(new Set<string>());
   const [serverOnline, setServerOnline] = useState(true);
   const [panelWidths, setPanelWidths] = useState<PanelWidths>(readPanelWidths);
   const [projects, setProjects] = useState<HubProject[]>([]);
@@ -380,6 +387,7 @@ export function App() {
     [data],
   );
 
+  const tableCount = data?.tables?.length ?? 0;
   const configCount = useMemo(
     () => changedNodes.filter((node) => node.kind === 'config').length,
     [changedNodes],
@@ -394,6 +402,7 @@ export function App() {
   }, [data, changedNodes]);
 
   const showConfig = panelWidths.showConfig;
+  const showDb = panelWidths.showDb;
   const visibleNodes = useMemo(() => {
     if (!data) return [];
     let nodes = showImpacted ? data.nodes : data.nodes.filter((node) => node.status !== 'impacted_only');
@@ -401,11 +410,17 @@ export function App() {
     return nodes;
   }, [data, showImpacted, showConfig]);
 
+  const visibleTables = useMemo(() => {
+    if (!data?.tables?.length) return [];
+    return showDb ? data.tables : [];
+  }, [data, showDb]);
+
   const visibleEdges = useMemo(() => {
     if (!data) return [];
     const ids = new Set(visibleNodes.map((node) => node.id));
+    for (const table of visibleTables) ids.add(table.id);
     return data.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
-  }, [data, visibleNodes]);
+  }, [data, visibleNodes, visibleTables]);
 
   const viewMode = panelWidths.viewMode;
   const groupBy = panelWidths.groupBy;
@@ -420,20 +435,32 @@ export function App() {
     [],
   );
 
-  const laneSpecs = useMemo(
-    () =>
-      data && effectiveViewMode === 'lane'
-        ? buildLaneSpecs(visibleNodes, visibleEdges, groupBy, data.meta.modules)
-        : [],
-    [data, effectiveViewMode, visibleNodes, visibleEdges, groupBy],
+  const layoutItems: GraphItem[] = useMemo(
+    () => [...visibleNodes.map(itemForNode), ...visibleTables.map(itemForTable)],
+    [visibleNodes, visibleTables],
   );
+
+  const laneSpecs = useMemo<LaneSpec[]>(() => {
+    if (!data || effectiveViewMode !== 'lane') return [];
+    const specs = buildLaneSpecs(visibleNodes, visibleEdges, groupBy, data.meta.modules);
+    if (visibleTables.length > 0) {
+      specs.push({
+        id: 'db',
+        label: `${data.meta.db?.label ?? 'Database'} · ${visibleTables.length} 张表`,
+        path: '',
+        kind: 'database',
+        order: specs.length,
+      });
+    }
+    return specs;
+  }, [data, effectiveViewMode, visibleNodes, visibleEdges, groupBy, visibleTables]);
 
   const layout = useMemo(() => {
     if (effectiveViewMode === 'lane' && laneSpecs.length > 0) {
-      return computeLaneLayout(visibleNodes, visibleEdges, laneSpecs, edgeMode, makeLaneKeyFn(groupBy));
+      return computeLaneLayout(layoutItems, visibleEdges, laneSpecs, edgeMode, makeLaneKeyFn(groupBy));
     }
-    return { positioned: computeLayout(visibleNodes, visibleEdges, direction, edgeMode), lanes: [] };
-  }, [effectiveViewMode, laneSpecs, visibleNodes, visibleEdges, edgeMode, direction, groupBy]);
+    return { positioned: computeLayout(layoutItems, visibleEdges, direction, edgeMode), lanes: [] };
+  }, [effectiveViewMode, laneSpecs, layoutItems, visibleEdges, edgeMode, direction, groupBy]);
 
   const selectedNode = useMemo(
     () => data?.nodes.find((node) => node.id === selectedId) ?? null,
@@ -620,6 +647,37 @@ export function App() {
     [selectedNode, postState],
   );
 
+  const loadTable = useCallback(
+    async (tableId: string) => {
+      if (!currentReviewId || tableDetails[tableId] || tableRequests.current.has(tableId)) return;
+      tableRequests.current.add(tableId);
+      try {
+        const response = await apiFetch(
+          `/api/table?review=${encodeURIComponent(currentReviewId)}&table=${encodeURIComponent(tableId)}`,
+          { cache: 'no-store' },
+        );
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = (await response.json()) as ReviewTable;
+        setTableDetails((current) => ({ ...current, [tableId]: payload }));
+      } catch {
+        /* the hover card keeps the metadata-only fallback */
+      } finally {
+        tableRequests.current.delete(tableId);
+      }
+    },
+    [currentReviewId, tableDetails],
+  );
+
+  const selectedTable = useMemo(
+    () => data?.tables?.find((table) => table.id === selectedId) ?? null,
+    [data, selectedId],
+  );
+
+  useEffect(() => {
+    if (!selectedTable) return;
+    void loadTable(selectedTable.id);
+  }, [selectedTable, loadTable]);
+
   const resizeSidebar = useCallback((delta: number) => {
     setPanelWidths((current) => ({
       ...current,
@@ -784,6 +842,8 @@ export function App() {
                 positioned={layout.positioned}
                 lanes={layout.lanes}
                 viewMode={effectiveViewMode}
+                tableDetails={tableDetails}
+                onRequestTable={(tableId) => void loadTable(tableId)}
                 edges={visibleEdges}
                 selectedId={selectedId}
                 direction={direction}
@@ -823,6 +883,8 @@ export function App() {
                 impactedCount={data.nodes.length - changedCount}
                 showConfig={showConfig}
                 configCount={configCount}
+                showDb={showDb}
+                tableCount={tableCount}
                 onEdgeModeChange={setEdgeMode}
                 onDirectionChange={setDirection}
                 onViewModeChange={setViewMode}
@@ -830,6 +892,7 @@ export function App() {
                 onToggleConfig={() =>
                   setPanelWidths((current) => ({ ...current, showConfig: !current.showConfig }))
                 }
+                onToggleDb={() => setPanelWidths((current) => ({ ...current, showDb: !current.showDb }))}
                 onToggleImpacted={() => {
                   const next = !showImpacted;
                   if (!next && selectedNode?.status === 'impacted_only') selectNode(null);
@@ -838,9 +901,12 @@ export function App() {
               />
               <Legend
                 edgeMode={edgeMode}
-                hasConfigEdges={(data?.edges ?? []).some((edge) => edge.relation && edge.relation !== 'imports')}
+                hasConfigEdges={(data?.edges ?? []).some(
+                  (edge) => edge.relation && !['imports', 'reads_table', 'writes_table'].includes(edge.relation),
+                )}
+                hasTableEdges={tableCount > 0}
               />
-              {!selectedNode ? (
+              {!selectedNode && !selectedTable ? (
                 <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-line/80 bg-ink-900/80 px-3 py-1.5 text-[9.5px] text-mist-500 backdrop-blur">
                   点击节点查看摘要、Diff 与待确认项 · ← → 切换 Review
                 </div>
@@ -849,7 +915,7 @@ export function App() {
           ) : null}
         </main>
 
-        {selectedNode ? (
+        {selectedNode || selectedTable ? (
           <div className="absolute inset-y-0 right-0 z-30 flex" style={{ width: drawerWidth }}>
             <ResizeHandle
               position="left"
@@ -861,6 +927,19 @@ export function App() {
               onStep={stepDrawer}
               onReset={resetDrawer}
             />
+            {selectedTable ? (
+              <TableDetail
+                table={tableDetails[selectedTable.id] ?? selectedTable}
+                components={data.components}
+                loading={!tableDetails[selectedTable.id]}
+                onClose={() => selectNode(null)}
+                onSelectSource={(path) => {
+                  selectNode(path);
+                  setTab('diff');
+                }}
+              />
+            ) : null}
+            {selectedNode ? (
             <DetailDrawer
               node={selectedNode}
               data={data}
@@ -878,6 +957,7 @@ export function App() {
               onToggleIgnored={toggleIgnored}
               onAddTodo={addTodo}
             />
+            ) : null}
           </div>
         ) : null}
       </div>

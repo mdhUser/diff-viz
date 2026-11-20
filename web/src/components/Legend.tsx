@@ -1,7 +1,7 @@
 import type { EdgeMode } from '../types';
 import { STATUS_META } from '../status';
 
-export function Legend({ edgeMode, hasConfigEdges = false }: { edgeMode: EdgeMode; hasConfigEdges?: boolean }) {
+export function Legend({ edgeMode, hasConfigEdges = false, hasTableEdges = false }: { edgeMode: EdgeMode; hasConfigEdges?: boolean; hasTableEdges?: boolean }) {
   return (
     <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-20 rounded-lg border border-line bg-[#fffdf8]/90 px-2.5 py-2 backdrop-blur-md">
       <div className="flex items-center gap-3">
@@ -34,6 +34,12 @@ export function Legend({ edgeMode, hasConfigEdges = false }: { edgeMode: EdgeMod
                 <span className="text-teal-300">青色「绑定/配置/引用」</span> = 代码 ↔ Mapper XML / Spring 配置
               </>
             ) : null}
+            {hasTableEdges ? (
+              <>
+                <br />
+                <span className="text-amber">橙色「读取/写入」</span> = Mapper XML / Java SQL → 数据库表
+              </>
+            ) : null}
           </>
         ) : (
           <>
@@ -44,6 +50,12 @@ export function Legend({ edgeMode, hasConfigEdges = false }: { edgeMode: EdgeMod
               <>
                 <br />
                 <span className="text-teal-300">青色边</span> = 代码 ↔ Mapper XML / Spring 配置（绑定 / 配置 / 引用）
+              </>
+            ) : null}
+            {hasTableEdges ? (
+              <>
+                <br />
+                <span className="text-amber">橙色边</span> = 代码 → 数据表（读取 / 写入）
               </>
             ) : null}
           </>

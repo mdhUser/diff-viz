@@ -4,7 +4,7 @@ import { readJsonSafe, shortId, stateHome, writeJsonAtomic } from './util.mjs';
 
 // Bump when the parsed entry shape changes, so old caches are ignored instead
 // of silently producing stale imports.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const MAX_CACHE_FILES = 25_000;
 
 export function scanCachePath(root) {

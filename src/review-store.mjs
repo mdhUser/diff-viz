@@ -65,6 +65,7 @@ export function reviewLayout(target) {
       target: resolved,
       manifestPath: path.join(resolved, MANIFEST_NAME),
       nodesDir: path.join(resolved, 'nodes'),
+      tablesDir: path.join(resolved, 'tables'),
     };
   }
   return {
@@ -72,6 +73,7 @@ export function reviewLayout(target) {
     target: resolved,
     manifestPath: resolved,
     nodesDir: path.join(path.dirname(resolved), `${path.basename(resolved)}.nodes`),
+    tablesDir: path.join(path.dirname(resolved), `${path.basename(resolved)}.tables`),
   };
 }
 
@@ -86,6 +88,20 @@ function resolveNodesDir(manifestPath, declared) {
   const resolved = path.resolve(base, declared);
   const relative = path.relative(base, resolved);
   if (relative.startsWith('..') || path.isAbsolute(relative)) return path.join(base, 'nodes');
+  return resolved;
+}
+
+function relativeTablesDir(layout) {
+  const base = path.dirname(layout.manifestPath);
+  return toPosix(path.relative(base, layout.tablesDir)) || 'tables';
+}
+
+function resolveTablesDir(manifestPath, declared) {
+  const base = path.dirname(manifestPath);
+  if (!declared || typeof declared !== 'string') return path.join(base, 'tables');
+  const resolved = path.resolve(base, declared);
+  const relative = path.relative(base, resolved);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return path.join(base, 'tables');
   return resolved;
 }
 
@@ -164,11 +180,34 @@ export function writeReviewStore(target, data) {
     stubs.push(stub);
   }
 
+  const tableStubs = [];
+  const keptTableFiles = new Set();
+  const tables = Array.isArray(data.tables) ? data.tables : [];
+  if (tables.length > 0) {
+    ensurePrivateDir(layout.tablesDir);
+    for (const table of tables) {
+      const key = typeof table.payload === 'string' && table.payload ? table.payload : shortId(table.id, 20);
+      const stub = { ...table };
+      const statements = Array.isArray(stub.statements) ? stub.statements : [];
+      delete stub.statements;
+      stub.payload = key;
+      writeJsonAtomic(path.join(layout.tablesDir, `${key}.json`), { statements });
+      keptTableFiles.add(`${key}.json`);
+      tableStubs.push(stub);
+    }
+    removeStalePayloads(layout.tablesDir, keptTableFiles);
+  }
+
   const manifest = {
-    storage: { format: REVIEW_STORAGE_FORMAT, nodesDir: relativeNodesDir(layout) },
+    storage: {
+      format: REVIEW_STORAGE_FORMAT,
+      nodesDir: relativeNodesDir(layout),
+      ...(tableStubs.length > 0 ? { tablesDir: relativeTablesDir(layout) } : {}),
+    },
     meta: data.meta,
     edges: Array.isArray(data.edges) ? data.edges : [],
     nodes: stubs,
+    ...(tableStubs.length > 0 ? { tables: tableStubs, components: data.components ?? [] } : {}),
   };
   writeJsonAtomic(layout.manifestPath, manifest);
   // Only drop old payloads once the new manifest is on disk, so a crash cannot
@@ -195,11 +234,15 @@ export function readReviewStore(target, { strict = true } = {}) {
   const nodesDir = split
     ? resolveNodesDir(layout.manifestPath, raw.storage.nodesDir)
     : layout.nodesDir;
+  const tablesDir = split
+    ? resolveTablesDir(layout.manifestPath, raw.storage.tablesDir)
+    : layout.tablesDir;
   const data = split
     ? {
         meta: raw.meta && typeof raw.meta === 'object' ? raw.meta : {},
         edges: Array.isArray(raw.edges) ? raw.edges : [],
         nodes: Array.isArray(raw.nodes) ? raw.nodes : [],
+        ...(Array.isArray(raw.tables) ? { tables: raw.tables, components: raw.components ?? [] } : {}),
       }
     : raw;
   if (!Array.isArray(data.nodes)) throw new Error(`Review 数据缺少 nodes：${layout.manifestPath}`);
@@ -213,11 +256,26 @@ export function readReviewStore(target, { strict = true } = {}) {
     return readJsonSafe(path.join(nodesDir, `${node.payload}.json`));
   };
 
+  const readTablePayload = (table) => {
+    if (!table) return [];
+    if (split) {
+      if (!table.payload) return [];
+      const payload = readJsonSafe(path.join(tablesDir, `${table.payload}.json`));
+      return Array.isArray(payload?.statements) ? payload.statements : [];
+    }
+    return Array.isArray(table.statements) ? table.statements : [];
+  };
+  const findTable = (idOrName) =>
+    (data.tables ?? []).find(
+      (table) => table.id === idOrName || table.name === idOrName || `table:${table.name}` === idOrName,
+    ) || null;
+
   const store = {
     layout: split ? 'split' : 'legacy',
     target: layout.target,
     manifestPath: layout.manifestPath,
     nodesDir,
+    tablesDir,
     data,
     get manifest() {
       return data;
@@ -226,6 +284,15 @@ export function readReviewStore(target, { strict = true } = {}) {
       return data.nodes.length;
     },
     findNode,
+    findTable,
+    readTable(idOrName) {
+      const table = findTable(idOrName);
+      if (!table) return null;
+      return { ...table, statements: readTablePayload(table) };
+    },
+    readTables() {
+      return (data.tables ?? []).map((table) => ({ ...table, statements: readTablePayload(table) }));
+    },
     readPayload,
     readNode(idOrPath) {
       const node = findNode(idOrPath);
@@ -238,7 +305,14 @@ export function readReviewStore(target, { strict = true } = {}) {
       return data.nodes.map((node) => mergeNode(node, readPayload(node)));
     },
     toFullData() {
-      return { meta: data.meta, edges: data.edges, nodes: store.readNodes() };
+      return {
+        meta: data.meta,
+        edges: data.edges,
+        nodes: store.readNodes(),
+        ...(Array.isArray(data.tables) && data.tables.length > 0
+          ? { tables: store.readTables(), components: data.components ?? [] }
+          : {}),
+      };
     },
     save() {
       if (!split) {
@@ -252,6 +326,9 @@ export function readReviewStore(target, { strict = true } = {}) {
         meta: data.meta,
         edges: data.edges,
         nodes: data.nodes,
+        ...(Array.isArray(data.tables) && data.tables.length > 0
+          ? { tables: data.tables, components: data.components ?? [] }
+          : {}),
       });
       return data;
     },
@@ -288,11 +365,34 @@ export function copyReviewStore(source, targetDir, { metaPatch = {} } = {}) {
       if (!stub.payload) stub.payload = key;
     }
     removeStalePayloads(layout.nodesDir, keptFiles);
+    const sourceTables = Array.isArray(source.data.tables) ? source.data.tables : [];
+    if (sourceTables.length > 0) {
+      ensurePrivateDir(layout.tablesDir);
+      const keptTables = new Set();
+      for (const table of sourceTables) {
+        const key = table.payload;
+        const from = key ? path.join(source.tablesDir, `${key}.json`) : null;
+        if (!from || !fs.existsSync(from)) {
+          throw new Error(`数据表内容缺失：${table.name || table.id || key}`);
+        }
+        const name = `${key}.json`;
+        fs.copyFileSync(from, path.join(layout.tablesDir, name));
+        keptTables.add(name);
+      }
+      removeStalePayloads(layout.tablesDir, keptTables);
+    }
     const manifest = {
-      storage: { format: REVIEW_STORAGE_FORMAT, nodesDir: relativeNodesDir(layout) },
+      storage: {
+        format: REVIEW_STORAGE_FORMAT,
+        nodesDir: relativeNodesDir(layout),
+        ...(sourceTables.length > 0 ? { tablesDir: relativeTablesDir(layout) } : {}),
+      },
       meta: { ...source.data.meta, ...metaPatch },
       edges: source.data.edges,
       nodes: source.data.nodes,
+      ...(sourceTables.length > 0
+        ? { tables: source.data.tables, components: source.data.components ?? [] }
+        : {}),
     };
     writeJsonAtomic(layout.manifestPath, manifest);
     return manifest;
@@ -315,7 +415,10 @@ export function removeReviewStore(target) {
   fs.rmSync(layout.target, { force: true });
   try {
     const raw = readJsonSafe(layout.manifestPath);
-    if (isSplitManifest(raw)) fs.rmSync(layout.nodesDir, { recursive: true, force: true });
+    if (isSplitManifest(raw)) {
+      fs.rmSync(layout.nodesDir, { recursive: true, force: true });
+      fs.rmSync(layout.tablesDir, { recursive: true, force: true });
+    }
   } catch {
     /* best effort */
   }

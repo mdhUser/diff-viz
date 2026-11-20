@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -12,18 +12,22 @@ import {
   type Node,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import type { EdgeMode, LayoutDirection, ReviewEdge } from '../types';
-import type { LaneBox, PositionedNode } from '../layout';
+import type { EdgeMode, LayoutDirection, ReviewEdge, ReviewTable } from '../types';
+import type { LaneBox, PositionedItem } from '../layout';
 import { LaneNode, type LaneFlowNode } from './LaneNode';
 import { FileNode, type FileFlowNode } from './FileNode';
+import { TableNode, type TableFlowNode } from './TableNode';
+import { SqlHoverCard } from './SqlHoverCard';
 import { STATUS_META } from '../status';
 
-const nodeTypes = { file: FileNode, lane: LaneNode };
+const nodeTypes = { file: FileNode, lane: LaneNode, table: TableNode };
 
 interface GraphViewProps {
-  positioned: PositionedNode[];
+  positioned: PositionedItem[];
   lanes: LaneBox[];
   viewMode: 'flow' | 'lane';
+  tableDetails: Record<string, ReviewTable>;
+  onRequestTable: (tableId: string) => void;
   edges: ReviewEdge[];
   selectedId: string | null;
   direction: LayoutDirection;
@@ -42,7 +46,7 @@ function FocusController({
   selectedId,
   drawerWidth,
 }: {
-  positioned: PositionedNode[];
+  positioned: PositionedItem[];
   selectedId: string | null;
   drawerWidth: number;
 }) {
@@ -51,7 +55,7 @@ function FocusController({
   drawerWidthRef.current = drawerWidth;
   useEffect(() => {
     if (!selectedId) return undefined;
-    const item = positioned.find((entry) => entry.node.id === selectedId);
+    const item = positioned.find((entry) => entry.id === selectedId);
     if (!item) return undefined;
     const timer = window.setTimeout(() => {
       const zoom = Math.max(getZoom(), 0.85);
@@ -72,7 +76,7 @@ function ViewportResizer({
   drawerWidth,
   resizeKey,
 }: {
-  positioned: PositionedNode[];
+  positioned: PositionedItem[];
   selectedId: string | null;
   drawerWidth: number;
   resizeKey: string;
@@ -90,7 +94,7 @@ function ViewportResizer({
     const timer = window.setTimeout(() => {
       const current = stateRef.current;
       if (current.selectedId) {
-        const item = current.positioned.find((entry) => entry.node.id === current.selectedId);
+        const item = current.positioned.find((entry) => entry.id === current.selectedId);
         if (!item) return;
         const zoom = Math.max(getZoom(), 0.8);
         void setCenter(
@@ -112,6 +116,8 @@ function GraphCanvas({
   positioned,
   lanes,
   viewMode,
+  tableDetails,
+  onRequestTable,
   edges,
   selectedId,
   direction,
@@ -125,6 +131,16 @@ function GraphCanvas({
   onInit,
 }: GraphViewProps) {
   const { fitView } = useReactFlow();
+  const [hoveredTable, setHoveredTable] = useState<{ id: string; x: number; y: number } | null>(null);
+
+  const handleHoverStart = useCallback(
+    (tableId: string, event: { clientX: number; clientY: number }) => {
+      onRequestTable(tableId);
+      setHoveredTable({ id: tableId, x: event.clientX, y: event.clientY });
+    },
+    [onRequestTable],
+  );
+  const handleHoverEnd = useCallback(() => setHoveredTable(null), []);
 
   const nodes = useMemo<Node[]>(() => {
     const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
@@ -145,33 +161,69 @@ function GraphCanvas({
     }
     for (const item of positioned) {
       const lane = item.laneId ? laneById.get(item.laneId) : undefined;
+      const position = lane ? { x: item.x - lane.x, y: item.y - lane.y } : { x: item.x, y: item.y };
+      const parent = lane ? { parentId: `lane:${lane.id}`, extent: 'parent' as const } : {};
+      if (item.kind === 'table' && item.table) {
+        entries.push({
+          id: item.id,
+          type: 'table',
+          position,
+          ...parent,
+          width: item.width,
+          height: item.height,
+          draggable: false,
+          selectable: false,
+          zIndex: 1,
+          data: {
+            table: item.table,
+            selected: item.id === selectedId,
+            onHoverStart: handleHoverStart,
+            onHoverEnd: handleHoverEnd,
+          },
+          style: { width: item.width, height: item.height },
+        } as TableFlowNode);
+        continue;
+      }
+      const node = item.node;
+      if (!node) continue;
       entries.push({
-        id: item.node.id,
+        id: node.id,
         type: 'file',
-        position: lane ? { x: item.x - lane.x, y: item.y - lane.y } : { x: item.x, y: item.y },
-        ...(lane ? { parentId: `lane:${lane.id}`, extent: 'parent' as const } : {}),
+        position,
+        ...parent,
         width: item.width,
         height: item.height,
         draggable: false,
         selectable: false,
         zIndex: 1,
         data: {
-          node: item.node,
+          node,
           direction,
-          selected: item.node.id === selectedId,
-          openTodos: openTodoCounts[item.node.id] || 0,
-          reviewed: Boolean(reviewedMap[item.node.id] ?? item.node.reviewed),
-          ignored: Boolean(ignoredMap[item.node.id] ?? item.node.ignored),
+          selected: node.id === selectedId,
+          openTodos: openTodoCounts[node.id] || 0,
+          reviewed: Boolean(reviewedMap[node.id] ?? node.reviewed),
+          ignored: Boolean(ignoredMap[node.id] ?? node.ignored),
           laneMode: viewMode === 'lane',
         },
         style: { width: item.width, height: item.height },
       } as FileFlowNode);
     }
     return entries;
-  }, [positioned, lanes, viewMode, direction, selectedId, openTodoCounts, reviewedMap, ignoredMap]);
+  }, [
+    positioned,
+    lanes,
+    viewMode,
+    direction,
+    selectedId,
+    openTodoCounts,
+    reviewedMap,
+    ignoredMap,
+    handleHoverStart,
+    handleHoverEnd,
+  ]);
 
   const flowEdges = useMemo<Edge[]>(() => {
-    const byId = new Map(positioned.map((item) => [item.node.id, item.node]));
+    const byId = new Map(positioned.map((item) => [item.id, item]));
     const result: Edge[] = [];
     const seen = new Set<string>();
     for (const edge of edges) {
@@ -179,34 +231,45 @@ function GraphCanvas({
       const importedNode = byId.get(edge.target);
       if (!importerNode || !importedNode || edge.source === edge.target) continue;
 
-      const importerChanged = importerNode.status !== 'impacted_only';
-      const importedChanged = importedNode.status !== 'impacted_only';
+      const edgeRelation = edge.relation || 'imports';
+      const isTableEdge = edgeRelation === 'reads_table' || edgeRelation === 'writes_table';
+      const importerChanged = importerNode.changed;
+      const importedChanged = importedNode.changed;
       const impactMode = edgeMode === 'impact';
 
-      // An unchanged file that the changed file imports is not a downstream
-      // impact of this change. Showing that edge in impact mode would reverse
-      // it into a false "untouched file caused the change" arrow; it remains
-      // available in dependency mode.
-      if (impactMode && importerChanged && !importedChanged) continue;
+      // Table edges always point code/config -> table; they are a data-access
+      // relationship, not a code impact direction.
+      if (!isTableEdge && impactMode && importerChanged && !importedChanged) continue;
 
-      const isImpact = impactMode && !importerChanged && importedChanged;
-      const source = impactMode ? edge.target : edge.source;
-      const target = impactMode ? edge.source : edge.target;
-      const edgeRelation = edge.relation || 'imports';
-      const relation = impactMode ? (isImpact ? 'impact' : edgeRelation === 'imports' ? 'dependency' : edgeRelation) : edgeRelation;
+      const isImpact = !isTableEdge && impactMode && !importerChanged && importedChanged;
+      const source = impactMode && !isTableEdge ? edge.target : edge.source;
+      const target = impactMode && !isTableEdge ? edge.source : edge.target;
+      const relation = isTableEdge
+        ? edgeRelation
+        : impactMode
+          ? isImpact
+            ? 'impact'
+            : edgeRelation === 'imports'
+              ? 'dependency'
+              : edgeRelation
+          : edgeRelation;
       const key = `${source}->${target}:${relation}`;
       if (seen.has(key)) continue;
       seen.add(key);
 
       const connected = Boolean(selectedId && (source === selectedId || target === selectedId));
       const dimmed = Boolean(selectedId && !connected);
-      const bothChanged = importerChanged && importedChanged;
+      const bothChanged = !isTableEdge && importerChanged && importedChanged;
 
-      const isResourceEdge = edgeRelation !== 'imports';
+      const isResourceEdge = !isTableEdge && edgeRelation !== 'imports';
       let stroke = '#8b9a9d';
       let dash: string | undefined = '3 5';
       let strokeWidth = 1.25;
-      if (isImpact) {
+      if (isTableEdge) {
+        stroke = '#c47a2c';
+        dash = undefined;
+        strokeWidth = 1.6;
+      } else if (isImpact) {
         stroke = '#8b5fbf';
         dash = '7 5';
         strokeWidth = 1.9;
@@ -242,7 +305,11 @@ function GraphCanvas({
                   ? '配置'
                   : relation === 'class-ref'
                     ? '引用'
-                    : 'import',
+                    : relation === 'reads_table'
+                      ? '读取'
+                      : relation === 'writes_table'
+                        ? '写入'
+                        : 'import',
         labelStyle: {
           fill: connected
             ? '#26353a'
@@ -252,7 +319,9 @@ function GraphCanvas({
                 ? '#3c6b9c'
                 : ['binds', 'config', 'class-ref'].includes(relation)
                   ? '#2f7373'
-                  : '#66797c',
+                  : ['reads_table', 'writes_table'].includes(relation)
+                    ? '#a35f14'
+                    : '#66797c',
           fontSize: 11,
           fontFamily: 'var(--font-mono)',
           fontWeight: 600,
@@ -284,7 +353,7 @@ function GraphCanvas({
 
   const signature = useMemo(
     () =>
-      `${positioned.map((item) => item.node.id).join('|')}:${direction}:${edgeMode}:${viewMode}:${lanes
+      `${positioned.map((item) => item.id).join('|')}:${direction}:${edgeMode}:${viewMode}:${lanes
         .map((lane) => lane.id)
         .join(',')}`,
     [positioned, direction, edgeMode, viewMode, lanes],
@@ -297,6 +366,9 @@ function GraphCanvas({
     return () => window.clearTimeout(timer);
   }, [signature, fitView]);
 
+
+  const hoveredItem = hoveredTable ? positioned.find((item) => item.id === hoveredTable.id) : null;
+  const hoverTable = hoveredTable ? tableDetails[hoveredTable.id] ?? hoveredItem?.table ?? null : null;
 
   return (
     <div className="h-full w-full">
@@ -331,6 +403,7 @@ function GraphCanvas({
         maskColor="rgba(246, 242, 233, 0.72)"
         nodeColor={(node) => {
           if (node.type === 'lane') return '#f1ecdf';
+          if (node.type === 'table') return '#c47a2c';
           const status = (node.data as { node?: { status?: keyof typeof STATUS_META } }).node?.status;
           return status ? STATUS_META[status].color : '#8b9a9d';
         }}
@@ -339,6 +412,17 @@ function GraphCanvas({
       />
     </ReactFlow>
     <FocusController positioned={positioned} selectedId={selectedId} drawerWidth={drawerWidth} />
+    {hoveredTable && hoverTable ? (
+      <SqlHoverCard
+        table={hoverTable}
+        x={hoveredTable.x}
+        y={hoveredTable.y}
+        onOpen={(tableId) => {
+          setHoveredTable(null);
+          onSelect(tableId);
+        }}
+      />
+    ) : null}
     <ViewportResizer
       positioned={positioned}
       selectedId={selectedId}

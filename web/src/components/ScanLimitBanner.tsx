@@ -38,17 +38,17 @@ export function ScanLimitBanner({ meta }: { meta: ReviewMeta }) {
       className="flex shrink-0 items-start gap-2 border-b border-amber/30 bg-[#fdf6ea] px-4 py-2 text-[11px] text-amber"
     >
       <TriangleAlert size={13} className="mt-[1px] shrink-0" />
-      <div className="min-w-0 flex-1 leading-[1.65]">
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 leading-[1.65]">
         <span className="font-medium">依赖扫描已截断，当前拓扑是不完整的</span>
         {info.legacyWarning ? (
-          <span className="ml-1.5 text-mist-500">{info.legacyWarning}</span>
+          <span className="text-mist-500">{info.legacyWarning}</span>
         ) : (
-          <span className="ml-1.5 text-mist-500">
+          <span className="text-mist-500">
             仓库共有 {count(info.codeFiles)} 个代码文件，本次只分析了前 {count(info.limit)} 个；
             未扫描的文件不会出现在依赖拓扑和影响分析里，可能漏掉受影响文件。
           </span>
         )}
-        <span className="ml-1.5 text-mist-600">
+        <span className="text-mist-600">
           需要完整结果时，用 <span className="font-mono">diff-viz --max-scan-files &lt;更大的数字&gt;</span> 重跑。
         </span>
       </div>

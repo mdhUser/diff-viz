@@ -47,6 +47,11 @@ export function Sidebar({ data, selectedId, query, reviewedMap, isTodoDone, onQu
   const reviewedCount = changed.filter((node) => reviewedMap[node.id] ?? node.reviewed).length;
   const agentSummaries = changed.filter((node) => node.summarySource === 'agent').length;
   const summaryText = (meta.overallSummary || '').trim();
+  // The scan cap already has a page-level banner; repeating it here just adds
+  // noise, so only show it when there is no structured banner to show.
+  const sidebarWarnings = (meta.warnings ?? []).filter(
+    (warning) => !(meta.scanLimit?.truncated && /依赖扫描上限|capped at/i.test(warning)),
+  );
   // Long overall summaries used to be clipped with no way to read the rest.
   const [summaryOpen, setSummaryOpen] = useState(false);
   const summaryCollapsible = summaryText.length > 120;
@@ -192,14 +197,14 @@ export function Sidebar({ data, selectedId, query, reviewedMap, isTodoDone, onQu
           </div>
         </div>
 
-        {meta.warnings?.length ? (
+        {sidebarWarnings.length > 0 ? (
           <div className="mx-1 mt-4 rounded-lg border border-amber/20 bg-amber/5 p-2.5">
             <div className="flex items-center gap-1.5 text-[10px] font-medium text-amber">
               <AlertTriangle size={11} />
               分析提示
             </div>
             <ul className="mt-1.5 space-y-1">
-              {meta.warnings.slice(0, 3).map((warning) => (
+              {sidebarWarnings.slice(0, 3).map((warning) => (
                 <li key={warning} className="text-[10px] leading-4 text-mist-500">
                   {warning}
                 </li>

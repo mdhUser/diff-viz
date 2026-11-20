@@ -39,31 +39,38 @@ function allAttrs(source, tagPattern, name) {
 
 function parseProperties(source) {
   const keys = [];
+  const values = {};
   for (const rawLine of String(source).split('\n')) {
     const line = rawLine.trim();
     if (!line || line.startsWith('#') || line.startsWith('!')) continue;
     const match = /^([^=:\s]+)\s*[=:]\s*(.*)$/.exec(line);
-    if (match) keys.push(match[1]);
+    if (!match) continue;
+    keys.push(match[1]);
+    values[match[1]] = match[2];
   }
-  return [...new Set(keys)];
+  return { keys: [...new Set(keys)], values };
 }
 
 export function parseYamlKeys(source) {
   // Minimal indentation tracker: enough to expose `a.b.c` keys for review, not
-  // a full YAML parser. Values on the same line are ignored.
+  // a full YAML parser. Scalar values are kept so datasource URLs can be read.
   const keys = [];
+  const values = {};
   const stack = [];
   for (const rawLine of String(source).split('\n')) {
     if (!rawLine.trim() || rawLine.trim().startsWith('#') || rawLine.trim() === '---') continue;
-    const match = /^(\s*)([A-Za-z0-9_.-]+)\s*:/.exec(rawLine);
+    const match = /^(\s*)([A-Za-z0-9_.-]+)\s*:\s*(.*)$/.exec(rawLine);
     if (!match) continue;
     const indent = match[1].length;
     while (stack.length > 0 && stack[stack.length - 1].indent >= indent) stack.pop();
     const key = match[2];
     stack.push({ indent, key });
-    keys.push(stack.map((item) => item.key).join('.'));
+    const full = stack.map((item) => item.key).join('.');
+    keys.push(full);
+    const value = String(match[3] || '').trim();
+    if (value && !value.startsWith('{') && !value.startsWith('[')) values[full] = value.replace(/^['"]|['"]$/g, '');
   }
-  return [...new Set(keys)];
+  return { keys: [...new Set(keys)], values };
 }
 
 /** Resolve a Spring resource reference into candidate repo-relative paths. */
@@ -91,6 +98,7 @@ export function analyzeResource(filePath, source) {
     classRefs: [],
     packages: [],
     keys: [],
+    values: {},
     statements: [],
     namespace: '',
     mapperInterface: '',
@@ -98,10 +106,14 @@ export function analyzeResource(filePath, source) {
   if (typeof source !== 'string' || !source) return base;
 
   if (ext === '.properties') {
-    return { ...base, resourceKind: 'properties', keys: parseProperties(source) };
+    const parsed = parseProperties(source);
+    return { ...base, resourceKind: 'properties', keys: parsed.keys, values: parsed.values };
   }
   if (ext === '.yml' || ext === '.yaml') {
-    return { ...base, resourceKind: 'yaml', keys: parseYamlKeys(source) };
+    // Preserve function compatibility for callers that only need keys.
+    // eslint-disable-next-line no-unused-vars
+    const parsedYaml = parseYamlKeys(source);
+    return { ...base, resourceKind: 'yaml', keys: parsedYaml.keys, values: parsedYaml.values };
   }
   if (ext === '.sql') {
     return {

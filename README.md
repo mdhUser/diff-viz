@@ -52,7 +52,7 @@ diff-viz stop                      # 停止后台 hub
 | 左栏 | 整体摘要、变更文件 / 受影响文件列表、Review 进度；点文件切换 |
 | 中间 | 拓扑图。紫色虚线 = 影响（改了 A 牵动 B），蓝色实线 = 依赖（A imports B），灰色节点 = 没改但受影响 |
 | 右侧 | 「摘要与影响」「代码 Diff」「待确认」三段；Diff 支持单栏/双栏、完整文件、语法高亮 |
-| 顶部 | 仓库切换、版本链（默认当前分支）、历史 commit 的 Review、刷新；工具栏可切换「流向 / 泳道」视图（泳道按模块/目录/包分层） |
+| 顶部 | 仓库切换、版本链（默认当前分支）、历史 commit 的 Review、刷新；工具栏可切换「流向 / 泳道」视图（泳道按模块/目录/包分层），以及「配置」「数据表」层 |
 
 快捷键：`←` / `→` 切换文件，`Esc` 关闭详情。改完代码保存后 hub 自动重算，页面通过 SSE 刷新，不用重跑命令。
 
@@ -82,8 +82,9 @@ diff-viz stop                      # 停止后台 hub
 配置文件和 SQL 也在拓扑图里：
 
 - `.xml`：MyBatis Mapper（`namespace` 绑定到 Java Mapper 接口）、Spring XML（`<bean class>` / `<import resource>`），未知 XML 只保留节点不猜边。
-- `.properties` / `.yml` / `.yaml` / `.sql`：作为配置节点参与分层；SQL 语句与表分析见后续版本。
-- 改 Mapper XML 会让接口和调用方进入「受影响」；工具栏可整体开关「配置」层。
+- `.properties` / `.yml` / `.yaml` / `.sql`：作为配置节点参与分层。
+- **数据库表**：MyBatis XML / Java 注解 / `.sql` 里的 SQL 会聚合成表节点（`t_order` 等），橙色「读取/写入」边连到数据库泳道；悬停看 SQL，点击打开完整语句抽屉。工具栏可开关「配置」「数据表」层。
+- 改 Mapper XML 会让接口和调用方进入「受影响」。
 
 模型、边方向和上限见 [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md)。
 
@@ -143,6 +144,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor
 | [docs/data-contract.md](https://github.com/mdhUser/diff-viz/blob/main/docs/data-contract.md) | 数据文件格式、字段语义、HTTP API、注解格式 |
 | [docs/languages.md](https://github.com/mdhUser/diff-viz/blob/main/docs/languages.md) | 支持的语言、自定义语言、影响分析模型 |
 | [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md) | 配置/资源文件入图、MyBatis/Spring 绑定与影响方向 |
+| [docs/database.md](https://github.com/mdhUser/diff-viz/blob/main/docs/database.md) | 数据库表/SQL 解析、读取写入边、悬停与抽屉、懒加载 API |
 | [docs/agent-integrations.md](https://github.com/mdhUser/diff-viz/blob/main/docs/agent-integrations.md) | Claude Code / Cursor / Codex 等 Agent 接入方式 |
 | [docs/development.md](https://github.com/mdhUser/diff-viz/blob/main/docs/development.md) | 本地开发、测试、目录结构、发布流程 |
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { isProbablyBinary, naturalCompare, readJsonSafe, toPosix } from './util.mjs';
 import { readScanCache, writeScanCache } from './cache.mjs';
 import { analyzeResource, isResourceFile } from './resources.mjs';
+import { extractAnnotationStatements } from './sql.mjs';
 import {
   EMPTY_REGISTRY,
   buildPackageIndexes,
@@ -883,6 +884,13 @@ export function scanRepository(
     if (JAVA_EXTENSION_SET.has(path.extname(filePath).toLowerCase())) {
       entry.javaPackage = extractJavaPackage(source);
       entry.javaIds = extractJavaIdentifiers(source);
+      const className = path.posix.basename(filePath).replace(/\.java$/i, '');
+      const javaStatements = extractAnnotationStatements(source, {
+        file: filePath,
+        packageName: entry.javaPackage,
+        className,
+      });
+      if (javaStatements.length > 0) entry.javaSqlStatements = javaStatements.slice(0, 200);
     }
     files.set(filePath, entry);
     if (caching && key) nextCache[filePath] = { key, entry };

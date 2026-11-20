@@ -44,6 +44,8 @@ export interface ReviewNode {
   impactOrigins?: string[];
   imports?: string[];
   importedBy?: string[];
+  // 1.3 additive: tables used by this file's SQL (ids like table:t_order).
+  sqlTables?: string[];
   summarySource?: 'auto' | 'agent' | string;
   impactSource?: string;
   reviewNotes?: string[];
@@ -54,6 +56,38 @@ export interface ReviewNode {
   moduleLabel?: string;
   modulePath?: string;
   packagePath?: string;
+}
+
+export interface SqlStatement {
+  id: string;
+  operation: string;
+  sql: string;
+  file: string;
+  line?: number | null;
+  mapper?: string;
+  dynamic?: boolean;
+}
+
+export interface ReviewTable {
+  id: string;
+  name: string;
+  schema?: string | null;
+  componentId?: string;
+  operations?: string[];
+  statementCount?: number;
+  changed?: boolean;
+  impacted?: boolean;
+  sources?: string[];
+  payload?: string;
+  statements?: SqlStatement[];
+}
+
+export interface ReviewComponent {
+  id: string;
+  kind: string;
+  label: string;
+  engine?: string;
+  tables?: string[];
 }
 
 export interface ReviewEdge {
@@ -101,6 +135,11 @@ export interface ReviewMeta {
   durationMs?: number;
   workspace?: boolean;
   modules?: ReviewModule[];
+  db?: {
+    engine: string;
+    label: string;
+    tables: number;
+  };
   stats: {
     changedFiles: number;
     impactedFiles: number;
@@ -110,6 +149,7 @@ export interface ReviewMeta {
     edges?: number;
     scannedFiles?: number;
     configFiles?: number;
+    tables?: number;
   };
 }
 
@@ -158,6 +198,8 @@ export interface ReviewData {
   meta: ReviewMeta;
   nodes: ReviewNode[];
   edges: ReviewEdge[];
+  tables?: ReviewTable[];
+  components?: ReviewComponent[];
 }
 
 export type LayoutDirection = 'LR' | 'TB';

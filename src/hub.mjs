@@ -765,6 +765,11 @@ export async function startHub({
 
   const analyzeProject = (project, payload) => {
     const scope = payload.scope || 'worktree';
+    // The browser has no knob for analyzer limits, and a worktree re-analysis
+    // (file watch, bare hub URL) must not silently reset what the CLI asked for:
+    // reuse the remembered cap unless this request sets one explicitly.
+    const remembered = lastPayloads.get(project.id) || {};
+    const maxScanFiles = payload.maxScanFiles ?? remembered.maxScanFiles;
     const options = {};
     if (scope === 'worktree') options.worktree = true;
     else if (scope === 'staged') options.staged = true;
@@ -775,6 +780,7 @@ export async function startHub({
     else throw new Error(`不支持的 scope：${scope}`);
     if (payload.annotations && typeof payload.annotations === 'object') options.annotations = payload.annotations;
     if (payload.summary) options.summary = String(payload.summary);
+    if (maxScanFiles) options.maxScanFiles = Number(maxScanFiles);
 
     const data = buildReviewData(new GitRepo(project.root), options);
     const reviewId = reviewIdFor(project.id, scope, data, payload);
@@ -788,7 +794,11 @@ export async function startHub({
     const previous = previousStore?.manifest ?? null;
     if (previous) mergePreviousState(data, previous);
     saveReview(reviewId, data, project.id);
-    lastPayloads.set(project.id, { ...payload, scope });
+    lastPayloads.set(project.id, {
+      ...payload,
+      scope,
+      ...(maxScanFiles ? { maxScanFiles: Number(maxScanFiles) } : {}),
+    });
     watchProject(project);
     return { reviewId, data };
   };
@@ -941,7 +951,12 @@ export async function startHub({
     // Only working-tree scopes can be re-derived after a file change; commit and
     // range reviews stay as they were generated.
     if (inferredScope === 'worktree' || inferredScope === 'staged') {
-      lastPayloads.set(project.id, { scope: inferredScope });
+      const remembered = lastPayloads.get(project.id)?.maxScanFiles;
+      const maxScanFiles = payload.maxScanFiles ?? remembered;
+      lastPayloads.set(project.id, {
+        scope: inferredScope,
+        ...(maxScanFiles ? { maxScanFiles: Number(maxScanFiles) } : {}),
+      });
       watchProject(project);
     }
     return { reviewId, data: manifest };
@@ -1209,6 +1224,27 @@ export async function startHub({
         return;
       }
 
+      if (pathname === '/api/table') {
+        const reviewId = safeReviewId(url.searchParams.get('review'), '');
+        if (!reviewId) {
+          sendJson(res, 400, { error: '缺少 review 参数。' });
+          return;
+        }
+        const store = loadStore(reviewId);
+        if (!store) {
+          sendJson(res, 404, { error: '找不到该 Review。' });
+          return;
+        }
+        const tableId = url.searchParams.get('table') || url.searchParams.get('id');
+        const table = store.readTable(tableId);
+        if (!table) {
+          sendJson(res, 404, { error: '数据表不存在。' });
+          return;
+        }
+        sendJson(res, 200, table);
+        return;
+      }
+
       if (pathname === '/api/state' && req.method === 'POST') {
         const payload = await readBody(req);
         const reviewId = safeReviewId(payload.reviewId, '');
@@ -1335,7 +1371,10 @@ export async function ensureHub({ port, host = '127.0.0.1', home = hubHome() } =
   const targetPort = resolveHubPort(existing, port);
   const child = spawn(
     process.execPath,
-    [BIN_PATH, 'hub', '--port', String(targetPort), '--host', host, '--quiet'],
+    // `--no-open` belongs to the caller: it opens the final Review URL itself,
+    // and a second tab on the bare hub URL would POST /api/review and race the
+    // import with a default-options re-analysis.
+    [BIN_PATH, 'hub', '--port', String(targetPort), '--host', host, '--quiet', '--no-open'],
     {
       detached: true,
       stdio: 'ignore',

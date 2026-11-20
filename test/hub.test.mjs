@@ -715,3 +715,45 @@ test('a restarted hub keeps the remembered port unless --port is explicit', () =
   assert.equal(resolveHubPort({}, undefined), 5173);
   assert.equal(resolveHubPort({ port: 0 }, undefined), 5173);
 });
+
+test('a re-analysis keeps the scan cap the import asked for', async () => {
+  const repoDir = makeTempRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-viz-hub-'));
+  write(repoDir, 'src/a.ts', 'export const a = 1;\n');
+  write(repoDir, 'src/b.ts', 'import { a } from "./a";\nexport const b = a;\n');
+  write(repoDir, 'src/c.ts', 'export const c = 3;\n');
+  commitAll(repoDir, 'initial');
+  write(repoDir, 'src/a.ts', 'export const a = 2;\n');
+
+  const repo = new GitRepo(repoDir);
+  const data = buildReviewData(repo, { worktree: true, maxScanFiles: 1 });
+  assert.equal(data.meta.scanLimit.truncated, true);
+  const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
+  try {
+    const imported = await hubFetch(server, 'api/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: repoDir, data, maxScanFiles: 1 }),
+    }).then((response) => response.json());
+    assert.ok(imported.reviewId);
+
+    // The bare hub page POSTs /api/review without any options; that re-analysis
+    // used to reset the cap back to 15000 and quietly un-truncate the graph.
+    const reopened = await hubFetch(server, 'api/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: imported.project.id, scope: 'worktree' }),
+    }).then((response) => response.json());
+    assert.ok(reopened.reviewId);
+
+    const review = await hubFetch(server, `api/data?review=${imported.reviewId}`).then((response) =>
+      response.json(),
+    );
+    assert.equal(review.meta.scanLimit.limit, 1);
+    assert.equal(review.meta.scanLimit.truncated, true);
+  } finally {
+    await server.close();
+    cleanup(repoDir);
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

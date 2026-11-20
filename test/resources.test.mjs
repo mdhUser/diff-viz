@@ -54,10 +54,14 @@ test('parses properties keys and flat yaml keys', () => {
   );
   assert.deepEqual(properties.keys, ['spring.datasource.url', 'feature.flag']);
 
-  assert.deepEqual(
-    parseYamlKeys(`server:\n  port: 8080\n  ssl:\n    enabled: true\nmybatis:\n  mapper-locations: classpath:mapper/*.xml\n`),
-    ['server', 'server.port', 'server.ssl', 'server.ssl.enabled', 'mybatis', 'mybatis.mapper-locations'],
-  );
+  assert.deepEqual(parseYamlKeys(`server:\n  port: 8080\n  ssl:\n    enabled: true\nmybatis:\n  mapper-locations: classpath:mapper/*.xml\n`).keys, [
+    'server',
+    'server.port',
+    'server.ssl',
+    'server.ssl.enabled',
+    'mybatis',
+    'mybatis.mapper-locations',
+  ]);
 
   const yaml = analyzeResource('application.yml', 'spring:\n  profiles: prod\n');
   assert.equal(yaml.resourceKind, 'yaml');

@@ -268,9 +268,13 @@ async function hubError(response, prefix) {
 // Importing by path lets the hub copy node files instead of receiving one huge
 // JSON body. Paths outside the repository fall back to an explicit upload, and
 // so does an older hub that predates dataPath imports.
-async function uploadReview(hub, { root, data, dataPath, reviewId }) {
-  const request = (body) => callHub(hub, 'api/import', body);
-  let response = await request(dataPath ? { root, dataPath, reviewId } : { root, data, reviewId });
+async function uploadReview(hub, { root, data, dataPath, reviewId, maxScanFiles }) {
+  // Carry the analysis limit along: the hub re-analyzes this scope on file
+  // changes, and it must keep the cap the user asked for instead of reverting
+  // to the default.
+  const base = { root, reviewId, ...(maxScanFiles ? { maxScanFiles: Number(maxScanFiles) } : {}) };
+  const request = (body) => callHub(hub, 'api/import', { ...base, ...body });
+  let response = await request(dataPath ? { dataPath } : { data });
   if (!response.ok && dataPath) {
     // Only retry when the hub rejected the request shape, not when it genuinely
     // failed to read our split files (that would silently lose node content).
@@ -283,7 +287,7 @@ async function uploadReview(hub, { root, data, dataPath, reviewId }) {
     const shapeRejected = response.status === 405 || /数据格式不正确|未知参数|dataPath/.test(detail);
     if (shapeRejected) {
       const full = data ?? readReviewStore(dataPath).toFullData();
-      response = await request({ root, data: full, reviewId });
+      response = await request({ data: full });
     }
   }
   if (!response.ok) throw await hubError(response, '注册 Review 到 hub 失败');
@@ -572,6 +576,7 @@ export async function main(argv = process.argv.slice(2)) {
     const imported = await uploadReview(hub, {
       root: repo.root,
       reviewId: data.meta?.reviewId,
+      maxScanFiles: options.maxScanFiles,
       ...(isInside(repo.root, dataPath) ? { dataPath } : { data: store.toFullData() }),
     });
     applyReviewIds(dataPath, { reviewId: imported.reviewId, projectId: imported.project?.id });
@@ -667,6 +672,7 @@ export async function main(argv = process.argv.slice(2)) {
   const imported = await uploadReview(hub, {
     root: repo.root,
     reviewId: data.meta?.reviewId,
+    maxScanFiles: options.maxScanFiles,
     ...(isInside(repo.root, dataPath) ? { dataPath, data } : { data }),
   });
   applyReviewIds(dataPath, {

@@ -8,6 +8,26 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `--max-scan-files` 被 hub 的自动重算重置：CLI 把上限随 Review 一起导入后，hub 会记住它；由文件监听或裸 hub URL 触发的 worktree 重算不再退回默认 15,000。之前页面会在打开后几秒内把「已截断」的图悄悄变回全量（或反过来）。
+- `ensureHub` 启动的后台 hub 不再自己打开一个裸 hub 页签：那个页签会 `POST /api/review` 用默认参数再分析一次，既覆盖刚导入的 Review，也让 `--no-open` 失效；最终 Review URL 仍由 CLI 打开。
+- 扫描截断的提示不再在页面顶部横幅和侧栏「分析提示」里各说一遍；顶部横幅改成一整行可换行排版，长数字不再挤在一起。
+
+## [1.3.0] - 2026-11-20
+
+### Added
+
+- **数据库表与 SQL 视图**：静态解析 MyBatis Mapper XML、Java `@Select/@Insert/@Update/@Delete` 注解和 `.sql` 文件，按表聚合成数据库组件与表节点，生成 `reads_table` / `writes_table` 边；从 `spring.datasource` / `jdbc:` 推断引擎（MySQL/PostgreSQL/Oracle/SQL Server/H2/SQLite）。
+- 表卡片显示读取/写入徽章与 SQL 条数；泳道视图新增数据库泳道（`MySQL · N 张表`）；悬停显示前 3 条 SQL（来源文件:行号、动态 SQL 标记），点击打开「数据表」抽屉查看全部语句并可跳到来源文件 Diff；工具栏「数据表 N」开关。
+- SQL 文本按表懒加载到 `<review>/tables/<payload>.json`（`storage.tablesDir`），`/api/data` 只含元数据；新增 `GET /api/table?review=&table=`。上限 300 张表 / 每表 200 条 / 单条 4KB，超出写入 `meta.warnings`。
+- 数据契约：顶层 `tables` / `components`，`meta.db`、`meta.stats.tables`、边关系 `reads_table` / `writes_table`；文档 [docs/database.md](https://github.com/mdhUser/diff-viz/blob/main/docs/database.md)。
+- 新增 `test/db.test.mjs` / `test/tables.test.mjs`，覆盖 SQL 分组、懒加载存储、复制与 `/api/table`。
+
+### Fixed
+
+- 重新分析（文件监听、裸 hub 页面刷新）会保留 `--max-scan-files` 上限，不再悄悄恢复默认 15000；侧栏不再重复页面顶部的扫描截断警告。
+
 ## [1.2.0] - 2026-11-20
 
 ### Added

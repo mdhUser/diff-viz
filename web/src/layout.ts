@@ -1,18 +1,33 @@
 import dagre from 'dagre';
-import type { EdgeMode, LayoutDirection, ReviewEdge, ReviewNode } from './types';
+import type { EdgeMode, LayoutDirection, ReviewEdge, ReviewNode, ReviewTable } from './types';
 
 export const NODE_SIZES = {
   changed: { width: 256, height: 94 },
   impacted: { width: 228, height: 74 },
 };
 
-export interface PositionedNode {
-  node: ReviewNode;
-  x: number;
-  y: number;
+export const TABLE_SIZE = { width: 212, height: 78 };
+
+export type GraphItemKind = 'file' | 'table';
+
+/** A layout input: file/config node or a virtual database table node. */
+export interface GraphItem {
+  id: string;
+  kind: GraphItemKind;
   width: number;
   height: number;
+  /** Changed table/file; used exactly like `status !== 'impacted_only'`. */
+  changed: boolean;
+  node?: ReviewNode;
+  table?: ReviewTable;
+}
+
+export interface PositionedItem extends GraphItem {
+  x: number;
+  y: number;
   laneId?: string;
+  /** @deprecated kept for older call sites; prefer node/table. */
+  laneKey?: string;
 }
 
 export interface LaneSpec {
@@ -33,11 +48,11 @@ export interface LaneBox extends LaneSpec {
 }
 
 export interface LaneLayout {
-  positioned: PositionedNode[];
+  positioned: PositionedItem[];
   lanes: LaneBox[];
 }
 
-export type LaneKeyFn = (node: ReviewNode) => string;
+export type LaneKeyFn = (item: GraphItem) => string;
 
 const LANE_HEADER = 46;
 const LANE_PADDING_X = 32;
@@ -48,14 +63,41 @@ const ROW_GAP = 18;
 const COLUMN_GAP = 26;
 const MAX_ROWS_PER_COLUMN = 5;
 
-function sizeFor(node: ReviewNode) {
+export function sizeForNode(node: ReviewNode) {
   return node.status === 'impacted_only' ? NODE_SIZES.impacted : NODE_SIZES.changed;
 }
 
+export function itemForNode(node: ReviewNode): GraphItem {
+  const size = sizeForNode(node);
+  return {
+    id: node.id,
+    kind: 'file',
+    width: size.width,
+    height: size.height,
+    changed: node.status !== 'impacted_only',
+    node,
+  };
+}
+
+export function itemForTable(table: ReviewTable): GraphItem {
+  return {
+    id: table.id,
+    kind: 'table',
+    width: TABLE_SIZE.width,
+    height: TABLE_SIZE.height,
+    changed: Boolean(table.changed),
+    table,
+  };
+}
+
+function changedOf(item: GraphItem): boolean {
+  return item.changed;
+}
+
 // Keep the dagre input identical to the edges the canvas actually draws.
-function graphEdgesFor(nodes: ReviewNode[], edges: ReviewEdge[], edgeMode: EdgeMode) {
-  const included = new Set(nodes.map((node) => node.id));
-  const byId = new Map(nodes.map((node) => [node.id, node]));
+function graphEdgesFor(items: GraphItem[], edges: ReviewEdge[], edgeMode: EdgeMode) {
+  const included = new Set(items.map((item) => item.id));
+  const byId = new Map(items.map((item) => [item.id, item]));
   const result: Array<{ source: string; target: string }> = [];
   const seen = new Set<string>();
   for (const edge of edges) {
@@ -64,11 +106,13 @@ function graphEdgesFor(nodes: ReviewNode[], edges: ReviewEdge[], edgeMode: EdgeM
     const imported = byId.get(edge.target);
     if (!importer || !imported) continue;
     const impactMode = edgeMode === 'impact';
-    const importerChanged = importer.status !== 'impacted_only';
-    const importedChanged = imported.status !== 'impacted_only';
-    if (impactMode && importerChanged && !importedChanged) continue;
-    const source = impactMode ? edge.target : edge.source;
-    const target = impactMode ? edge.source : edge.target;
+    const isTableEdge = imported.kind === 'table' || importer.kind === 'table';
+    const importerChanged = changedOf(importer);
+    const importedChanged = changedOf(imported);
+    if (!isTableEdge && impactMode && importerChanged && !importedChanged) continue;
+    // Table edges always point code/config -> table and never reverse.
+    const source = impactMode && !isTableEdge ? edge.target : edge.source;
+    const target = impactMode && !isTableEdge ? edge.source : edge.target;
     if (source === target) continue;
     const key = `${source}->${target}`;
     if (seen.has(key)) continue;
@@ -79,11 +123,11 @@ function graphEdgesFor(nodes: ReviewNode[], edges: ReviewEdge[], edgeMode: EdgeM
 }
 
 export function computeLayout(
-  nodes: ReviewNode[],
+  items: GraphItem[],
   edges: ReviewEdge[],
   direction: LayoutDirection,
   edgeMode: EdgeMode,
-): PositionedNode[] {
+): PositionedItem[] {
   const graph = new dagre.graphlib.Graph({ multigraph: false, compound: false });
   graph.setDefaultEdgeLabel(() => ({}));
   graph.setGraph({
@@ -97,49 +141,42 @@ export function computeLayout(
     ranker: 'network-simplex',
   });
 
-  for (const node of nodes) {
-    const size = sizeFor(node);
-    graph.setNode(node.id, { ...size });
-  }
-  for (const edge of graphEdgesFor(nodes, edges, edgeMode)) {
-    graph.setEdge(edge.source, edge.target);
-  }
+  for (const item of items) graph.setNode(item.id, { width: item.width, height: item.height });
+  for (const edge of graphEdgesFor(items, edges, edgeMode)) graph.setEdge(edge.source, edge.target);
 
   dagre.layout(graph);
 
-  return nodes.map((node) => {
-    const size = sizeFor(node);
-    const position = graph.node(node.id);
+  return items.map((item) => {
+    const position = graph.node(item.id);
     return {
-      node,
-      x: (position?.x ?? 0) - size.width / 2,
-      y: (position?.y ?? 0) - size.height / 2,
-      width: size.width,
-      height: size.height,
+      ...item,
+      x: (position?.x ?? 0) - item.width / 2,
+      y: (position?.y ?? 0) - item.height / 2,
     };
   });
 }
 
-export function fallbackLaneKey(node: ReviewNode): string {
-  if (node.moduleId) return node.moduleId;
-  const first = node.path.split('/').filter(Boolean)[0];
+export function fallbackLaneKey(item: GraphItem): string {
+  if (item.kind === 'table') return 'db';
+  if (item.node?.moduleId) return item.node.moduleId;
+  const first = (item.node?.path ?? '').split('/').filter(Boolean)[0];
   return first ?? '(root)';
 }
 
 /**
  * Swimlane layout: dagre still decides the horizontal dependency depth, then
- * nodes are re-banded into one horizontal lane per module/package. Within a
- * lane nodes are bucketed by depth so multiple files at the same depth stack
- * vertically instead of overlapping.
+ * items are re-banded into one horizontal lane per module/package. Within a
+ * lane items are bucketed by depth and packed into columns of at most
+ * MAX_ROWS_PER_COLUMN so a large module does not create a very tall lane.
  */
 export function computeLaneLayout(
-  nodes: ReviewNode[],
+  items: GraphItem[],
   edges: ReviewEdge[],
   laneSpecs: LaneSpec[],
   edgeMode: EdgeMode,
   laneKeyOf: LaneKeyFn = fallbackLaneKey,
 ): LaneLayout {
-  if (nodes.length === 0) {
+  if (items.length === 0) {
     return {
       positioned: [],
       lanes: laneSpecs.map((lane) => ({
@@ -154,13 +191,13 @@ export function computeLaneLayout(
     };
   }
 
-  const flow = computeLayout(nodes, edges, 'LR', edgeMode);
+  const flow = computeLayout(items, edges, 'LR', edgeMode);
   const minX = Math.min(...flow.map((item) => item.x));
   const shifted = flow.map((item) => ({ ...item, x: item.x - minX }));
 
-  const byLane = new Map<string, PositionedNode[]>();
+  const byLane = new Map<string, PositionedItem[]>();
   for (const item of shifted) {
-    const key = laneKeyOf(item.node);
+    const key = laneKeyOf(item);
     if (!byLane.has(key)) byLane.set(key, []);
     byLane.get(key)!.push({ ...item, laneId: key });
   }
@@ -172,19 +209,16 @@ export function computeLaneLayout(
     orderedSpecs.push({ id: key, label: key, path: '', kind: 'other', order: orderedSpecs.length });
   }
 
-  const ordered: PositionedNode[] = [];
+  const ordered: PositionedItem[] = [];
   const laneDrafts: Array<Omit<LaneBox, 'x' | 'width'> & { maxRight: number }> = [];
   let laneTop = 0;
 
   for (const spec of orderedSpecs) {
-    const laneNodes = byLane.get(spec.id) ?? [];
-    if (laneNodes.length === 0) continue;
+    const laneItems = byLane.get(spec.id) ?? [];
+    if (laneItems.length === 0) continue;
 
-    // Bucket by horizontal depth, then pack each bucket into columns of at
-    // most MAX_ROWS_PER_COLUMN so one module with many files does not produce a
-    // 10,000px-tall lane.
-    const buckets = new Map<number, PositionedNode[]>();
-    for (const item of laneNodes) {
+    const buckets = new Map<number, PositionedItem[]>();
+    for (const item of laneItems) {
       const bucket = Math.round(item.x / COLUMN_STEP);
       if (!buckets.has(bucket)) buckets.set(bucket, []);
       buckets.get(bucket)!.push(item);
@@ -193,7 +227,7 @@ export function computeLaneLayout(
     let maxColumnBottom = laneTop + LANE_HEADER;
     for (const bucket of [...buckets.keys()].sort((a, b) => a - b)) {
       const columns = buckets.get(bucket)!;
-      columns.sort((a, b) => a.y - b.y || a.node.id.localeCompare(b.node.id));
+      columns.sort((a, b) => a.y - b.y || a.id.localeCompare(b.id));
       const columnWidth = Math.max(...columns.map((item) => item.width));
       const baseX = Math.max(columns[0].x + LANE_PADDING_X, laneCursorX);
       for (let startIndex = 0; startIndex < columns.length; startIndex += MAX_ROWS_PER_COLUMN) {
@@ -216,8 +250,8 @@ export function computeLaneLayout(
       y: laneTop,
       height: laneHeight,
       maxRight: laneCursorX,
-      changedFiles: laneNodes.filter((item) => item.node.status !== 'impacted_only').length,
-      impactedFiles: laneNodes.filter((item) => item.node.status === 'impacted_only').length,
+      changedFiles: laneItems.filter((item) => item.changed).length,
+      impactedFiles: laneItems.filter((item) => !item.changed).length,
     });
     laneTop += laneHeight + LANE_GAP;
   }

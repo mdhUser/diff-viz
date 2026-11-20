@@ -106,6 +106,25 @@
 - hub 会把注解按「项目 + 文件路径 + 归一化 diff」记在 `~/.diff-viz/annotations/<projectId>.json`（含整体概览）。同一改动在 worktree / commit / range Review 之间切换时自动复用；内容变化后不会套用旧注解。
 - 给任意已有 Review（包括版本链里点开的 commit Review）写注解：`diff-viz annotate --review <id> --annotations <file>`。
 
+## 数据库表（1.3 起）
+
+顶层可选字段 `components` / `tables`；SQL 文本不在清单里，按表拆到 `storage.tablesDir` 指向的目录（文件型数据是 `<data>.tables/`，hub 快照是 `<reviewId>/tables/`），由 `GET /api/table?review=&table=` 按需读取。
+
+```json
+"components": [{ "id": "db:default", "kind": "database", "label": "MySQL", "engine": "mysql", "tables": ["table:t_order"] }],
+"tables": [{
+  "id": "table:t_order", "name": "t_order", "schema": null,
+  "componentId": "db:default", "operations": ["select", "update"],
+  "statementCount": 3, "changed": true, "impacted": false,
+  "sources": ["mapper/OrderMapper.xml"], "payload": "a1b2c3d4e5f6a7b8c9d0"
+}]
+```
+
+- 边关系新增 `reads_table` / `writes_table`，方向固定为「SQL 来源文件 → 表」，不会随影响/依赖视图翻转。
+- 表节点只做展示，不计入 `changedFiles` / `impactedFiles`；`meta.stats.tables` 与 `meta.db`（engine/label/tables）记录汇总。
+- `tables/<payload>.json` 内容：`{ "statements": [{ id, operation, sql, file, line, mapper, dynamic }] }`。
+- `/api/data?full=1` 会合并 SQL 文本；默认 `/api/data` 只有元数据。详见 [database.md](database.md)。
+
 ## 状态持久化
 
 - 勾选 TODO / 标记 Review：`POST /api/state` → 只重写对应 Review 的清单，不碰节点内容文件。

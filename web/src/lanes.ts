@@ -1,5 +1,5 @@
 import type { ReviewEdge, ReviewModule, ReviewNode } from './types';
-import type { LaneKeyFn, LaneSpec } from './layout';
+import type { GraphItem, LaneKeyFn, LaneSpec } from './layout';
 
 export type LaneGroupBy = 'module' | 'directory' | 'package';
 
@@ -20,7 +20,10 @@ export function laneKeyFor(node: ReviewNode, groupBy: LaneGroupBy): string {
 }
 
 export function makeLaneKeyFn(groupBy: LaneGroupBy): LaneKeyFn {
-  return (node) => laneKeyFor(node, groupBy);
+  return (item: GraphItem) => {
+    if (item.kind === 'table') return 'db';
+    return item.node ? laneKeyFor(item.node, groupBy) : '(root)';
+  };
 }
 
 /**
