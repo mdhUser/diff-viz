@@ -71,3 +71,21 @@ test('maps operations to read/write edge relations', () => {
   assert.deepEqual(tableEdgeRelations(['insert', 'update']), ['writes_table']);
   assert.deepEqual(tableEdgeRelations(['select', 'delete']), ['reads_table', 'writes_table']);
 });
+
+test('clamps overly long SQL and warns, keeping the true statement count', () => {
+  const longSql = `select '${'x'.repeat(5000)}'`;
+  const built = buildTables([{ ...statement('a.sql', 'select', ['t_long'], 'long'), sql: longSql }]);
+  const sql = built.tables[0].statements[0].sql;
+  assert.equal(sql.length, 4097);
+  assert.ok(sql.endsWith('…'));
+  assert.equal(built.tables[0].statementCount, 1);
+  assert.ok(built.warnings.some((warning) => warning.includes('4096')));
+});
+
+test('warns when a table hits the per-table statement cap', () => {
+  const entries = [0, 1, 2].map((index) => statement('a.sql', 'select', ['t_many'], `s${index}`));
+  const built = buildTables(entries, { maxStatementsPerTable: 2 });
+  assert.equal(built.tables[0].statements.length, 2);
+  assert.equal(built.tables[0].statementCount, 3);
+  assert.ok(built.warnings.some((warning) => warning.includes('上限')));
+});

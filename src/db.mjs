@@ -49,6 +49,16 @@ export function detectDatabaseEngine(resources) {
  * `changedFiles` / `impactedFiles`: Sets of repo-relative paths so a table can
  * be marked changed when one of its SQL sources changed.
  */
+// Long dynamic SQL bloats the lazily stored table payloads, so keep each
+// statement bounded; `statementCount` still reports the true number.
+const MAX_STATEMENT_CHARS = 4096;
+
+function clampStatement(sql) {
+  if (typeof sql !== 'string') return '';
+  if (sql.length <= MAX_STATEMENT_CHARS) return sql;
+  return `${sql.slice(0, MAX_STATEMENT_CHARS)}…`;
+}
+
 export function buildTables(
   statements,
   { changedFiles = new Set(), impactedFiles = new Set(), maxTables = 300, maxStatementsPerTable = 200 } = {},
@@ -64,6 +74,8 @@ export function buildTables(
   }
 
   const warnings = [];
+  let tablesWithTruncatedStatements = 0;
+  let clampedStatements = 0;
   const tableNames = [...byTable.keys()].sort();
   const kept = tableNames.slice(0, maxTables);
   if (tableNames.length > kept.length) {
@@ -79,6 +91,7 @@ export function buildTables(
       if (entry.file) sources.add(entry.file);
     }
     const limited = entries.slice(0, maxStatementsPerTable);
+    if (limited.length < entries.length) tablesWithTruncatedStatements += 1;
     const orderedOperations = ['select', 'insert', 'update', 'delete'].filter((op) => operations.has(op))
       .concat([...operations].filter((op) => !['select', 'insert', 'update', 'delete'].includes(op)).sort());
     const schema = name.includes('.') ? name.slice(0, name.lastIndexOf('.')) : null;
@@ -92,17 +105,30 @@ export function buildTables(
       impacted: [...sources].some((source) => impactedFiles.has(source)),
       sources: [...sources].sort(),
       payload: shortId(`table:${name}`, 20),
-      statements: limited.map((entry) => ({
-        id: entry.id,
-        operation: entry.operation,
-        sql: entry.sql,
-        file: entry.file,
-        line: entry.line ?? null,
-        mapper: entry.namespace || '',
-        dynamic: Boolean(entry.dynamic),
-      })),
+      statements: limited.map((entry) => {
+        const sql = clampStatement(entry.sql);
+        if (sql !== entry.sql) clampedStatements += 1;
+        return {
+          id: entry.id,
+          operation: entry.operation,
+          sql,
+          file: entry.file,
+          line: entry.line ?? null,
+          mapper: entry.namespace || '',
+          dynamic: Boolean(entry.dynamic),
+        };
+      }),
     };
   });
+
+  if (tablesWithTruncatedStatements > 0) {
+    warnings.push(
+      `${tablesWithTruncatedStatements} 张表的 SQL 条数超出上限，每表最多展示 ${maxStatementsPerTable} 条。`,
+    );
+  }
+  if (clampedStatements > 0) {
+    warnings.push(`${clampedStatements} 条 SQL 超过 ${MAX_STATEMENT_CHARS} 字符，已截断展示。`);
+  }
 
   if (tables.length === 0) return { components: [], tables: [], warnings };
 
