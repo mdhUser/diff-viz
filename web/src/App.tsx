@@ -316,8 +316,20 @@ export function App() {
 
   // The hub re-analyzes on file changes and pushes a review id over SSE; pull the
   // new data only when it belongs to the review currently open in this tab.
+  //
+  // SSE is an intentionally endless request. Agent/IDE built-in browsers usually
+  // wait for `networkidle` before treating a page as loaded, so keeping the
+  // stream open made those previews spin forever. Skip it for automation
+  // (navigator.webdriver) and support `?sse=0` / `?sse=1` overrides; the refresh
+  // button still pulls the latest data.
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.EventSource === 'undefined') return undefined;
+    const sseParam = new URLSearchParams(window.location.search).get('sse');
+    const automation = typeof navigator !== 'undefined' && navigator.webdriver === true;
+    // A same-origin iframe comparison does not touch cross-origin properties.
+    const embedded = window.self !== window.top;
+    if (sseParam === '0') return undefined;
+    if (sseParam !== '1' && (automation || embedded)) return undefined;
     const source = new EventSource('/api/events');
     source.onmessage = (event) => {
       try {

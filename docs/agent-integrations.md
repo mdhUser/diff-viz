@@ -167,6 +167,21 @@ npx -y diff-viz-cli annotate \
   --annotations .diff-review-annotations.json
 ```
 
+## 内置浏览器打不开 Review URL？
+
+Agent / IDE 自带的浏览器（Cursor Browser、DSH 右侧栏 Browser 等）打开 `http://127.0.0.1:<port>/?review=...` 一直转圈，通常是两类原因：
+
+1. **浏览器在远程环境里**（Cursor Remote / SSH / DevContainer / 云端 Agent）：它的 `127.0.0.1` 指向那个环境，而不是你的电脑。
+   - 在 Agent 所在环境里直接运行 `npx -y diff-viz-cli`，用那个环境打印的 URL；或
+   - 使用编辑器的端口转发（VS Code / Cursor 的 Ports 面板转发 5174），打开转发后的地址；或
+   - 在远程环境启动 hub 时监听 `--host 0.0.0.0`，但只建议在可信网络内这么做（会暴露源码）。
+2. **同机但预览用「网络空闲」判断加载完成**：diff-viz 页面默认保持一条 `/api/events` SSE 长连接（用于保存代码后自动刷新），`networkidle` 永远不结束。
+   - 1.0.1 起，自动化浏览器（`navigator.webdriver`）和 iframe 内嵌会自动跳过 SSE；
+   - 也可以手动在 URL 后加 `&sse=0`，需要强制开启时用 `&sse=1`；
+   - 跳过 SSE 后页面仍可正常 Review，只是保存后的自动刷新变成点右上角刷新按钮。
+
+快速自检：在 Agent 的终端里执行 `curl -m 3 http://127.0.0.1:<port>/api/health`，能返回 `{"ok":true,...}` 说明网络可达；打不开则是浏览器/加载判定问题。
+
 ## 限制
 
 - 目标目录必须是 Git 仓库。

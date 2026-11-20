@@ -24,6 +24,13 @@
 
 - Agent 注解在提交 / 切换 Review 后丢失：注解原来只存在写入时的那条 Review 快照里，提交后版本链里的 commit Review 是新的 reviewId（且 worktree Review 可能被自动重算成空改动），所以总结全部消失。现在 hub 会按「项目 + 文件路径 + 改动内容（去掉 index 行后的 diff）」记住最后一次 Agent 总结/影响分析/待办，存放在 `~/.diff-viz/annotations/<projectId>.json`；打开或重新生成相同改动的 Review（worktree → commit → range）时自动复用，并对旧的已注解快照做一次回填。**Review 顶部的整体概览（`meta.overallSummary`）也会按「变更文件集合 + 各自 diff」记住并复用**，重新生成 Review 不会再退回自动生成的一句话。内容不同的改动不会复用旧总结。
 
+## [1.0.1] - 2026-11-20
+
+### Fixed
+
+- Cursor / DSH 等 Agent、IDE 内置浏览器打开 Review 一直转圈：页面会保持一条 `/api/events` SSE 长连接，而这类浏览器工具通常要等 `networkidle` 才认为加载完成，于是永远等不到。现在检测到自动化浏览器（`navigator.webdriver`）或在 iframe 内嵌时会自动跳过 SSE（刷新按钮仍可手动拉取最新数据），也支持 URL 参数 `?sse=0` / `?sse=1` 显式关闭/开启。
+- 文档补充：如果 Agent 的浏览器运行在远程 / 容器环境，`127.0.0.1` 指向的是那个环境而不是你的电脑，需要端口转发，或直接在该环境里运行 `diff-viz`。
+
 ## [1.0.0] - 2026-11-19
 
 **1.0 = 对外契约冻结。** 此前 0.x 的 minor 版本（0.7 / 0.8 / 0.9 / 0.10）按 semver 规则逐个递增；从 1.0.0 起，下列接口视为稳定，1.x 内不做破坏性改动，破坏性变更进入 2.0.0。

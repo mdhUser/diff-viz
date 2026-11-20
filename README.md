@@ -117,6 +117,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor
 - 超过 15,000 个代码文件只扫描前 15,000 个，并在 `meta.warnings` 中提示。
 - 自动刷新只对 hub 本进程分析过的仓库生效；hub 重启后需再跑一次 `diff-viz`。Linux 上 Node 的递归 `fs.watch` 不可用，会退化为不监听。
 - 它是**只读的 Review 工具**：不做暂存、提交、分支、合并、推送等 Git 操作；这些仍交给 SourceTree / 命令行 / 你的 IDE。
+- 如果 Cursor / DSH 等 Agent、IDE 内置浏览器打开 Review 一直转圈：页面默认保持一条 `/api/events` SSE 长连接，而这类预览工具常以「网络空闲」判断加载完成。自动化浏览器和 iframe 会自动跳过 SSE，也可以在 URL 加 `&sse=0`；浏览器运行在远程/容器里时，`127.0.0.1` 不是你的电脑，需要端口转发或在该环境里直接运行 `diff-viz`。
 
 ## 版本与兼容
 
