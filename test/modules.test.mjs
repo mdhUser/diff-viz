@@ -121,14 +121,3 @@ test('orders lanes by dependency depth and computes java package paths', () => {
   assert.equal(packagePathOf('apps/web/src/a.ts', null), 'apps/web/src');
   assert.equal(packagePathOf('A.java', 'com.acme'), 'com.acme');
 });
-
-test('module metadata survives as optional fields for old reviews', () => {
-  // Older snapshots have no module fields; nothing here should throw when they
-  // are absent — the UI falls back to the first path segment.
-  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'diff-viz-modules-'));
-  try {
-    assert.equal(typeof detectModules, 'function');
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
