@@ -3,7 +3,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureGitExcluded, findRepoRoot, GitRepo } from './git.mjs';
 import { applyAnnotations, buildReviewData, mergePreviousState } from './collect.mjs';
-import { ensureHub, hubIsAlive, readHubInfo, resolveHubPort, startHub, stopHub } from './hub.mjs';
+import {
+  ensureHub,
+  hubAuthHeaders,
+  hubIsAlive,
+  readHubInfo,
+  resolveHubPort,
+  startHub,
+  stopHub,
+  withHubToken,
+} from './hub.mjs';
 import { workspaceTemplate } from './workspace.mjs';
 import { isInside, readReviewStore, reviewLayout, writeReviewStore } from './review-store.mjs';
 import { openInBrowser } from './server.mjs';
@@ -46,6 +55,7 @@ diff-viz · 本地代码变更可视化 Review 工具
 分析:
   --impact-depth <n>      下游影响分析深度 (默认 3)
   --max-impact <n>        最多展示多少个受影响文件 (默认 120)
+  --max-scan-files <n>    依赖扫描的代码文件上限 (默认 15000)
   --no-untracked          不把未跟踪的新文件纳入 Review
   --repo <dir>            指定仓库目录 (默认当前目录)
 
@@ -112,6 +122,7 @@ const VALUE_FLAGS = new Set([
   'host',
   'impact-depth',
   'max-impact',
+  'max-scan-files',
   'repo',
   'node',
   'languages',
@@ -231,11 +242,11 @@ function printSummary(data, dataPath) {
   process.stdout.write(`  数据        ${dataPath}\n`);
 }
 
-async function callHub(hubUrl, endpoint, body) {
+async function callHub(hub, endpoint, body) {
   try {
-    return await fetch(new URL(endpoint, hubUrl), {
+    return await fetch(new URL(endpoint, hub.url), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...hubAuthHeaders(hub) },
       body: JSON.stringify(body),
     });
   } catch (error) {
@@ -257,8 +268,8 @@ async function hubError(response, prefix) {
 // Importing by path lets the hub copy node files instead of receiving one huge
 // JSON body. Paths outside the repository fall back to an explicit upload, and
 // so does an older hub that predates dataPath imports.
-async function uploadReview(hubUrl, { root, data, dataPath, reviewId }) {
-  const request = (body) => callHub(hubUrl, 'api/import', body);
+async function uploadReview(hub, { root, data, dataPath, reviewId }) {
+  const request = (body) => callHub(hub, 'api/import', body);
   let response = await request(dataPath ? { root, dataPath, reviewId } : { root, data, reviewId });
   if (!response.ok && dataPath) {
     // Only retry when the hub rejected the request shape, not when it genuinely
@@ -279,8 +290,8 @@ async function uploadReview(hubUrl, { root, data, dataPath, reviewId }) {
   return response.json();
 }
 
-async function syncAnnotations(hubUrl, { root, reviewId, annotations, onlyPaths, summary }) {
-  const response = await callHub(hubUrl, 'api/annotate', {
+async function syncAnnotations(hub, { root, reviewId, annotations, onlyPaths, summary }) {
+  const response = await callHub(hub, 'api/annotate', {
     root,
     reviewId,
     annotations,
@@ -416,7 +427,9 @@ export async function main(argv = process.argv.slice(2)) {
     const existing = readHubInfo();
     if (existing && (await hubIsAlive(existing))) {
       const infoHost = existing.host === '0.0.0.0' || existing.host === '::' ? '127.0.0.1' : existing.host;
-      process.stdout.write(`hub 已在运行：http://${infoHost}:${existing.port}/\n`);
+      const hubUrl = `http://${infoHost}:${existing.port}/`;
+      process.stdout.write(`hub 已在运行：${hubUrl}\n`);
+      if (existing.token) process.stdout.write(`带令牌链接：${withHubToken(hubUrl, existing.token)}\n`);
       return;
     }
     const server = await startHub({
@@ -444,12 +457,12 @@ export async function main(argv = process.argv.slice(2)) {
     // Review opened from the version chain) without regenerating anything.
     if (options.review) {
       const reviewId = String(options.review);
-      const hub = readHubInfo();
-      if (!hub || !(await hubIsAlive(hub))) {
+      const info = readHubInfo();
+      if (!info || !(await hubIsAlive(info))) {
         throw new Error('--review 需要 hub 正在运行；请先运行 diff-viz hub，或用不带 --review 的 annotate 写本地数据文件。');
       }
-      const hubUrl = hubUrlFor(hub);
-      const response = await syncAnnotations(hubUrl, {
+      const hub = { url: hubUrlFor(info), token: info.token };
+      const response = await syncAnnotations(hub, {
         reviewId,
         annotations,
         onlyPaths,
@@ -491,12 +504,12 @@ export async function main(argv = process.argv.slice(2)) {
       store.save();
     }
     hideDataFile(repo, dataPath);
-    const hub = readHubInfo();
+    const info = readHubInfo();
     let syncNote = null;
-    if (hub && (await hubIsAlive(hub))) {
-      const hubUrl = hubUrlFor(hub);
+    if (info && (await hubIsAlive(info))) {
+      const hub = { url: hubUrlFor(info), token: info.token };
       try {
-        const response = await syncAnnotations(hubUrl, {
+        const response = await syncAnnotations(hub, {
           root: repo.root,
           reviewId: data.meta?.reviewId,
           annotations,
@@ -514,7 +527,7 @@ export async function main(argv = process.argv.slice(2)) {
           // The hub has no snapshot for this review (fresh state dir or pruned
           // history). Import by path when possible so node content is copied
           // instead of uploaded as one JSON body.
-          const imported = await uploadReview(hubUrl, {
+          const imported = await uploadReview(hub, {
             root: repo.root,
             reviewId: data.meta?.reviewId,
             ...(isInside(repo.root, dataPath)
@@ -556,13 +569,13 @@ export async function main(argv = process.argv.slice(2)) {
       port: hubPortOption(options),
       host: options.host || '127.0.0.1',
     });
-    const imported = await uploadReview(hub.url, {
+    const imported = await uploadReview(hub, {
       root: repo.root,
       reviewId: data.meta?.reviewId,
       ...(isInside(repo.root, dataPath) ? { dataPath } : { data: store.toFullData() }),
     });
     applyReviewIds(dataPath, { reviewId: imported.reviewId, projectId: imported.project?.id });
-    const reviewUrl = new URL(imported.url, hub.url).toString();
+    const reviewUrl = withHubToken(new URL(imported.url, hub.url).toString(), hub.token);
     if (!options.noOpen && !process.env.CI) openInBrowser(reviewUrl);
     process.stdout.write(`\n  Review UI  ${reviewUrl}\n  Hub        ${hub.url}\n\n`);
     return;
@@ -586,10 +599,10 @@ export async function main(argv = process.argv.slice(2)) {
       throw new Error(`找不到 workspace 文件：${target}\n  先运行 diff-viz workspace --init 生成模板。`);
     }
     const hub = await ensureHub({ port: hubPortOption(options), host: options.host || '127.0.0.1' });
-    const response = await callHub(hub.url, 'api/workspace', { file: target });
+    const response = await callHub(hub, 'api/workspace', { file: target });
     if (!response.ok) throw await hubError(response, '工作区分析失败');
     const payload = await response.json();
-    const url = new URL(payload.url, hub.url).toString();
+    const url = withHubToken(new URL(payload.url, hub.url).toString(), hub.token);
     if (!options.noOpen && !process.env.CI) openInBrowser(url);
     process.stdout.write(
       `\n  ✔ 工作区分析完成  ${payload.stats.changed} 个仓库有改动 · ${payload.stats.impacted} 个受影响\n`,
@@ -609,6 +622,7 @@ export async function main(argv = process.argv.slice(2)) {
     base: options.base,
     impactDepth: options.impactDepth,
     maxImpact: options.maxImpact,
+    maxScanFiles: options.maxScanFiles,
     untracked: options.untracked,
     summary: options.summary,
     annotationFile: options.annotations ? path.resolve(process.cwd(), options.annotations) : null,
@@ -650,7 +664,7 @@ export async function main(argv = process.argv.slice(2)) {
     port: hubPortOption(options),
     host: options.host || '127.0.0.1',
   });
-  const imported = await uploadReview(hub.url, {
+  const imported = await uploadReview(hub, {
     root: repo.root,
     reviewId: data.meta?.reviewId,
     ...(isInside(repo.root, dataPath) ? { dataPath, data } : { data }),
@@ -659,7 +673,7 @@ export async function main(argv = process.argv.slice(2)) {
     reviewId: imported.reviewId,
     projectId: imported.project?.id ?? data.meta.projectId,
   });
-  const reviewUrl = new URL(imported.url, hub.url).toString();
+  const reviewUrl = withHubToken(new URL(imported.url, hub.url).toString(), hub.token);
 
   if (options.quiet) {
     process.stdout.write(`${reviewUrl}\n`);

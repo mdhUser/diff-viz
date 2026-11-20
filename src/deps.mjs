@@ -745,7 +745,10 @@ export function scanRepository(
   let skippedLarge = 0;
   let skippedBinary = 0;
 
+  // Count every code file even when the scan is capped: the UI needs the real
+  // number to say "only N of M were analysed" instead of silently degrading.
   const candidates = [];
+  let codeFiles = 0;
   for (const filePath of allFiles) {
     const posixPath = toPosix(filePath);
     if (isSkippedPath(posixPath)) {
@@ -753,11 +756,14 @@ export function scanRepository(
       continue;
     }
     if (!isCodeFile(posixPath, registry)) continue;
-    candidates.push(posixPath);
-    if (candidates.length >= maxFiles) {
-      warnings.push(`Dependency scan capped at ${maxFiles} code files; deeper impact analysis may be incomplete.`);
-      break;
-    }
+    codeFiles += 1;
+    if (candidates.length < maxFiles) candidates.push(posixPath);
+  }
+  const scanTruncated = codeFiles > maxFiles;
+  if (scanTruncated) {
+    warnings.push(
+      `依赖扫描上限：仓库共有 ${codeFiles} 个代码文件，本次只分析了前 ${maxFiles} 个；未扫描的文件不会出现在拓扑和影响分析里。`,
+    );
   }
 
   const tsconfig = loadTsconfig(absoluteRoot, readTextAt);
@@ -890,6 +896,12 @@ export function scanRepository(
       skippedDir,
       skippedLarge,
       skippedBinary,
+    },
+    scanLimit: {
+      limit: maxFiles,
+      codeFiles,
+      scanned: files.size,
+      truncated: scanTruncated,
     },
   };
 }

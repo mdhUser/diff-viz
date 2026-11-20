@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { CommitInfo, HubProject } from '../types';
 import { CommitGraph } from './CommitGraph';
+import { apiFetch, describeResponseFailure, responseErrorDetail } from '../api';
 import { cn } from '../cn';
 
 interface RepoPanelProps {
@@ -54,7 +55,7 @@ export function RepoPanel({
     setAdding(true);
     setAddError(null);
     try {
-      const response = await fetch('/api/projects', {
+      const response = await apiFetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ root }),
@@ -64,7 +65,7 @@ export function RepoPanel({
         error?: string;
       };
       if (!response.ok || !payload.project) {
-        throw new Error(payload.error ?? `HTTP ${response.status}`);
+        throw new Error(describeResponseFailure(response, payload.error));
       }
       setNewRoot('');
       setSelectedId(payload.project.id);
@@ -79,12 +80,11 @@ export function RepoPanel({
   const removeProject = async (projectId: string) => {
     setAddError(null);
     try {
-      const response = await fetch(`/api/projects?id=${encodeURIComponent(projectId)}`, {
+      const response = await apiFetch(`/api/projects?id=${encodeURIComponent(projectId)}`, {
         method: 'DELETE',
       });
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(payload.error ?? `HTTP ${response.status}`);
+        throw new Error(describeResponseFailure(response, await responseErrorDetail(response)));
       }
       await onRefreshProjects();
     } catch (error) {
@@ -102,11 +102,13 @@ export function RepoPanel({
     let cancelled = false;
     setLoadingCommits(true);
     setCommitsError(null);
-    fetch(`/api/commits?project=${encodeURIComponent(selectedId)}&all=${allBranches ? '1' : '0'}`, {
+    apiFetch(`/api/commits?project=${encodeURIComponent(selectedId)}&all=${allBranches ? '1' : '0'}`, {
       cache: 'no-store',
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) {
+          throw new Error(describeResponseFailure(response, await responseErrorDetail(response)));
+        }
         const payload = (await response.json()) as { commits?: CommitInfo[]; branch?: string };
         if (!cancelled) {
           setCommits(payload.commits ?? []);

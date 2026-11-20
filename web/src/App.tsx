@@ -18,8 +18,11 @@ import { Legend } from './components/Legend';
 import { DetailDrawer } from './components/DetailDrawer';
 import { ResizeHandle } from './components/ResizeHandle';
 import { RepoPanel } from './components/RepoPanel';
+import { ScanLimitBanner } from './components/ScanLimitBanner';
 import { WorkspaceView } from './components/WorkspaceView';
-import { computeLayout } from './layout';
+import { computeLaneLayout, computeLayout } from './layout';
+import { buildLaneSpecs, makeLaneKeyFn, type LaneGroupBy } from './lanes';
+import { apiEventUrl, apiFetch, describeResponseFailure, responseErrorDetail } from './api';
 import { cn } from './cn';
 
 interface PersistedState {
@@ -69,12 +72,16 @@ function drawerMaxWidth(sidebarWidth: number): number {
 interface PanelWidths {
   sidebarWidth: number;
   drawerWidth: number;
+  viewMode: 'auto' | 'flow' | 'lane';
+  groupBy: LaneGroupBy;
 }
 
 function readPanelWidths(): PanelWidths {
   const fallback: PanelWidths = {
     sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
     drawerWidth: DEFAULT_DRAWER_WIDTH,
+    viewMode: 'auto',
+    groupBy: 'module',
   };
   try {
     const raw = window.localStorage.getItem(UI_PREFS_KEY);
@@ -84,6 +91,12 @@ function readPanelWidths(): PanelWidths {
     return {
       sidebarWidth,
       drawerWidth: clampWidth(Number(parsed.drawerWidth), DRAWER_MIN, drawerMaxWidth(sidebarWidth)),
+      viewMode: ['auto', 'flow', 'lane'].includes(String(parsed.viewMode))
+        ? (parsed.viewMode as PanelWidths['viewMode'])
+        : 'auto',
+      groupBy: ['module', 'directory', 'package'].includes(String(parsed.groupBy))
+        ? (parsed.groupBy as LaneGroupBy)
+        : 'module',
     };
   } catch {
     return fallback;
@@ -144,6 +157,7 @@ export function App() {
       setPanelWidths((current) => {
         const sidebarWidthNext = clampWidth(current.sidebarWidth, SIDEBAR_MIN, sidebarMaxWidth());
         return {
+          ...current,
           sidebarWidth: sidebarWidthNext,
           drawerWidth: clampWidth(current.drawerWidth, DRAWER_MIN, drawerMaxWidth(sidebarWidthNext)),
         };
@@ -170,18 +184,12 @@ export function App() {
 
   const fetchReview = useCallback(
     async (reviewId: string, reset = false) => {
-      const response = await fetch(`/api/data?review=${encodeURIComponent(reviewId)}&t=${Date.now()}`, {
+      const response = await apiFetch(`/api/data?review=${encodeURIComponent(reviewId)}&t=${Date.now()}`, {
         cache: 'no-store',
       });
       if (!response.ok) {
-        let detail = `HTTP ${response.status}`;
-        try {
-          const payload = await response.json();
-          if (payload?.error) detail = payload.error;
-        } catch {
-          /* ignore */
-        }
-        throw new Error(`无法读取 Review：${detail}`);
+        const detail = await responseErrorDetail(response);
+        throw new Error(`无法读取 Review：${describeResponseFailure(response, detail)}`);
       }
       const payload = (await response.json()) as ReviewData;
       hydrateData(payload);
@@ -208,20 +216,14 @@ export function App() {
       setSwitching(true);
       setSwitchError(null);
       try {
-        const response = await fetch('/api/review', {
+        const response = await apiFetch('/api/review', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ projectId, scope, commit }),
         });
         if (!response.ok) {
-          let detail = `HTTP ${response.status}`;
-          try {
-            const payload = await response.json();
-            if (payload?.error) detail = payload.error;
-          } catch {
-            /* ignore */
-          }
-          throw new Error(detail);
+          const detail = await responseErrorDetail(response);
+          throw new Error(describeResponseFailure(response, detail));
         }
         const payload = (await response.json()) as { reviewId: string };
         await fetchReview(payload.reviewId, true);
@@ -240,7 +242,10 @@ export function App() {
     let cancelled = false;
     const bootstrap = async () => {
       try {
-        const hubResponse = await fetch('/api/hub', { cache: 'no-store' });
+        const hubResponse = await apiFetch('/api/hub', { cache: 'no-store' });
+        if (hubResponse.status === 401 || hubResponse.status === 403) {
+          throw new Error(describeResponseFailure(hubResponse));
+        }
         if (hubResponse.ok) {
           const hub = (await hubResponse.json()) as { projects?: HubProject[] };
           if (cancelled) return;
@@ -254,12 +259,16 @@ export function App() {
             return;
           }
           if (hubProjects.length > 0) {
-            const response = await fetch('/api/review', {
+            const response = await apiFetch('/api/review', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ projectId: hubProjects[0].id, scope: 'worktree' }),
             });
-            if (!response.ok) throw new Error(`无法打开仓库：HTTP ${response.status}`);
+            if (!response.ok) {
+              throw new Error(
+                `无法打开仓库：${describeResponseFailure(response, await responseErrorDetail(response))}`,
+              );
+            }
             const payload = (await response.json()) as { reviewId: string };
             await fetchReview(payload.reviewId);
             return;
@@ -268,8 +277,10 @@ export function App() {
         }
 
         // Legacy single-review server.
-        const response = await fetch(`/api/data?t=${Date.now()}`, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`无法读取数据（HTTP ${response.status}）`);
+        const response = await apiFetch(`/api/data?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`无法读取数据：${describeResponseFailure(response, await responseErrorDetail(response))}`);
+        }
         hydrateData((await response.json()) as ReviewData);
       } catch (bootstrapError) {
         if (!cancelled) {
@@ -287,7 +298,7 @@ export function App() {
 
   const refreshProjects = useCallback(async () => {
     try {
-      const response = await fetch('/api/hub', { cache: 'no-store' });
+      const response = await apiFetch('/api/hub', { cache: 'no-store' });
       if (!response.ok) return;
       const payload = (await response.json()) as { projects?: HubProject[] };
       setProjects(payload.projects ?? []);
@@ -330,7 +341,7 @@ export function App() {
     const embedded = window.self !== window.top;
     if (sseParam === '0') return undefined;
     if (sseParam !== '1' && (automation || embedded)) return undefined;
-    const source = new EventSource('/api/events');
+    const source = new EventSource(apiEventUrl('/api/events'));
     source.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data) as { type?: string; reviewId?: string };
@@ -385,10 +396,33 @@ export function App() {
     return data.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
   }, [data, visibleNodes]);
 
-  const positioned = useMemo(
-    () => computeLayout(visibleNodes, visibleEdges, direction, edgeMode),
-    [visibleNodes, visibleEdges, direction, edgeMode],
+  const viewMode = panelWidths.viewMode;
+  const groupBy = panelWidths.groupBy;
+  const effectiveViewMode: 'flow' | 'lane' =
+    viewMode === 'auto' ? ((data?.meta.modules?.length ?? 0) > 1 ? 'lane' : 'flow') : viewMode;
+  const setViewMode = useCallback(
+    (mode: 'flow' | 'lane') => setPanelWidths((current) => ({ ...current, viewMode: mode })),
+    [],
   );
+  const setGroupBy = useCallback(
+    (next: LaneGroupBy) => setPanelWidths((current) => ({ ...current, groupBy: next })),
+    [],
+  );
+
+  const laneSpecs = useMemo(
+    () =>
+      data && effectiveViewMode === 'lane'
+        ? buildLaneSpecs(visibleNodes, visibleEdges, groupBy, data.meta.modules)
+        : [],
+    [data, effectiveViewMode, visibleNodes, visibleEdges, groupBy],
+  );
+
+  const layout = useMemo(() => {
+    if (effectiveViewMode === 'lane' && laneSpecs.length > 0) {
+      return computeLaneLayout(visibleNodes, visibleEdges, laneSpecs, edgeMode, makeLaneKeyFn(groupBy));
+    }
+    return { positioned: computeLayout(visibleNodes, visibleEdges, direction, edgeMode), lanes: [] };
+  }, [effectiveViewMode, laneSpecs, visibleNodes, visibleEdges, edgeMode, direction, groupBy]);
 
   const selectedNode = useMemo(
     () => data?.nodes.find((node) => node.id === selectedId) ?? null,
@@ -404,7 +438,7 @@ export function App() {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `/api/node?review=${encodeURIComponent(currentReviewId)}&id=${encodeURIComponent(selectedId)}`,
           { cache: 'no-store' },
         );
@@ -512,7 +546,7 @@ export function App() {
 
   const postState = useCallback(async (payload: Record<string, unknown>) => {
     try {
-      const response = await fetch('/api/state', {
+      const response = await apiFetch('/api/state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...payload, reviewId: currentReviewId }),
@@ -705,6 +739,8 @@ export function App() {
         onRefresh={() => void refreshReview()}
       />
 
+      <ScanLimitBanner meta={data.meta} />
+
       <div className="flex min-h-0 flex-1">
         {sidebarOpen ? (
           <div className="relative flex shrink-0" style={{ width: sidebarWidth }}>
@@ -734,7 +770,9 @@ export function App() {
           <div className="canvas-shell absolute inset-0">
             {visibleNodes.length > 0 ? (
               <GraphView
-                positioned={positioned}
+                positioned={layout.positioned}
+                lanes={layout.lanes}
+                viewMode={effectiveViewMode}
                 edges={visibleEdges}
                 selectedId={selectedId}
                 direction={direction}
@@ -767,11 +805,15 @@ export function App() {
               <CanvasToolbar
                 edgeMode={edgeMode}
                 direction={direction}
+                viewMode={effectiveViewMode}
+                groupBy={groupBy}
                 showImpacted={showImpacted}
                 changedCount={changedCount}
                 impactedCount={data.nodes.length - changedCount}
                 onEdgeModeChange={setEdgeMode}
                 onDirectionChange={setDirection}
+                onViewModeChange={setViewMode}
+                onGroupByChange={setGroupBy}
                 onToggleImpacted={() => {
                   const next = !showImpacted;
                   if (!next && selectedNode?.status === 'impacted_only') selectNode(null);

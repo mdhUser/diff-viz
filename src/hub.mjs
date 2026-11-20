@@ -10,6 +10,14 @@ import { applyAnnotations, buildReviewData, mergePreviousState } from './collect
 import { updateReviewState, openInBrowser } from './server.mjs';
 import { computeServiceImpact, detectServiceEdges, loadWorkspace } from './workspace.mjs';
 import {
+  checkRequestTrust,
+  extractToken,
+  hostAllowlist,
+  readOrCreateToken,
+  tokenCookie,
+  tokenMatches,
+} from './security.mjs';
+import {
   copyReviewStore,
   isInside,
   readReviewStore,
@@ -58,6 +66,24 @@ export function hubRegistryPath(home = hubHome()) {
 
 export function readHubInfo(home = hubHome()) {
   return readJsonSafe(hubRegistryPath(home));
+}
+
+// Append the access token to a URL the CLI prints / opens. Relative paths stay
+// relative so existing `new URL(payload.url, hub.url)` call sites keep working.
+export function withHubToken(target, token) {
+  if (!token) return String(target);
+  const value = String(target);
+  try {
+    const parsed = new URL(value, 'http://127.0.0.1');
+    parsed.searchParams.set('token', token);
+    return value.startsWith('/') ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.toString();
+  } catch {
+    return value;
+  }
+}
+
+export function hubAuthHeaders(info) {
+  return info?.token ? { 'X-Diff-Viz-Token': info.token } : {};
 }
 
 export async function hubIsAlive(info) {
@@ -134,6 +160,9 @@ async function serveStatic(req, res, pathname) {
     'Content-Type': contentTypeFor(filePath),
     'Cache-Control': isHashedAsset ? 'public, max-age=31536000, immutable' : 'no-store',
     'Content-Length': body.length,
+    'X-Content-Type-Options': 'nosniff',
+    // The printed URL carries the access token; never leak it through Referer.
+    'Referrer-Policy': 'no-referrer',
   });
   if (req.method === 'HEAD') res.end();
   else res.end(body);
@@ -249,11 +278,16 @@ export async function startHub({
   open = false,
   quiet = false,
   home = hubHome(),
+  auth = process.env.DIFF_VIZ_NO_AUTH !== '1',
 } = {}) {
   ensurePrivateDir(home);
   const reviewsDir = path.join(home, 'reviews');
   ensurePrivateDir(reviewsDir);
   ensurePrivateDir(path.join(home, 'cache'));
+  // `/api/*` is the source-code surface; everything except the health probe
+  // needs this token. Host allowlisting (below) is what stops DNS rebinding.
+  const token = auth ? readOrCreateToken(home) : null;
+  const allowedHosts = hostAllowlist(host);
   const projectsFile = path.join(home, 'projects.json');
   const projects = loadProjects(home);
   const reviews = new Map();
@@ -777,6 +811,13 @@ export async function startHub({
         if (requested.base) payload.base = requested.base;
         if (requested.commit) payload.commit = requested.commit;
         const { reviewId, data } = analyzeProject(project, payload);
+        // Surface the per-repo scan cap on the workspace page too; otherwise a
+        // truncated repo silently looks like a repo with very little impact.
+        if (data.meta.scanLimit?.truncated) {
+          errors.push(
+            `${entry.label || entry.id}：依赖扫描只分析了前 ${data.meta.scanLimit.limit} 个代码文件（共 ${data.meta.scanLimit.codeFiles} 个），影响分析可能不完整。`,
+          );
+        }
         const changed = data.nodes.filter((node) => node.status !== 'impacted_only').length;
         repos.push({
           id: entry.id,
@@ -911,6 +952,31 @@ export async function startHub({
     const pathname = decodeURIComponent(url.pathname);
 
     try {
+      const untrusted = checkRequestTrust(req, { hostnames: allowedHosts });
+      if (untrusted) {
+        sendJson(res, 403, { error: untrusted });
+        return;
+      }
+      const isApi = pathname === '/api' || pathname.startsWith('/api/');
+      // Health stays open so `hubIsAlive` can detect a hub whose token is not
+      // known yet; it exposes no repository data.
+      const needsToken = Boolean(token) && isApi && pathname !== '/api/health';
+      if (needsToken && !tokenMatches(token, extractToken(req, url))) {
+        sendJson(res, 401, {
+          error:
+            '缺少或无效的访问令牌：请从 diff-viz 打印的带 token 链接打开，或在请求头带上 X-Diff-Viz-Token（token 见 ~/.diff-viz/token）。',
+        });
+        return;
+      }
+      // Trade a valid `?token=` on a page request for an HttpOnly cookie, so
+      // refreshing or bookmarking the page keeps working without the token.
+      if (token && !isApi) {
+        const fromUrl = url.searchParams.get('token');
+        if (fromUrl && tokenMatches(token, fromUrl)) {
+          res.setHeader('Set-Cookie', tokenCookie(token));
+        }
+      }
+
       if (pathname === '/api/health') {
         sendJson(res, 200, {
           ok: true,
@@ -1191,12 +1257,14 @@ export async function startHub({
     port: actualPort,
     host,
     home,
+    token,
     startedAt: formatTimestamp(),
   });
 
-  if (open) openInBrowser(url);
+  if (open) openInBrowser(withHubToken(url, token));
   if (!quiet) {
     process.stdout.write(`\n  diff-viz hub  ${url}\n`);
+    if (token) process.stdout.write(`  带令牌链接    ${withHubToken(url, token)}\n`);
     process.stdout.write(`  状态目录      ${home}\n`);
     process.stdout.write('  按 Ctrl+C 停止 hub\n\n');
   }
@@ -1204,6 +1272,7 @@ export async function startHub({
   return {
     url,
     port: actualPort,
+    token,
     server,
     home,
     close: () =>
@@ -1254,7 +1323,13 @@ export async function ensureHub({ port, host = '127.0.0.1', home = hubHome() } =
   const existing = readHubInfo(home);
   if (existing && (await hubIsAlive(existing))) {
     const infoHost = existing.host === '0.0.0.0' || existing.host === '::' ? '127.0.0.1' : existing.host;
-    return { url: `http://${infoHost}:${existing.port}/`, port: existing.port, info: existing, started: false };
+    return {
+      url: `http://${infoHost}:${existing.port}/`,
+      port: existing.port,
+      info: existing,
+      token: existing.token ?? null,
+      started: false,
+    };
   }
 
   const targetPort = resolveHubPort(existing, port);
@@ -1275,7 +1350,13 @@ export async function ensureHub({ port, host = '127.0.0.1', home = hubHome() } =
     const info = readHubInfo(home);
     if (info && (await hubIsAlive(info))) {
       const infoHost = info.host === '0.0.0.0' || info.host === '::' ? '127.0.0.1' : info.host;
-      return { url: `http://${infoHost}:${info.port}/`, port: info.port, info, started: true };
+      return {
+        url: `http://${infoHost}:${info.port}/`,
+        port: info.port,
+        info,
+        token: info.token ?? null,
+        started: true,
+      };
     }
   }
   throw new Error('diff-viz hub 启动超时，请检查端口或手动运行 `diff-viz hub`。');

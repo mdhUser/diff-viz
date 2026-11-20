@@ -12,16 +12,22 @@ export interface FileNodeData extends Record<string, unknown> {
   openTodos: number;
   reviewed: boolean;
   ignored: boolean;
+  laneMode: boolean;
 }
 
 export type FileFlowNode = Node<FileNodeData, 'file'>;
 
 function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
-  const { node, direction, selected, openTodos, reviewed, ignored } = data;
+  const { node, direction, selected, openTodos, reviewed, ignored, laneMode } = data;
   const meta = STATUS_META[node.status];
   const Icon = meta.icon;
   const impacted = node.status === 'impacted_only';
   const vertical = direction === 'TB';
+  const contextPath = node.packagePath || dirname(node.path) || '仓库根目录';
+  const contextLine = laneMode
+    ? contextPath
+    : [node.moduleLabel, contextPath].filter(Boolean).join(' · ') || '仓库根目录';
+  const titleParts = [node.path, node.moduleLabel, node.packagePath].filter(Boolean);
   const width = impacted ? 228 : 256;
 
   return (
@@ -37,7 +43,7 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
         opacity: ignored ? 0.42 : impacted ? 0.88 : 1,
         boxShadow: selected ? undefined : '0 8px 20px -18px rgba(60,50,30,0.35)',
       }}
-      title={node.path}
+      title={titleParts.join('\n')}
     >
       <Handle
         type="target"
@@ -67,8 +73,8 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
             <span className="truncate text-[13px] font-semibold leading-5 text-mist-100">{node.label}</span>
             {node.renamed ? <CornerUpRight size={11} className="shrink-0 text-mist-600" aria-label="重命名" /> : null}
           </div>
-          <div className="truncate font-mono text-[10px] leading-4 text-mist-600">
-            {dirname(node.path) || '仓库根目录'}
+          <div className="truncate font-mono text-[10px] leading-4 text-mist-600" title={titleParts.join(' · ')}>
+            {contextLine}
           </div>
         </div>
         <span

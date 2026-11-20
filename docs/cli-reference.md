@@ -47,6 +47,7 @@ diff-viz skill install          # 把薄 SKILL.md 注册到 Agent 技能目录
 | --- | --- |
 | `--impact-depth <n>` | 下游影响分析深度，默认 3（最多 6） |
 | `--max-impact <n>` | 最多展示多少个受影响文件，默认 120 |
+| `--max-scan-files <n>` | 依赖扫描的代码文件上限，默认 15000。超过时页面顶部会显式警告「共 N 个文件，只分析了前 n 个」 |
 | `--languages <file>` | 额外语言定义 JSON（也可放 `<repo>/.diff-viz/languages.json`），见 [languages.md](languages.md) |
 
 ## 工作区（多仓库）
@@ -101,3 +102,13 @@ hub 的状态目录默认 `~/.diff-viz/`，不可写时（例如 Agent 沙箱）
 | `DIFF_VIZ_NO_WATCH=1` | 关闭 hub 的文件监听（默认开启，改完保存自动重算） |
 | `DIFF_VIZ_NO_CACHE=1` | 关闭文件级解析缓存 |
 | `DIFF_VIZ_KEEP_REVIEWS` | Review 快照保留数量，默认 50（最少 5） |
+| `DIFF_VIZ_TOKEN` | 固定 hub 访问令牌（默认自动生成在 `~/.diff-viz/token`） |
+| `DIFF_VIZ_NO_AUTH=1` | 关闭 `/api/*` 的令牌校验（保留 Host 白名单；不建议） |
+| `DIFF_VIZ_ALLOWED_HOSTS` | 额外允许的 `Host` 主机名，逗号分隔；`--host 0.0.0.0` 之外需要域名访问时使用 |
+
+## hub 访问控制
+
+- 只监听 loopback 仍然会被 DNS rebinding 绕过，所以 hub 会校验 `Host`：只接受 `127.0.0.1` / `localhost` / `::1` 以及显式绑定或放行的主机，其余返回 403。
+- `/api/*` 除 `GET /api/health` 外都要求访问令牌。`diff-viz` / `diff-viz hub` 打印的「带令牌链接」里已经带 `?token=`，直接用那个地址打开即可；页面随后会用 HttpOnly Cookie 记住这次授权。
+- 令牌保存在 `~/.diff-viz/token`（0600），hub 重启后复用，所以之前打印的链接不会因为一次重启失效。需要作废时删掉该文件并重启 hub。
+- 用 `curl` 等脚本直接调 API 时，带上 `-H "X-Diff-Viz-Token: $(cat ~/.diff-viz/token)"`。

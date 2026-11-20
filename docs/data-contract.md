@@ -73,7 +73,9 @@
 - `imports` / `importedBy`：该文件**完整**的直接依赖列表，可能包含没画进图里的文件，详情抽屉会标「图外」。
 - `reviewed` / `ignored`：人工标记的已 Review / 无关改动，重新生成时保留。
 - `meta.reviewOrder`：依赖优先的 Review 顺序；`meta.warnings`：扫描上限等提示。
+- `meta.scanLimit`：依赖扫描的文件上限与仓库真实规模，形如 `{ limit, codeFiles, scanned, truncated }`。`truncated: true` 表示还有代码文件没被扫描，界面会在页面顶部显式警告，而不是只在侧栏底部写一行提示；旧 Review 没有该字段时按 `meta.warnings` 里的文案回退识别。
 - 额外字段（`summarySource`、`impactOrigins`、`depth`、`binary`、`diffTruncated` 等）用于界面增强，不属于必需字段。
+- 1.1 起节点可带泳道信息（可选）：`moduleId` / `moduleLabel` / `modulePath` / `packagePath`；`meta.modules` 为 `[{ id, label, path, kind, order, fileCount, changedFiles, impactedFiles }]`，按依赖深度排序（入口模块在前）。旧 Review 没有这些字段时，界面按路径一级目录回退推断泳道。
 
 ## Agent 注解
 
@@ -112,11 +114,14 @@
 
 ## hub HTTP API
 
-hub 默认监听 `127.0.0.1:5173`，只提供本机访问。
+hub 默认监听 `127.0.0.1:5173`，只提供本机访问。只绑 loopback 挡不住 DNS rebinding（恶意页面让域名解析到 `127.0.0.1`，浏览器就会当成同源），所以还有两道校验：
+
+- **Host 白名单**：`Host` 的 hostname 必须是 `127.0.0.1` / `localhost` / `::1`，或显式绑定/放行的主机，否则返回 403。rebinding 请求的 `Host` 永远是攻击者自己的域名，这一步能直接拦掉。
+- **访问令牌**：除 `GET /api/health`（存活检查）外，所有 `/api/*` 都要求令牌，可以放在 `X-Diff-Viz-Token` 头、`Authorization: Bearer`、`?token=` 查询参数或 `diff_viz_token` Cookie 里。令牌在 hub 首次启动时生成到 `~/.diff-viz/token`（0600）并在重启后复用；`diff-viz` 打印的链接带 `?token=`，页面首次以该链接打开时会换成 HttpOnly Cookie，之后刷新/书签都不用再带 token。直接用脚本调 API 时从 CLI 打印的地址或 `~/.diff-viz/hub.json` 取 `token`。
 
 | 端点 | 说明 |
 | --- | --- |
-| `GET /api/health` | 存活检查 |
+| `GET /api/health` | 存活检查（唯一不需要令牌的端点） |
 | `GET /api/hub` | hub 状态与已注册仓库 |
 | `POST /api/projects` / `DELETE /api/projects?id=` | 注册 / 移除仓库 |
 | `GET /api/commits?project=<id>[&all=1]` | 版本链提交（默认只看当前分支） |

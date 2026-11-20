@@ -174,7 +174,7 @@ diff-viz --workspace path/to/workspace.json
 - `meta.stats`：`{ repos, changed, impacted }`；`meta.repos[].scopeMode` / `scopeLabel` 表示该仓库实际比较的范围。
 - `meta.warnings` 是真实失败，`meta.notes` 是说明性信息；自己写注解时不要往 `warnings` 里塞说明文字。
 - 想深入某个服务：界面上点卡片；脚本里用 `meta.repos[].reviewId` 去读该仓库的完整 Review。
-- 没有浏览器时直接读 JSON：`curl "$HUB/api/data?review=<workspace-review-id>"`，看 `meta.repos` 和 `meta.serviceEdges`。
+- 没有浏览器时直接读 JSON：`curl -H "X-Diff-Viz-Token: $(cat ~/.diff-viz/token)" "$HUB/api/data?review=<workspace-review-id>"`，看 `meta.repos` 和 `meta.serviceEdges`。hub 的 `/api/*` 需要访问令牌（`GET /api/health` 除外），令牌在 `~/.diff-viz/token`；`diff-viz` 打印的链接里已经带好了 `?token=`。
 
 **边界**：只到仓库粒度——共享库被具体哪些文件引用、跨仓库文件级连边都不做。单仓改动别用工作区。
 

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { GitRepo } from '../src/git.mjs';
 import { buildReviewData } from '../src/collect.mjs';
 import { startHub } from '../src/hub.mjs';
-import { cleanup, commitAll, makeTempRepo, run, write } from './helpers.mjs';
+import { cleanup, commitAll, hubFetch, makeTempRepo, run, write } from './helpers.mjs';
 
 const bin = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'diff-viz.mjs');
 const execFileAsync = promisify(execFile);
@@ -186,7 +186,7 @@ test('CLI annotate --review writes annotations into a running hub review', async
     const data = buildReviewData(new GitRepo(dir), { worktree: true });
     const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
     try {
-      const imported = await fetch(`${server.url}api/import`, {
+      const imported = await hubFetch(server, `api/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ root: dir, data, reviewId: 'cli-review-target' }),
@@ -213,7 +213,7 @@ test('CLI annotate --review writes annotations into a running hub review', async
       );
       assert.match(output, /已把注解写入 hub Review/);
 
-      const review = await fetch(`${server.url}api/data?review=${imported.reviewId}`).then((response) =>
+      const review = await hubFetch(server, `api/data?review=${imported.reviewId}`).then((response) =>
         response.json(),
       );
       assert.equal(review.meta.overallSummary, 'CLI --review 总结');

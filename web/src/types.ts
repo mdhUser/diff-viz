@@ -47,6 +47,11 @@ export interface ReviewNode {
   summarySource?: 'auto' | 'agent' | string;
   impactSource?: string;
   reviewNotes?: string[];
+  // 1.1 additive: module/package grouping for the swimlane view.
+  moduleId?: string;
+  moduleLabel?: string;
+  modulePath?: string;
+  packagePath?: string;
 }
 
 export interface ReviewEdge {
@@ -76,9 +81,18 @@ export interface ReviewMeta {
   reviewOrder?: string[];
   summarySource?: string;
   updatedAt?: string;
+  // Set when the dependency scan hit its file cap; `truncated` drives the
+  // top-of-page warning so a partial graph is never silently presented.
+  scanLimit?: {
+    limit: number;
+    codeFiles: number;
+    scanned: number;
+    truncated: boolean;
+  };
   warnings?: string[];
   durationMs?: number;
   workspace?: boolean;
+  modules?: ReviewModule[];
   stats: {
     changedFiles: number;
     impactedFiles: number;
@@ -140,6 +154,17 @@ export interface ReviewData {
 export type LayoutDirection = 'LR' | 'TB';
 export type EdgeMode = 'impact' | 'dependency';
 export type DrawerTab = 'summary' | 'diff' | 'todos';
+
+export interface ReviewModule {
+  id: string;
+  label: string;
+  path?: string;
+  kind?: string;
+  order: number;
+  fileCount?: number;
+  changedFiles?: number;
+  impactedFiles?: number;
+}
 
 export interface HubProject {
   id: string;

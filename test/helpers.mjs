@@ -34,3 +34,10 @@ export function commitAll(dir, message = 'commit') {
 export function cleanup(dir) {
   fs.rmSync(dir, { recursive: true, force: true });
 }
+
+// Every hub endpoint except /api/health needs the access token now; keep tests
+// focused on behaviour by attaching it here.
+export function hubFetch(server, pathname, init = {}) {
+  const headers = { 'X-Diff-Viz-Token': server.token, ...(init.headers ?? {}) };
+  return fetch(`${server.url}${pathname}`, { ...init, headers });
+}

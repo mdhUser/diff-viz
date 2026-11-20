@@ -4,6 +4,7 @@ import { GitRepo } from './git.mjs';
 import { parseUnifiedDiff, extractTodosFromAddedLines } from './diff-parse.mjs';
 import { createResolver, languageOf, scanRepository } from './deps.mjs';
 import { loadLanguageSpecs, registryFor } from './languages.mjs';
+import { detectModules, limitModules, orderModules, packagePathOf } from './modules.mjs';
 import {
   clampText,
   formatTimestamp,
@@ -469,9 +470,10 @@ export function buildReviewData(repo, options = {}) {
 
   const scanRef = options.scanRef ?? (scope.mode === 'rev' ? scope.newRef : null);
   const registry = loadRegistry(repo.root, options.languages);
+  const maxScanFiles = Math.max(1, Number(options.maxScanFiles) || 15000);
   const scan = scanRepository(repo, {
     includeUntracked: !scanRef && options.untracked !== false,
-    maxFiles: options.maxScanFiles ?? 15000,
+    maxFiles: maxScanFiles,
     gitRef: scanRef,
     registry,
   });
@@ -484,6 +486,24 @@ export function buildReviewData(repo, options = {}) {
   }
   for (const file of parsedFiles) {
     if (file.oldPath) fileSet.add(file.oldPath);
+  }
+
+  const moduleDetection = detectModules(repo.root, [...fileSet]);
+  const changedModuleIds = [];
+  for (const node of changedFiles) {
+    const module = moduleDetection.moduleOf(node.path);
+    if (module) changedModuleIds.push(module.id);
+  }
+  const { modules: laneModules, moduleIdOf } = limitModules(
+    moduleDetection.modules,
+    moduleDetection.moduleOf,
+    { maxLanes: 12, keepIds: changedModuleIds },
+  );
+  const moduleById = new Map(laneModules.map((module) => [module.id, module]));
+  if (moduleDetection.modules.length > laneModules.length) {
+    warnings.push(
+      `模块数量过多，最小的一些已合并为「其他模块」：${moduleDetection.modules.length} 个模块只展示 ${laneModules.length} 条泳道。`,
+    );
   }
 
   const oldPathAliases = new Map();
@@ -630,6 +650,17 @@ export function buildReviewData(repo, options = {}) {
     delete node._hunks;
   }
 
+  for (const node of finalNodes) {
+    const moduleId = moduleIdOf(node.path);
+    if (moduleId) {
+      const descriptor = moduleById.get(moduleId);
+      node.moduleId = moduleId;
+      node.moduleLabel = descriptor?.label ?? moduleId;
+      node.modulePath = descriptor?.path ?? '';
+    }
+    node.packagePath = packagePathOf(node.path, scan.files.get(node.path)?.javaPackage);
+  }
+
   const reviewOrder = computeReviewOrder(changedFiles, edges);
   const dedupedEdges = uniqueBy(edges, (edge) => `${edge.source}->${edge.target}`).sort(
     (a, b) => naturalCompare(a.source, b.source) || naturalCompare(a.target, b.target),
@@ -639,6 +670,30 @@ export function buildReviewData(repo, options = {}) {
       '未解析到文件之间的依赖边；如果项目使用路径别名、跨包引用或动态加载，可能未被静态解析覆盖。',
     );
   }
+
+  const moduleCounts = new Map(
+    laneModules.map((module) => [module.id, { changedFiles: 0, impactedFiles: 0 }]),
+  );
+  for (const node of changedFiles) {
+    const counts = moduleCounts.get(node.moduleId);
+    if (counts) counts.changedFiles += 1;
+  }
+  for (const node of impacted) {
+    const counts = moduleCounts.get(node.moduleId);
+    if (counts) counts.impactedFiles += 1;
+  }
+  const orderedModules = orderModules(laneModules, dedupedEdges, (filePath) => {
+    const id = moduleIdOf(filePath);
+    return id ? { id } : null;
+  }).map((module, index) => ({
+    id: module.id,
+    label: module.label,
+    path: module.path,
+    kind: module.kind,
+    order: index,
+    fileCount: module.fileCount,
+    ...(moduleCounts.get(module.id) ?? { changedFiles: 0, impactedFiles: 0 }),
+  }));
 
   const meta = {
     timestamp: formatTimestamp(),
@@ -655,6 +710,7 @@ export function buildReviewData(repo, options = {}) {
     generator: 'diff-viz',
     version: options.version || '0.1.0',
     reviewOrder,
+    modules: orderedModules,
     stats: {
       changedFiles: changedFiles.length,
       impactedFiles: impacted.length,
@@ -664,6 +720,9 @@ export function buildReviewData(repo, options = {}) {
       edges: dedupedEdges.length,
       scannedFiles: scan.stats.scannedFiles,
     },
+    // Structured copy of the scan cap so the UI can warn at the top of the page
+    // instead of burying it in `warnings` at the bottom of the sidebar.
+    scanLimit: scan.scanLimit,
     warnings: [...new Set(warnings)],
     durationMs: Date.now() - startedAt,
   };

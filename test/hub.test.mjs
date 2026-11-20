@@ -7,7 +7,7 @@ import { GitRepo } from '../src/git.mjs';
 import { buildReviewData } from '../src/collect.mjs';
 import { resolveHubPort, startHub } from '../src/hub.mjs';
 import { writeReviewStore } from '../src/review-store.mjs';
-import { cleanup, commitAll, makeTempRepo, run, write } from './helpers.mjs';
+import { cleanup, commitAll, hubFetch, makeTempRepo, run, write } from './helpers.mjs';
 
 test('hub registers projects, serves data, lists commits and builds historical reviews', async () => {
   const repoDir = makeTempRepo();
@@ -21,31 +21,31 @@ test('hub registers projects, serves data, lists commits and builds historical r
   const data = buildReviewData(repo, { worktree: true });
   const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
   try {
-    const imported = await fetch(`${server.url}api/import`, {
+    const imported = await hubFetch(server, `api/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: repoDir, data }),
     }).then((response) => response.json());
     assert.ok(imported.reviewId);
 
-    const hub = await fetch(`${server.url}api/hub`).then((response) => response.json());
+    const hub = await hubFetch(server, `api/hub`).then((response) => response.json());
     assert.equal(hub.projects.length, 1);
     const projectId = hub.projects[0].id;
 
-    const commits = await fetch(`${server.url}api/commits?project=${projectId}`).then((response) =>
+    const commits = await hubFetch(server, `api/commits?project=${projectId}`).then((response) =>
       response.json(),
     );
     assert.equal(commits.commits.length, 1);
     assert.equal(commits.commits[0].subject, 'initial java service');
 
-    const reviewResponse = await fetch(`${server.url}api/review`, {
+    const reviewResponse = await hubFetch(server, `api/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, scope: 'commit', commit: commits.commits[0].sha }),
     }).then((response) => response.json());
     assert.ok(reviewResponse.reviewId.includes('commit'));
 
-    const review = await fetch(`${server.url}api/data?review=${reviewResponse.reviewId}`).then((response) =>
+    const review = await hubFetch(server, `api/data?review=${reviewResponse.reviewId}`).then((response) =>
       response.json(),
     );
     assert.ok(review.nodes.some((node) => node.path.endsWith('App.java')));
@@ -55,15 +55,17 @@ test('hub registers projects, serves data, lists commits and builds historical r
     assert.ok(appStub.payload);
     assert.equal(appStub.oldContent, undefined, 'graph payload should not embed file content');
 
-    const appNode = await fetch(
-      `${server.url}api/node?review=${encodeURIComponent(reviewResponse.reviewId)}&id=${encodeURIComponent(appPath)}`,
+    const appNode = await hubFetch(
+      server,
+      `api/node?review=${encodeURIComponent(reviewResponse.reviewId)}&id=${encodeURIComponent(appPath)}`,
     ).then((response) => response.json());
     assert.match(appNode.newContent, /public class App/);
     assert.match(appNode.diff, /@@/);
     assert.equal(appNode.contentMissing, undefined);
 
-    const fullReview = await fetch(
-      `${server.url}api/data?review=${encodeURIComponent(reviewResponse.reviewId)}&full=1`,
+    const fullReview = await hubFetch(
+      server,
+      `api/data?review=${encodeURIComponent(reviewResponse.reviewId)}&full=1`,
     ).then((response) => response.json());
     assert.match(fullReview.nodes.find((node) => node.path === appPath).newContent, /public class App/);
 
@@ -72,7 +74,7 @@ test('hub registers projects, serves data, lists commits and builds historical r
     const payloadBody = fs.readFileSync(payloadFile, 'utf8');
     const payloadMtime = fs.statSync(payloadFile).mtimeMs;
 
-    const state = await fetch(`${server.url}api/state`, {
+    const state = await hubFetch(server, `api/state`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -83,7 +85,7 @@ test('hub registers projects, serves data, lists commits and builds historical r
     }).then((response) => response.json());
     assert.equal(state.ok, true);
 
-    const updated = await fetch(`${server.url}api/data?review=${reviewResponse.reviewId}`).then((response) =>
+    const updated = await hubFetch(server, `api/data?review=${reviewResponse.reviewId}`).then((response) =>
       response.json(),
     );
     assert.equal(
@@ -94,7 +96,7 @@ test('hub registers projects, serves data, lists commits and builds historical r
     assert.equal(fs.readFileSync(payloadFile, 'utf8'), payloadBody);
     assert.equal(fs.statSync(payloadFile).mtimeMs, payloadMtime);
 
-    await fetch(`${server.url}api/state`, {
+    await hubFetch(server, `api/state`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -103,7 +105,7 @@ test('hub registers projects, serves data, lists commits and builds historical r
         ignored: true,
       }),
     });
-    const ignored = await fetch(`${server.url}api/data?review=${reviewResponse.reviewId}`).then((response) =>
+    const ignored = await hubFetch(server, `api/data?review=${reviewResponse.reviewId}`).then((response) =>
       response.json(),
     );
     assert.equal(
@@ -132,7 +134,7 @@ test('hub imports a review by data path instead of a JSON body', async () => {
 
   const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
   try {
-    const imported = await fetch(`${server.url}api/import`, {
+    const imported = await hubFetch(server, `api/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: repoDir, dataPath, reviewId: 'path-import' }),
@@ -142,15 +144,15 @@ test('hub imports a review by data path instead of a JSON body', async () => {
     assert.ok(fs.existsSync(path.join(home, 'reviews', 'path-import', 'manifest.json')));
     assert.ok(fs.existsSync(path.join(home, 'reviews', 'path-import', 'nodes')));
 
-    const manifest = await fetch(`${server.url}api/data?review=path-import`).then((response) => response.json());
+    const manifest = await hubFetch(server, `api/data?review=path-import`).then((response) => response.json());
     assert.ok(manifest.nodes.some((node) => node.path === 'a.ts'));
-    const node = await fetch(`${server.url}api/node?review=path-import&id=a.ts`).then((response) =>
+    const node = await hubFetch(server, `api/node?review=path-import&id=a.ts`).then((response) =>
       response.json(),
     );
     assert.match(node.newContent, /a = 2/);
 
     // A data path outside the registered repository is never used for import.
-    const outside = await fetch(`${server.url}api/import`, {
+    const outside = await hubFetch(server, `api/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: repoDir, dataPath: outsidePath, reviewId: 'outside' }),
@@ -199,12 +201,12 @@ test('legacy single-file snapshots keep working and accept state updates', async
 
   const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
   try {
-    const data = await fetch(`${server.url}api/data?review=legacy-1`).then((response) => response.json());
+    const data = await hubFetch(server, `api/data?review=legacy-1`).then((response) => response.json());
     assert.equal(data.nodes[0].oldContent, 'OLD');
-    const node = await fetch(`${server.url}api/node?review=legacy-1&id=a.ts`).then((response) => response.json());
+    const node = await hubFetch(server, `api/node?review=legacy-1&id=a.ts`).then((response) => response.json());
     assert.equal(node.newContent, 'NEW');
 
-    const state = await fetch(`${server.url}api/state`, {
+    const state = await hubFetch(server, `api/state`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reviewId: 'legacy-1', nodeId: 'a.ts', reviewed: true }),
@@ -230,7 +232,7 @@ test('projects can be added by path, validated, deduplicated and removed', async
   const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
   try {
     const add = (root) =>
-      fetch(`${server.url}api/projects`, {
+      hubFetch(server, `api/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ root }),
@@ -247,7 +249,7 @@ test('projects can be added by path, validated, deduplicated and removed', async
     const nested = await add(path.join(repoDir, 'src')).then((response) => response.json());
     assert.equal(nested.project.id, added.project.id);
 
-    const hub = await fetch(`${server.url}api/hub`).then((response) => response.json());
+    const hub = await hubFetch(server, `api/hub`).then((response) => response.json());
     assert.equal(hub.projects.length, 1);
 
     const missing = await add(path.join(os.tmpdir(), 'diff-viz-definitely-missing'));
@@ -258,15 +260,15 @@ test('projects can be added by path, validated, deduplicated and removed', async
     assert.equal(notRepo.status, 500);
     assert.match((await notRepo.json()).error, /不是 Git 仓库/);
 
-    const removed = await fetch(`${server.url}api/projects?id=${added.project.id}`, {
+    const removed = await hubFetch(server, `api/projects?id=${added.project.id}`, {
       method: 'DELETE',
     }).then((response) => response.json());
     assert.equal(removed.ok, true);
 
-    const empty = await fetch(`${server.url}api/hub`).then((response) => response.json());
+    const empty = await hubFetch(server, `api/hub`).then((response) => response.json());
     assert.equal(empty.projects.length, 0);
 
-    const missingDelete = await fetch(`${server.url}api/projects?id=nope`, { method: 'DELETE' });
+    const missingDelete = await hubFetch(server, `api/projects?id=nope`, { method: 'DELETE' });
     assert.equal(missingDelete.status, 404);
   } finally {
     await server.close();
@@ -295,13 +297,13 @@ test('commit history defaults to the checked-out branch and all=1 includes every
 
   const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
   try {
-    const project = await fetch(`${server.url}api/projects`, {
+    const project = await hubFetch(server, `api/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: repoDir }),
     }).then((response) => response.json());
 
-    const scoped = await fetch(`${server.url}api/commits?project=${project.project.id}`).then((response) =>
+    const scoped = await hubFetch(server, `api/commits?project=${project.project.id}`).then((response) =>
       response.json(),
     );
     assert.equal(scoped.branch, 'feature/current');
@@ -311,7 +313,7 @@ test('commit history defaults to the checked-out branch and all=1 includes every
     assert.ok(subjects.includes('base commit'));
     assert.ok(!subjects.includes('other branch work'), 'other branches must stay out of the default chain');
 
-    const all = await fetch(`${server.url}api/commits?project=${project.project.id}&all=1`).then((response) =>
+    const all = await hubFetch(server, `api/commits?project=${project.project.id}&all=1`).then((response) =>
       response.json(),
     );
     assert.equal(all.all, true);
@@ -333,20 +335,20 @@ test('annotate API writes agent summaries into an existing hub review', async ()
 
   const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
   try {
-    const imported = await fetch(`${server.url}api/import`, {
+    const imported = await hubFetch(server, `api/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: repoDir, data, reviewId: 'ann-review' }),
     }).then((response) => response.json());
 
-    const before = await fetch(`${server.url}api/data?review=${imported.reviewId}`).then((response) =>
+    const before = await hubFetch(server, `api/data?review=${imported.reviewId}`).then((response) =>
       response.json(),
     );
     const payload = before.nodes[0].payload;
     const payloadFile = path.join(home, 'reviews', imported.reviewId, 'nodes', `${payload}.json`);
     const payloadBody = fs.readFileSync(payloadFile, 'utf8');
 
-    const annotated = await fetch(`${server.url}api/annotate`, {
+    const annotated = await hubFetch(server, `api/annotate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -360,7 +362,7 @@ test('annotate API writes agent summaries into an existing hub review', async ()
     assert.equal(annotated.ok, true);
     assert.equal(annotated.annotated, 1);
 
-    const after = await fetch(`${server.url}api/data?review=${imported.reviewId}`).then((response) =>
+    const after = await hubFetch(server, `api/data?review=${imported.reviewId}`).then((response) =>
       response.json(),
     );
     assert.equal(after.meta.overallSummary, 'Agent 整体总结');
@@ -372,7 +374,7 @@ test('annotate API writes agent summaries into an existing hub review', async ()
     assert.ok(node.todos.some((todo) => todo.source === 'agent' && todo.text === '人工确认'));
     assert.equal(fs.readFileSync(payloadFile, 'utf8'), payloadBody, 'annotate must not touch node payloads');
 
-    const missing = await fetch(`${server.url}api/annotate`, {
+    const missing = await hubFetch(server, `api/annotate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reviewId: 'nope', annotations: { nodes: {} } }),
@@ -394,7 +396,7 @@ test('agent annotations survive commit and are reused in another Review of the s
 
   const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
   try {
-    const project = await fetch(`${server.url}api/projects`, {
+    const project = await hubFetch(server, `api/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: repoDir }),
@@ -402,12 +404,12 @@ test('agent annotations survive commit and are reused in another Review of the s
     const projectId = project.project.id;
 
     // Worktree Review with an agent summary.
-    const worktree = await fetch(`${server.url}api/review`, {
+    const worktree = await hubFetch(server, `api/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, scope: 'worktree' }),
     }).then((response) => response.json());
-    await fetch(`${server.url}api/annotate`, {
+    await hubFetch(server, `api/annotate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -424,14 +426,14 @@ test('agent annotations survive commit and are reused in another Review of the s
     run(repoDir, 'git', ['add', '-A']);
     commitAll(repoDir, 'commit change');
     const sha = run(repoDir, 'git', ['rev-parse', 'HEAD']).trim();
-    const commitReview = await fetch(`${server.url}api/review`, {
+    const commitReview = await hubFetch(server, `api/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, scope: 'commit', commit: sha }),
     }).then((response) => response.json());
     assert.equal(commitReview.reviewId, `${projectId}-commit-${sha.slice(0, 12)}`);
 
-    const opened = await fetch(`${server.url}api/data?review=${commitReview.reviewId}`).then((response) =>
+    const opened = await hubFetch(server, `api/data?review=${commitReview.reviewId}`).then((response) =>
       response.json(),
     );
     const openedNode = opened.nodes.find((node) => node.path === 'a.ts');
@@ -443,12 +445,12 @@ test('agent annotations survive commit and are reused in another Review of the s
     assert.equal(opened.meta.summarySource, 'agent');
 
     // Regenerating the same commit Review keeps the annotation from the store.
-    const regenerated = await fetch(`${server.url}api/review`, {
+    const regenerated = await hubFetch(server, `api/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, scope: 'commit', commit: sha }),
     }).then((response) => response.json());
-    const regeneratedData = await fetch(`${server.url}api/data?review=${regenerated.reviewId}`).then((response) =>
+    const regeneratedData = await hubFetch(server, `api/data?review=${regenerated.reviewId}`).then((response) =>
       response.json(),
     );
     assert.equal(regeneratedData.nodes.find((node) => node.path === 'a.ts').summarySource, 'agent');
@@ -457,12 +459,12 @@ test('agent annotations survive commit and are reused in another Review of the s
 
     // Different content must not inherit the stale annotation.
     write(repoDir, 'a.ts', 'export const a = 3;\n');
-    const changed = await fetch(`${server.url}api/review`, {
+    const changed = await hubFetch(server, `api/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, scope: 'worktree' }),
     }).then((response) => response.json());
-    const changedData = await fetch(`${server.url}api/data?review=${changed.reviewId}`).then((response) =>
+    const changedData = await hubFetch(server, `api/data?review=${changed.reviewId}`).then((response) =>
       response.json(),
     );
     const changedNode = changedData.nodes.find((node) => node.path === 'a.ts');
@@ -487,19 +489,19 @@ test('overviews are reused when a new Review change set heavily overlaps', async
 
   const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
   try {
-    const project = await fetch(`${server.url}api/projects`, {
+    const project = await hubFetch(server, `api/projects`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ root: repoDir }),
     }).then((response) => response.json());
     const projectId = project.project.id;
 
-    const worktree = await fetch(`${server.url}api/review`, {
+    const worktree = await hubFetch(server, `api/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, scope: 'worktree' }),
     }).then((response) => response.json());
-    await fetch(`${server.url}api/annotate`, {
+    await hubFetch(server, `api/annotate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -518,12 +520,12 @@ test('overviews are reused when a new Review change set heavily overlaps', async
 
     // The range Review now has 5 changed files: 4 identical to the annotated
     // worktree plus e.ts, so its overview is reused via change-set overlap.
-    const range = await fetch(`${server.url}api/review`, {
+    const range = await hubFetch(server, `api/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId, scope: 'range', range: `${base}..HEAD` }),
     }).then((response) => response.json());
-    const data = await fetch(`${server.url}api/data?review=${range.reviewId}`).then((response) => response.json());
+    const data = await hubFetch(server, `api/data?review=${range.reviewId}`).then((response) => response.json());
     assert.equal(data.meta.overallSummary, '整个 feature 的 Agent 概览');
     assert.equal(data.meta.summarySource, 'agent');
     assert.equal(data.nodes.find((node) => node.path === 'a.ts').summarySource, 'agent');
@@ -614,7 +616,7 @@ test('hub builds a workspace review across repositories', async () => {
 
     const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
     try {
-      const response = await fetch(`${server.url}api/workspace`, {
+      const response = await hubFetch(server, `api/workspace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file: workspaceFile }),
@@ -623,7 +625,7 @@ test('hub builds a workspace review across repositories', async () => {
       assert.deepEqual(response.stats, { repos: 2, changed: 1, impacted: 1 });
       assert.match(response.warnings[0], /plain/);
 
-      const data = await fetch(`${server.url}api/data?review=${response.reviewId}`).then((res) => res.json());
+      const data = await hubFetch(server, `api/data?review=${response.reviewId}`).then((res) => res.json());
       assert.equal(data.meta.workspace, true);
       assert.equal(data.meta.repos.length, 2);
       const orderRepo = data.meta.repos.find((repo) => repo.id === 'order');
@@ -680,13 +682,13 @@ test('workspace honors per-repo and workspace-level comparison scopes', async ()
 
     const server = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
     try {
-      const response = await fetch(`${server.url}api/workspace`, {
+      const response = await hubFetch(server, `api/workspace`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file: wsFile }),
       }).then((res) => res.json());
       assert.equal(response.ok, true);
-      const data = await fetch(`${server.url}api/data?review=${response.reviewId}`).then((res) => res.json());
+      const data = await hubFetch(server, `api/data?review=${response.reviewId}`).then((res) => res.json());
       const scoped = data.meta.repos.find((item) => item.id === 'repo');
       const worktree = data.meta.repos.find((item) => item.id === 'weird');
       assert.equal(scoped.scopeMode, 'range');

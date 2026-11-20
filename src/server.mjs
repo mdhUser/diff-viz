@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readReviewStore } from './review-store.mjs';
+import { checkRequestTrust, hostAllowlist } from './security.mjs';
 import { formatTimestamp, shortId } from './util.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -108,12 +109,20 @@ function contentTypeFor(filePath) {
   return MIME[path.extname(filePath).toLowerCase()] || 'application/octet-stream';
 }
 
-function createRequestHandler({ dataPath }) {
+function createRequestHandler({ dataPath, host = '127.0.0.1' }) {
+  const allowedHosts = hostAllowlist(host);
   return async (req, res) => {
     const url = new URL(req.url || '/', 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
 
     try {
+      // Same DNS-rebinding guard as the hub: this server also returns source.
+      const untrusted = checkRequestTrust(req, { hostnames: allowedHosts });
+      if (untrusted) {
+        sendJson(res, 403, { error: untrusted });
+        return;
+      }
+
       if (pathname === '/api/health') {
         sendJson(res, 200, { ok: true, data: fs.existsSync(dataPath), dist: fs.existsSync(DIST_DIR) });
         return;
@@ -193,6 +202,8 @@ function createRequestHandler({ dataPath }) {
         'Content-Type': contentTypeFor(filePath),
         'Cache-Control': isHashedAsset ? 'public, max-age=31536000, immutable' : 'no-store',
         'Content-Length': body.length,
+        'X-Content-Type-Options': 'nosniff',
+        'Referrer-Policy': 'no-referrer',
       });
       if (req.method === 'HEAD') res.end();
       else res.end(body);
@@ -242,7 +253,7 @@ export function openInBrowser(url) {
 }
 
 export async function startServer({ dataPath, port = 5173, host = '127.0.0.1', open = false, quiet = false }) {
-  const server = http.createServer(createRequestHandler({ dataPath }));
+  const server = http.createServer(createRequestHandler({ dataPath, host }));
   let actualPort = port;
   let lastError = null;
   for (let attempt = 0; attempt < 20; attempt += 1) {

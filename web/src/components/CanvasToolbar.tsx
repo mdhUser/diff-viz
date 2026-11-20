@@ -1,26 +1,35 @@
 import { ArrowDown, ArrowRight, ArrowRightLeft, GitFork, Layers } from 'lucide-react';
 import type { EdgeMode, LayoutDirection } from '../types';
+import type { LaneGroupBy } from '../lanes';
 import { cn } from '../cn';
 
 interface CanvasToolbarProps {
   edgeMode: EdgeMode;
   direction: LayoutDirection;
+  viewMode: 'flow' | 'lane';
+  groupBy: LaneGroupBy;
   showImpacted: boolean;
   changedCount: number;
   impactedCount: number;
   onEdgeModeChange: (mode: EdgeMode) => void;
   onDirectionChange: (direction: LayoutDirection) => void;
+  onViewModeChange: (mode: 'flow' | 'lane') => void;
+  onGroupByChange: (groupBy: LaneGroupBy) => void;
   onToggleImpacted: () => void;
 }
 
 export function CanvasToolbar({
   edgeMode,
   direction,
+  viewMode,
+  groupBy,
   showImpacted,
   changedCount,
   impactedCount,
   onEdgeModeChange,
   onDirectionChange,
+  onViewModeChange,
+  onGroupByChange,
   onToggleImpacted,
 }: CanvasToolbarProps) {
   return (
@@ -54,30 +63,80 @@ export function CanvasToolbar({
 
       <div className="mx-0.5 h-4 w-px bg-line" />
 
-      <div className="flex items-center rounded-lg p-0.5">
+      <div className="flex items-center rounded-lg bg-ink-900/70 p-0.5">
         <button
           type="button"
-          onClick={() => onDirectionChange('LR')}
+          onClick={() => onViewModeChange('flow')}
           className={cn(
-            'flex h-7 w-7 items-center justify-center rounded-md transition',
-            direction === 'LR' ? 'bg-ink-750 text-mist-100' : 'text-mist-600 hover:text-mist-300',
+            'flex h-7 items-center gap-1.5 rounded-md px-2 text-[10.5px] transition',
+            viewMode === 'flow' ? 'bg-accent-soft text-accent-bright' : 'text-mist-500 hover:text-mist-200',
           )}
-          title="横向布局"
+          title="流向视图：单张平铺图，不按模块分泳道"
         >
-          <ArrowRight size={13} />
+          <ArrowRightLeft size={11.5} />
+          流向
         </button>
         <button
           type="button"
-          onClick={() => onDirectionChange('TB')}
+          onClick={() => onViewModeChange('lane')}
           className={cn(
-            'flex h-7 w-7 items-center justify-center rounded-md transition',
-            direction === 'TB' ? 'bg-ink-750 text-mist-100' : 'text-mist-600 hover:text-mist-300',
+            'flex h-7 items-center gap-1.5 rounded-md px-2 text-[10.5px] transition',
+            viewMode === 'lane' ? 'bg-accent-soft text-accent-bright' : 'text-mist-500 hover:text-mist-200',
           )}
-          title="纵向布局"
+          title="泳道视图：按模块/目录/包分层，入口层在上"
         >
-          <ArrowDown size={13} />
+          <Layers size={11.5} />
+          泳道
         </button>
       </div>
+
+      {viewMode === 'lane' ? (
+        <div className="flex items-center rounded-lg p-0.5">
+          {([
+            ['module', '模块'],
+            ['directory', '目录'],
+            ['package', '包'],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onGroupByChange(value)}
+              className={cn(
+                'flex h-7 items-center rounded-md px-1.5 text-[10px] transition',
+                groupBy === value ? 'bg-ink-750 text-mist-100' : 'text-mist-600 hover:text-mist-300',
+              )}
+              title={`按${label}分组泳道`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center rounded-lg p-0.5">
+          <button
+            type="button"
+            onClick={() => onDirectionChange('LR')}
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-md transition',
+              direction === 'LR' ? 'bg-ink-750 text-mist-100' : 'text-mist-600 hover:text-mist-300',
+            )}
+            title="横向布局"
+          >
+            <ArrowRight size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDirectionChange('TB')}
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-md transition',
+              direction === 'TB' ? 'bg-ink-750 text-mist-100' : 'text-mist-600 hover:text-mist-300',
+            )}
+            title="纵向布局"
+          >
+            <ArrowDown size={13} />
+          </button>
+        </div>
+      )}
 
       <div className="mx-0.5 h-4 w-px bg-line" />
 

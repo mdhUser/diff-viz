@@ -257,3 +257,25 @@ test('server serves data and persists todo/review state', async () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('reports the dependency scan cap with the real code-file count', () => {
+  const dir = seedRepo();
+  try {
+    const repo = new GitRepo(dir);
+    const capped = buildReviewData(repo, { worktree: true, maxScanFiles: 4 });
+    assert.equal(capped.meta.scanLimit.truncated, true);
+    assert.equal(capped.meta.scanLimit.limit, 4);
+    assert.ok(capped.meta.scanLimit.codeFiles > 4, 'the real file count must be reported');
+    assert.ok(capped.meta.scanLimit.scanned <= 4);
+    assert.ok(
+      capped.meta.warnings.some((warning) => /依赖扫描上限/.test(warning)),
+      'the warning should name the cap and the real total',
+    );
+
+    const full = buildReviewData(repo, { worktree: true });
+    assert.equal(full.meta.scanLimit.truncated, false);
+    assert.equal(full.meta.scanLimit.limit, 15000);
+  } finally {
+    cleanup(dir);
+  }
+});

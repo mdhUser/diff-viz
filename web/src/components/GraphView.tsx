@@ -13,14 +13,17 @@ import {
   type ReactFlowInstance,
 } from '@xyflow/react';
 import type { EdgeMode, LayoutDirection, ReviewEdge } from '../types';
-import type { PositionedNode } from '../layout';
+import type { LaneBox, PositionedNode } from '../layout';
+import { LaneNode, type LaneFlowNode } from './LaneNode';
 import { FileNode, type FileFlowNode } from './FileNode';
 import { STATUS_META } from '../status';
 
-const nodeTypes = { file: FileNode };
+const nodeTypes = { file: FileNode, lane: LaneNode };
 
 interface GraphViewProps {
   positioned: PositionedNode[];
+  lanes: LaneBox[];
+  viewMode: 'flow' | 'lane';
   edges: ReviewEdge[];
   selectedId: string | null;
   direction: LayoutDirection;
@@ -107,6 +110,8 @@ function ViewportResizer({
 
 function GraphCanvas({
   positioned,
+  lanes,
+  viewMode,
   edges,
   selectedId,
   direction,
@@ -121,16 +126,35 @@ function GraphCanvas({
 }: GraphViewProps) {
   const { fitView } = useReactFlow();
 
-  const nodes = useMemo<Node[]>(
-    () =>
-      positioned.map((item) => ({
+  const nodes = useMemo<Node[]>(() => {
+    const laneById = new Map(lanes.map((lane) => [lane.id, lane]));
+    const entries: Node[] = [];
+    for (const lane of lanes) {
+      entries.push({
+        id: `lane:${lane.id}`,
+        type: 'lane',
+        position: { x: lane.x, y: lane.y },
+        width: lane.width,
+        height: lane.height,
+        draggable: false,
+        selectable: false,
+        zIndex: 0,
+        data: { lane },
+        style: { width: lane.width, height: lane.height },
+      } as LaneFlowNode);
+    }
+    for (const item of positioned) {
+      const lane = item.laneId ? laneById.get(item.laneId) : undefined;
+      entries.push({
         id: item.node.id,
         type: 'file',
-        position: { x: item.x, y: item.y },
+        position: lane ? { x: item.x - lane.x, y: item.y - lane.y } : { x: item.x, y: item.y },
+        ...(lane ? { parentId: `lane:${lane.id}`, extent: 'parent' as const } : {}),
         width: item.width,
         height: item.height,
         draggable: false,
         selectable: false,
+        zIndex: 1,
         data: {
           node: item.node,
           direction,
@@ -138,11 +162,13 @@ function GraphCanvas({
           openTodos: openTodoCounts[item.node.id] || 0,
           reviewed: Boolean(reviewedMap[item.node.id] ?? item.node.reviewed),
           ignored: Boolean(ignoredMap[item.node.id] ?? item.node.ignored),
+          laneMode: viewMode === 'lane',
         },
         style: { width: item.width, height: item.height },
-      })) as FileFlowNode[],
-    [positioned, direction, selectedId, openTodoCounts, reviewedMap, ignoredMap],
-  );
+      } as FileFlowNode);
+    }
+    return entries;
+  }, [positioned, lanes, viewMode, direction, selectedId, openTodoCounts, reviewedMap, ignoredMap]);
 
   const flowEdges = useMemo<Edge[]>(() => {
     const byId = new Map(positioned.map((item) => [item.node.id, item.node]));
@@ -238,8 +264,11 @@ function GraphCanvas({
   }, [positioned, edges, edgeMode, selectedId]);
 
   const signature = useMemo(
-    () => `${positioned.map((item) => item.node.id).join('|')}:${direction}:${edgeMode}`,
-    [positioned, direction, edgeMode],
+    () =>
+      `${positioned.map((item) => item.node.id).join('|')}:${direction}:${edgeMode}:${viewMode}:${lanes
+        .map((lane) => lane.id)
+        .join(',')}`,
+    [positioned, direction, edgeMode, viewMode, lanes],
   );
 
   useEffect(() => {
@@ -265,7 +294,10 @@ function GraphCanvas({
       elementsSelectable={false}
       panOnScroll
       selectionOnDrag={false}
-      onNodeClick={(_, node) => onSelect(node.id)}
+      onNodeClick={(_, node) => {
+        if (node.type === 'lane') return;
+        onSelect(node.id);
+      }}
       onPaneClick={() => onSelect(null)}
       onInit={onInit}
       proOptions={{ hideAttribution: true }}
@@ -279,6 +311,7 @@ function GraphCanvas({
         position="bottom-right"
         maskColor="rgba(246, 242, 233, 0.72)"
         nodeColor={(node) => {
+          if (node.type === 'lane') return '#f1ecdf';
           const status = (node.data as { node?: { status?: keyof typeof STATUS_META } }).node?.status;
           return status ? STATUS_META[status].color : '#8b9a9d';
         }}

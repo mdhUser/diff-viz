@@ -52,7 +52,7 @@ diff-viz stop                      # 停止后台 hub
 | 左栏 | 整体摘要、变更文件 / 受影响文件列表、Review 进度；点文件切换 |
 | 中间 | 拓扑图。紫色虚线 = 影响（改了 A 牵动 B），蓝色实线 = 依赖（A imports B），灰色节点 = 没改但受影响 |
 | 右侧 | 「摘要与影响」「代码 Diff」「待确认」三段；Diff 支持单栏/双栏、完整文件、语法高亮 |
-| 顶部 | 仓库切换、版本链（默认当前分支）、历史 commit 的 Review、刷新 |
+| 顶部 | 仓库切换、版本链（默认当前分支）、历史 commit 的 Review、刷新；工具栏可切换「流向 / 泳道」视图（泳道按模块/目录/包分层） |
 
 快捷键：`←` / `→` 切换文件，`Esc` 关闭详情。改完代码保存后 hub 自动重算，页面通过 SSE 刷新，不用重跑命令。
 
@@ -107,14 +107,14 @@ diff-viz skill install --agent dsh      # 或 claude / cursor
 
 - 数据文件包含完整源码，**不要提交到 Git 或分享**；生成后会自动写入 `.git/info/exclude`。
 - hub 状态目录默认 `~/.diff-viz/`（不可写时自动落到系统临时目录，可用 `DIFF_VIZ_HOME` 指定）：Review 快照目录 `0700`、文件 `0600`，按数量自动清理。
-- 服务只监听 `127.0.0.1`，不上传任何代码，也不需要账号。
+- 服务只监听 `127.0.0.1`，不上传任何代码，也不需要账号。只绑 loopback 挡不住 DNS rebinding，所以 hub 还会校验 `Host`，并且 `/api/*` 要带访问令牌（`diff-viz` 打印的链接里已包含，页面会换成 Cookie 记住）；详见 [docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md) 的「hub 访问控制」。
 
 数据结构、HTTP API 与完整字段说明见 **[docs/data-contract.md](https://github.com/mdhUser/diff-viz/blob/main/docs/data-contract.md)**。
 
 ## 已知限制
 
 - 依赖解析是静态近似（正则/解析器，不跑 AST，也不处理运行时动态路径）：Java 同包引用可能把注释里的同名类算成依赖，可在界面「忽略」；tsconfig 只读仓库根目录，不处理 `extends` 和 monorepo 子包。
-- 超过 15,000 个代码文件只扫描前 15,000 个，并在 `meta.warnings` 中提示。
+- 超过 15,000 个代码文件只扫描前 15,000 个：页面顶部会显式警告「共 N 个文件，只分析了前 15,000 个」，需要完整结果时用 `--max-scan-files` 调高上限（扫描耗时随文件数增长）。
 - 自动刷新只对 hub 本进程分析过的仓库生效；hub 重启后需再跑一次 `diff-viz`。Linux 上 Node 的递归 `fs.watch` 不可用，会退化为不监听。
 - 它是**只读的 Review 工具**：不做暂存、提交、分支、合并、推送等 Git 操作；这些仍交给 SourceTree / 命令行 / 你的 IDE。
 - 如果 Cursor / DSH 等 Agent、IDE 内置浏览器打开 Review 一直转圈：页面默认保持一条 `/api/events` SSE 长连接，而这类预览工具常以「网络空闲」判断加载完成。自动化浏览器和 iframe 会自动跳过 SSE，也可以在 URL 加 `&sse=0`；浏览器运行在远程/容器里时，`127.0.0.1` 不是你的电脑，需要端口转发或在该环境里直接运行 `diff-viz`。

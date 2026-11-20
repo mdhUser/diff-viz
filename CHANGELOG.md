@@ -8,7 +8,33 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-20
+
+### Added
+
+- **泳道视图**：拓扑图可在「流向 / 泳道」之间切换。泳道按模块（Maven/Gradle/npm/go.mod/pyproject 构建标记识别，可切目录/包粒度）分组，按依赖深度从上到下排列（入口层在前、数据层在后），泳道头显示模块路径与变更/受影响数量；节点卡片显示 module 与 Java package。最多 12 条泳道，超出部分合并为「其他模块」；旧 Review 没有模块字段时按一级目录回退推断。
+- hub 访问控制：校验 `Host` 白名单挡住 DNS rebinding，`/api/*`（除 health）要求访问令牌；CLI 打印的链接带 `?token=`，页面随后换成 HttpOnly Cookie。令牌存 `~/.diff-viz/token`（0600），重启后复用；支持 `DIFF_VIZ_TOKEN` / `DIFF_VIZ_NO_AUTH` / `DIFF_VIZ_ALLOWED_HOSTS`。
+- `--max-scan-files <n>`：可调依赖扫描上限（默认 15000）。
+
+### Fixed
+
+- 大仓库依赖扫描被 15000 文件上限截断时不再静默降级：页面顶部显示「共 N 个文件，只分析了前 n 个」的警告，并提示用 `--max-scan-files` 调高上限。
+
+## [1.0.2] - 2026-11-20
+### Added
+
+- 页面顶部新增「依赖扫描已截断」横幅：超过扫描上限时明确写出「仓库共有 N 个代码文件，本次只分析了前 15,000 个」，并提示用 `--max-scan-files` 调高上限。之前这条信息只写在侧栏底部的 `meta.warnings` 里，大仓库用户很容易以为残缺的拓扑就是全部。
+- `--max-scan-files <n>`：依赖扫描的代码文件上限（默认 15,000）。数据里新增 `meta.scanLimit = { limit, codeFiles, scanned, truncated }`，`codeFiles` 是仓库真实的代码文件数（此前只统计到上限为止）。
+
+### Security
+
+- hub 增加 Host 白名单：`Host` 必须是 `127.0.0.1` / `localhost` / `::1` 或显式绑定/放行的主机，否则返回 403。只绑 loopback 挡不住 DNS rebinding——恶意页面把自己的域名解析到 `127.0.0.1` 后，浏览器会把响应当成同源内容读走。
+- hub 的 `/api/*` 现在要求访问令牌（`GET /api/health` 除外）：令牌首次启动时生成到 `~/.diff-viz/token`（0600），重启后复用；`diff-viz` / `diff-viz hub` 打印的链接自动带上 `?token=`，页面打开后换成 HttpOnly Cookie，刷新和书签不用再带 token。
+- 页面响应补上 `Referrer-Policy: no-referrer` 与 `X-Content-Type-Options: nosniff`，避免带 token 的 URL 通过 Referer 外泄。
+
 ### Changed
+
+- 直接用 `curl` 等脚本调 hub `/api/*` 时需要加 `X-Diff-Viz-Token` 头（或 `?token=` 参数）；CLI 自己会带上，Agent 通过 `diff-viz` 打印的链接访问也不受影响。`DIFF_VIZ_TOKEN` 可固定令牌，`DIFF_VIZ_NO_AUTH=1` 可关闭鉴权，`DIFF_VIZ_ALLOWED_HOSTS` 可追加允许的 Host。
 
 - 文档：README 重写为「用途 + 快速开始 + 常用操作」优先的结构（549 → 145 行）；完整 CLI 参数、数据/HTTP 契约、语言解析、开发与发布流程拆分到 `docs/cli-reference.md`、`docs/data-contract.md`、`docs/languages.md`、`docs/development.md`。
 
