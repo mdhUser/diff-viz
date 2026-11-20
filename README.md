@@ -147,6 +147,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor
 | [docs/database.md](https://github.com/mdhUser/diff-viz/blob/main/docs/database.md) | 数据库表/SQL 解析、读取写入边、悬停与抽屉、懒加载 API |
 | [docs/agent-integrations.md](https://github.com/mdhUser/diff-viz/blob/main/docs/agent-integrations.md) | Claude Code / Cursor / Codex 等 Agent 接入方式 |
 | [docs/development.md](https://github.com/mdhUser/diff-viz/blob/main/docs/development.md) | 本地开发、测试、目录结构、发布流程 |
+| [docs/roadmap.md](https://github.com/mdhUser/diff-viz/blob/main/docs/roadmap.md) | 泳道 / 配置 / 数据库视图的迭代计划与后续 v1.4 提议 |
 
 ## 打赏作者
 

@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 文档：新增 [docs/roadmap.md](https://github.com/mdhUser/diff-viz/blob/main/docs/roadmap.md)，记录泳道分层（v1.1）、配置/资源入图（v1.2）、数据库表与 SQL 视图（v1.3）的迭代计划、数据契约增量、设计取舍与后续 v1.4 提议。
+
 ### Fixed
 
 - 补齐文档承诺的单条 SQL 4KB 截断：之前只实现了「最多 300 张表 / 每表 200 条」两个上限，超长语句会原样写进 `<review>/tables/`。现在超过 4096 字符的语句截断展示（`statementCount` 仍是真实条数），每表条数超限和语句截断都会写入 `meta.warnings`。
