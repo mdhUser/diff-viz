@@ -134,6 +134,7 @@ export interface ReviewMeta {
   warnings?: string[];
   durationMs?: number;
   workspace?: boolean;
+  pull?: PullRequestInfo;
   modules?: ReviewModule[];
   db?: {
     engine: string;
@@ -215,6 +216,29 @@ export interface ReviewModule {
   fileCount?: number;
   changedFiles?: number;
   impactedFiles?: number;
+}
+
+export interface HubPullRequest {
+  provider: 'github' | 'gitlab' | string;
+  number: number;
+  title: string;
+  author?: string;
+  sourceBranch?: string;
+  targetBranch?: string;
+  sourceSha?: string;
+  baseSha?: string;
+  updatedAt?: string;
+  url?: string;
+  draft?: boolean;
+  state?: string;
+}
+
+export interface PullRequestInfo extends HubPullRequest {
+  baseBranch?: string;
+  host?: string;
+  repoPath?: string;
+  webUrl?: string;
+  remote?: string;
 }
 
 export interface HubProject {

@@ -8,9 +8,19 @@
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-23
+
+### Added
+
+- **远端 PR / MR 接入**：hub「已注册仓库」窗口新增 **PR / MR** 标签，直接列出当前仓库远端的 GitHub Pull Request / GitLab Merge Request；点击任意一条即自动 fetch `refs/pull/<n>/head`（GitLab 为 `refs/merge-requests/<iid>/head`）和目标分支，按 `merge-base` 生成 diff 拓扑图。顶部显示 `PR #N · 标题` 与远端链接。
+- 平台自动识别：解析 `origin` 的 ssh/https 地址，支持 GitHub、GitLab 与自建实例；`GITHUB_TOKEN` / `GITLAB_TOKEN` 仅由 hub 进程读取，自建域名可用 `DIFF_VIZ_PROVIDER` / `DIFF_VIZ_GITHUB_HOSTS` / `DIFF_VIZ_GITLAB_HOSTS` / `DIFF_VIZ_*_API_URL` 配置。
+- 同一 PR/MR 复用稳定 Review id（`<projectId>-pull-<number>`），已有 Agent 摘要/待办/审查状态可复用；`meta.pull` 记录 provider、编号、标题、作者、来源/目标分支与远端 URL。
+- CLI 新增 `--pr <编号|URL>` / `--mr <编号|URL>`，`--base` 可覆盖目标分支；新增 `GET /api/pulls?project=`（60 秒缓存、`refresh=1` 强制刷新）与 `POST /api/review {pull}`。
+- 新增 `test/remotes.test.mjs` / `test/pull-request.test.mjs`，覆盖平台识别、API 映射与鉴权、ref 拉取、CLI/hub 端到端与稳定 Review id；新增 [docs/pull-requests.md](https://github.com/mdhUser/diff-viz/blob/main/docs/pull-requests.md)。
+
 ### Changed
 
-- 文档：新增 [docs/roadmap.md](https://github.com/mdhUser/diff-viz/blob/main/docs/roadmap.md)，记录泳道分层（v1.1）、配置/资源入图（v1.2）、数据库表与 SQL 视图（v1.3）的迭代计划、数据契约增量、设计取舍与后续 v1.4 提议。
+- 文档：更新 [docs/roadmap.md](https://github.com/mdhUser/diff-viz/blob/main/docs/roadmap.md)，把远端 PR/MR 接入记为 v1.4.0 已完成，后续提议顺延为 v1.5；README / CLI 参考 / 数据契约同步补充。
 
 ### Fixed
 

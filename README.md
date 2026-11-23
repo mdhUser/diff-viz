@@ -69,6 +69,7 @@ diff-viz stop                      # 停止后台 hub
 | Review 工作区改动 | `diff-viz` |
 | Review 某次提交 / 某个范围 | `diff-viz --last` / `--range A..B` / `--base main` |
 | 在界面里切换仓库、看历史提交 | 点顶部仓库名 → 左侧选仓库 → 右侧「版本链条」点提交 |
+| 直接看远端 PR / MR | 点顶部仓库名 → 「PR / MR」→ 点击目标 PR；或 CLI `diff-viz --pr 123` / `--mr 7` |
 | 叠加 Agent / 人工总结 | `diff-viz annotate --data .diff-review-data.json --annotations ann.json` |
 | 给已打开的任意 Review 补注解 | `diff-viz annotate --review <id> --annotations ann.json`（id 在页面 URL 的 `?review=` 后） |
 | 只拿机器可读结果 | `diff-viz --json-only --quiet` |
@@ -76,6 +77,22 @@ diff-viz stop                      # 停止后台 hub
 | 多仓库一起分析 | `diff-viz workspace --init` → 编辑 `diff-viz.workspace.json` → `diff-viz workspace` |
 
 完整命令与参数见 **[docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md)**。
+
+## 远程 PR / MR
+
+仓库远端的 GitHub PR / GitLab MR 可以直接在 hub 里打开：点顶部仓库名 → **PR / MR** 标签 → 点击任意一条，就自动拉取 `refs/pull/<n>/head`（GitLab 为 `refs/merge-requests/<iid>/head`）、fetch 目标分支并生成 `base...head` 的 diff 拓扑。
+
+```bash
+diff-viz --pr 123                 # GitHub PR 编号或 URL
+diff-viz --mr 7                   # GitLab MR
+diff-viz --pr 123 --base release/1.8   # 目标分支不是默认分支时
+```
+
+- 私有仓库配置 `GITHUB_TOKEN` / `GITLAB_TOKEN` 后重启 hub；自建 GitLab 可设 `DIFF_VIZ_PROVIDER=gitlab` 与 `DIFF_VIZ_GITLAB_HOSTS`。
+- PR/MR 元数据写入 `meta.pull`，顶部范围标签显示 `PR #N · 标题`，并带远端链接。
+- 同一 PR 复用同一个 Review（`<projectId>-pull-<number>`），已有注解会尽量保留。
+
+细节与限制见 [docs/pull-requests.md](https://github.com/mdhUser/diff-viz/blob/main/docs/pull-requests.md)。
 
 ## 配置与数据库
 
@@ -147,7 +164,8 @@ diff-viz skill install --agent dsh      # 或 claude / cursor
 | [docs/database.md](https://github.com/mdhUser/diff-viz/blob/main/docs/database.md) | 数据库表/SQL 解析、读取写入边、悬停与抽屉、懒加载 API |
 | [docs/agent-integrations.md](https://github.com/mdhUser/diff-viz/blob/main/docs/agent-integrations.md) | Claude Code / Cursor / Codex 等 Agent 接入方式 |
 | [docs/development.md](https://github.com/mdhUser/diff-viz/blob/main/docs/development.md) | 本地开发、测试、目录结构、发布流程 |
-| [docs/roadmap.md](https://github.com/mdhUser/diff-viz/blob/main/docs/roadmap.md) | 泳道 / 配置 / 数据库视图的迭代计划与后续 v1.4 提议 |
+| [docs/roadmap.md](https://github.com/mdhUser/diff-viz/blob/main/docs/roadmap.md) | 泳道 / 配置 / 数据库视图 / PR-MR 接入的迭代计划与后续提议 |
+| [docs/pull-requests.md](https://github.com/mdhUser/diff-viz/blob/main/docs/pull-requests.md) | 远端 PR/MR 列表、鉴权、自建实例、CLI 用法与限制 |
 
 ## 打赏作者
 

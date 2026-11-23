@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 import {
   Check,
+  ExternalLink,
   FolderGit2,
   GitBranch,
+  GitMerge,
+  GitPullRequest,
   History,
   Loader2,
   Plus,
   RefreshCw,
   X,
 } from 'lucide-react';
-import type { CommitInfo, HubProject } from '../types';
+import type { CommitInfo, HubProject, HubPullRequest } from '../types';
 import { CommitGraph } from './CommitGraph';
 import { apiFetch, describeResponseFailure, responseErrorDetail } from '../api';
 import { cn } from '../cn';
@@ -24,6 +27,7 @@ interface RepoPanelProps {
   onClose: () => void;
   onOpenWorktree: (projectId: string) => void;
   onOpenCommit: (projectId: string, commit: CommitInfo) => void;
+  onOpenPull: (projectId: string, pull: HubPullRequest) => void;
   onRefreshProjects: () => Promise<void> | void;
 }
 
@@ -37,6 +41,7 @@ export function RepoPanel({
   onClose,
   onOpenWorktree,
   onOpenCommit,
+  onOpenPull,
   onRefreshProjects,
 }: RepoPanelProps) {
   const [selectedId, setSelectedId] = useState(currentProjectId ?? projects[0]?.id ?? '');
@@ -45,6 +50,12 @@ export function RepoPanel({
   const [commitsError, setCommitsError] = useState<string | null>(null);
   const [allBranches, setAllBranches] = useState(false);
   const [branch, setBranch] = useState<string | null>(null);
+  const [view, setView] = useState<'commits' | 'pulls'>('commits');
+  const [pulls, setPulls] = useState<HubPullRequest[]>([]);
+  const [pullsInfo, setPullsInfo] = useState<{ provider?: string; host?: string } | null>(null);
+  const [loadingPulls, setLoadingPulls] = useState(false);
+  const [pullsError, setPullsError] = useState<string | null>(null);
+  const [pullsRefresh, setPullsRefresh] = useState(0);
   const [newRoot, setNewRoot] = useState('');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -126,9 +137,59 @@ export function RepoPanel({
     };
   }, [open, selectedId, allBranches]);
 
+  useEffect(() => {
+    if (!open || !selectedId || view !== 'pulls') return undefined;
+    let cancelled = false;
+    setLoadingPulls(true);
+    setPullsError(null);
+    apiFetch(
+      `/api/pulls?project=${encodeURIComponent(selectedId)}${pullsRefresh ? '&refresh=1' : ''}`,
+      { cache: 'no-store' },
+    )
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(describeResponseFailure(response, await responseErrorDetail(response)));
+        }
+        const payload = (await response.json()) as {
+          pulls?: HubPullRequest[];
+          provider?: string;
+          host?: string;
+        };
+        if (!cancelled) {
+          setPulls(payload.pulls ?? []);
+          setPullsInfo({ provider: payload.provider, host: payload.host });
+        }
+      })
+      .catch((loadError) => {
+        if (!cancelled) setPullsError(loadError instanceof Error ? loadError.message : String(loadError));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPulls(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, selectedId, view, pullsRefresh]);
+
   if (!open) return null;
   const selectedProject = projects.find((project) => project.id === selectedId) ?? projects[0];
   const projectCommits = commits;
+  const formatUpdated = (value?: string) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+  const pullHint = pullsError?.includes('鉴权') || pullsError?.includes('权限') || pullsError?.includes('限流')
+    ? '私有仓库需要 token：GitHub 设置 GITHUB_TOKEN，GitLab 设置 GITLAB_TOKEN，然后重启 hub。'
+    : pullsError?.includes('无法识别远端平台')
+      ? '自建 GitLab / GitHub 企业版：设置 DIFF_VIZ_PROVIDER=gitlab|github 后重启 hub。'
+      : null;
 
   return (
     <div
@@ -263,62 +324,170 @@ export function RepoPanel({
             </button>
 
             <div className="mb-2 flex items-center justify-between gap-2 px-1">
-              <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-mist-500">
-                版本链条
-                {branch ? (
-                  <span
-                    className="max-w-[150px] truncate rounded border border-line px-1 py-0.5 font-mono text-[8.5px] normal-case tracking-normal text-mist-600"
-                    title={`当前分支：${branch}`}
-                  >
-                    {branch}
-                  </span>
-                ) : null}
-              </span>
-              <span className="flex shrink-0 items-center gap-1">
+              <div className="flex min-w-0 items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setAllBranches(false)}
+                  onClick={() => setView('commits')}
                   className={cn(
-                    'rounded border px-1.5 py-0.5 text-[9px] transition',
-                    allBranches
-                      ? 'border-transparent text-mist-600 hover:text-mist-400'
-                      : 'border-accent/25 bg-accent-soft text-accent-bright',
-                  )}
-                  title="只显示当前分支的历史"
-                >
-                  当前分支
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAllBranches(true)}
-                  className={cn(
-                    'rounded border px-1.5 py-0.5 text-[9px] transition',
-                    allBranches
+                    'flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9.5px] transition',
+                    view === 'commits'
                       ? 'border-accent/25 bg-accent-soft text-accent-bright'
                       : 'border-transparent text-mist-600 hover:text-mist-400',
                   )}
-                  title="包含所有分支（含他人的远程分支）"
+                  title="按提交查看历史"
                 >
-                  全部分支
+                  <History size={10} />
+                  版本链条
                 </button>
-                {loadingCommits ? <Loader2 size={11} className="animate-spin text-accent" /> : null}
-              </span>
+                <button
+                  type="button"
+                  onClick={() => setView('pulls')}
+                  className={cn(
+                    'flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9.5px] transition',
+                    view === 'pulls'
+                      ? 'border-accent/25 bg-accent-soft text-accent-bright'
+                      : 'border-transparent text-mist-600 hover:text-mist-400',
+                  )}
+                  title="直接打开远端 PR / MR 的 diff 图"
+                >
+                  <GitPullRequest size={10} />
+                  PR / MR
+                </button>
+              </div>
+
+              {view === 'commits' ? (
+                <span className="flex shrink-0 items-center gap-1">
+                  {branch ? (
+                    <span
+                      className="max-w-[150px] truncate rounded border border-line px-1 py-0.5 font-mono text-[8.5px] text-mist-600"
+                      title={`当前分支：${branch}`}
+                    >
+                      {branch}
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setAllBranches(false)}
+                    className={cn(
+                      'rounded border px-1.5 py-0.5 text-[9px] transition',
+                      allBranches
+                        ? 'border-transparent text-mist-600 hover:text-mist-400'
+                        : 'border-accent/25 bg-accent-soft text-accent-bright',
+                    )}
+                    title="只显示当前分支的历史"
+                  >
+                    当前分支
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAllBranches(true)}
+                    className={cn(
+                      'rounded border px-1.5 py-0.5 text-[9px] transition',
+                      allBranches
+                        ? 'border-accent/25 bg-accent-soft text-accent-bright'
+                        : 'border-transparent text-mist-600 hover:text-mist-400',
+                    )}
+                    title="包含所有分支（含他人的远程分支）"
+                  >
+                    全部分支
+                  </button>
+                  {loadingCommits ? <Loader2 size={11} className="animate-spin text-accent" /> : null}
+                </span>
+              ) : (
+                <span className="flex shrink-0 items-center gap-1">
+                  {pullsInfo?.host ? (
+                    <span
+                      className="max-w-[180px] truncate rounded border border-line px-1 py-0.5 font-mono text-[8.5px] text-mist-600"
+                      title={`${pullsInfo.provider === 'gitlab' ? 'GitLab' : 'GitHub'} · ${pullsInfo.host}`}
+                    >
+                      {pullsInfo.provider === 'gitlab' ? 'GitLab' : 'GitHub'} · {pullsInfo.host}
+                    </span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setPullsRefresh((value) => value + 1)}
+                    className="flex h-5 w-5 items-center justify-center rounded border border-line text-mist-600 transition hover:text-mist-300"
+                    title="刷新 PR / MR 列表"
+                  >
+                    <RefreshCw size={10} className={loadingPulls ? 'animate-spin' : ''} />
+                  </button>
+                </span>
+              )}
             </div>
 
-            {commitsError ? (
-              <div className="rounded-lg border border-rose/20 bg-rose/5 px-3 py-2 text-[10px] text-rose">
-                读取提交历史失败：{commitsError}
+            {view === 'commits' ? (
+              <>
+                {commitsError ? (
+                  <div className="rounded-lg border border-rose/20 bg-rose/5 px-3 py-2 text-[10px] text-rose">
+                    读取提交历史失败：{commitsError}
+                  </div>
+                ) : null}
+                <CommitGraph
+                  commits={projectCommits}
+                  currentSha={currentSha}
+                  disabled={busy}
+                  onSelect={(commit) => {
+                    if (selectedProject) onOpenCommit(selectedProject.id, commit);
+                  }}
+                />
+              </>
+            ) : (
+              <div className="space-y-1.5">
+                {pullsError ? (
+                  <div className="rounded-lg border border-rose/20 bg-rose/5 px-3 py-2 text-[10px] leading-5 text-rose">
+                    <div>读取 PR / MR 失败：{pullsError}</div>
+                    {pullHint ? <div className="mt-1 text-mist-500">{pullHint}</div> : null}
+                  </div>
+                ) : null}
+                {loadingPulls && pulls.length === 0 ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-line bg-ink-850/40 px-3 py-4 text-[10px] text-mist-500">
+                    <Loader2 size={12} className="animate-spin text-accent" />
+                    正在读取远端 PR / MR…
+                  </div>
+                ) : null}
+                {!loadingPulls && !pullsError && pulls.length === 0 ? (
+                  <div className="rounded-lg border border-line bg-ink-850/40 px-3 py-5 text-center text-[10px] leading-5 text-mist-500">
+                    没有开放的 PR / MR。
+                    <br />
+                    合并请求创建后会出现在这里，点击即可生成 diff 图。
+                  </div>
+                ) : null}
+                {pulls.map((pull) => (
+                  <button
+                    key={pull.number}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => selectedProject && onOpenPull(selectedProject.id, pull)}
+                    className="flex w-full items-start gap-2.5 rounded-xl border border-line bg-ink-850/50 px-3 py-2.5 text-left transition hover:border-accent/30 hover:bg-accent-soft/40 disabled:opacity-50"
+                  >
+                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-bright">
+                      {pull.draft ? <GitMerge size={13} /> : <GitPullRequest size={13} />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className="shrink-0 font-mono text-[9.5px] text-mist-600">#{pull.number}</span>
+                        <span className="truncate text-[11px] font-medium text-mist-200" title={pull.title}>
+                          {pull.title}
+                        </span>
+                        {pull.draft ? (
+                          <span className="shrink-0 rounded border border-line px-1 py-0.5 text-[8px] text-mist-600">
+                            草稿
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[8.5px] text-mist-600">
+                        {pull.author ? <span>{pull.author}</span> : null}
+                        <span className="truncate font-mono">
+                          {pull.sourceBranch} → {pull.targetBranch}
+                        </span>
+                        {pull.updatedAt ? <span>{formatUpdated(pull.updatedAt)}</span> : null}
+                      </span>
+                    </span>
+                    <ExternalLink size={10} className="mt-1 shrink-0 text-mist-600" />
+                  </button>
+                ))}
               </div>
-            ) : null}
-
-            <CommitGraph
-              commits={projectCommits}
-              currentSha={currentSha}
-              disabled={busy}
-              onSelect={(commit) => {
-                if (selectedProject) onOpenCommit(selectedProject.id, commit);
-              }}
-            />
+            )}
           </div>
         </div>
 

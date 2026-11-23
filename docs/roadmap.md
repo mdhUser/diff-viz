@@ -1,10 +1,10 @@
-# 迭代计划：泳道分层 · 配置入图 · 数据库 SQL 视图
+# 迭代计划：泳道分层 · 配置入图 · 数据库 SQL 视图 · 远端 PR/MR
 
 > 目标：把一次 Review 从「文件列表 + 流向」升级为端到端可读的链路：
 > **模块/包（泳道）→ 代码 → 配置文件 → 数据库表（含 SQL）**。
 > 原则：数据契约只做增量、不破坏 1.x；所有解析保持零运行时依赖、只读、可回退。
 
-## 当前状态（2026-11-20）
+## 当前状态（2026-11-23）
 
 | 迭代 | 版本 | 状态 |
 | --- | --- | --- |
@@ -12,7 +12,8 @@
 | 1. 泳道分层 | `v1.1.0` / `v1.1.1` | ✅ 完成 |
 | 2. 配置/资源入图 | `v1.2.0` | ✅ 完成 |
 | 3. 数据库表与 SQL 视图 | `v1.3.0` | ✅ 完成 |
-| 4. 扩展与硬化 | 未排期 | ⏳ 待做 |
+| 4. 远端 PR / MR 接入 | `v1.4.0` | ✅ 完成 |
+| 5. 扩展与硬化 | 未排期 | ⏳ 待做 |
 
 ## 已完成
 
@@ -37,6 +38,15 @@
 - SQL 按表懒加载（`<review>/tables/<payload>.json` + `/api/table`），`/api/data` 只含元数据；上限 300 表 / 每表 200 条 / 单条 4KB，超限写入 `meta.warnings`。
 - 关键文件：`src/sql.mjs`、`src/db.mjs`、`src/review-store.mjs`、`src/hub.mjs`、`web/src/components/TableNode.tsx`、`TableDetail.tsx`、`SqlHoverCard.tsx`。
 
+### v1.4.0 — 远端 PR / MR 接入
+
+- hub「已注册仓库」窗口新增 **PR / MR** 标签：列出 GitHub PR / GitLab MR（编号、标题、作者、来源→目标分支、更新时间、草稿标记），点击即生成 `base...head` 的 Review；顶部显示 `PR #N · 标题` 并可跳远端网页。
+- 平台自动识别：解析 `origin` 的 ssh/https 地址；支持 GitHub / GitLab / 自建实例（`DIFF_VIZ_PROVIDER`、`DIFF_VIZ_*_HOSTS`、`DIFF_VIZ_*_API_URL`）。token 从 `GITHUB_TOKEN` / `GITLAB_TOKEN` 读取，仅在 hub 进程内使用。
+- 自动 fetch `refs/pull/<n>/head` 或 `refs/merge-requests/<iid>/head` + 目标分支；同一 PR 复用 `<projectId>-pull-<number>` Review，注解/审查状态可复用；`meta.pull` 记录元数据。
+- CLI 新增 `--pr <编号|URL>` / `--mr <编号|URL>`，`--base` 可覆盖目标分支。
+- 新增 `GET /api/pulls`（60s 缓存、可 `refresh=1`）与 `POST /api/review {pull}`；列表/详情/鉴权错误给出可操作提示。
+- 关键文件：`src/remotes.mjs`、`src/cli.mjs`、`src/hub.mjs`、`web/src/components/RepoPanel.tsx`、`web/src/components/Header.tsx`。
+
 ## 数据契约增量（1.x 兼容）
 
 - 节点：`kind: "code" | "config"`、`resourceKind`、`moduleId/moduleLabel/modulePath`、`packagePath`。
@@ -45,7 +55,7 @@
 - 边 `relation`：`imports | binds | config | class-ref | reads_table | writes_table`，方向统一为「source 依赖 target」；表边固定「代码 → 表」不随视图翻转。
 - 旧数据：无新字段时前端回退（目录泳道、隐藏配置/DB 层）；旧单文件 Review 可读并在写回时升级。
 
-## 后续迭代 v1.4（提议）
+## 后续迭代 v1.5（提议）
 
 1. **properties / yaml 键引用**：`@Value("${key}")`、`@ConfigurationProperties(prefix)` 与配置键建立边，配置改动能命中使用方；keys 已在 v1.2 解析，补键索引与 Java 注解匹配。
 2. **Spring `component-scan` 包映射**：把 `base-package` 映射到包内 Java 文件，补齐 Spring 配置到代码的边。
@@ -61,4 +71,5 @@
 - **泳道布局**：复用 dagre 计算依赖深度，再按模块分带 + 深度分桶打包（每列最多 5 行），避免单模块文件多时拉出超长泳道；不使用 dagre compound clusters（边路由与回归风险更高）。
 - **配置节点**：正则/状态机静态解析，不引入 XML/SQL 解析库；未识别内容保留节点、不猜测边。方向统一「依赖方 → 被依赖方」，复用现有反向 BFS 影响分析。
 - **数据库表**：作为展示型虚拟节点，不计入 `changedFiles/impactedFiles`；SQL 文本懒加载，manifest 只保留元数据，避免大仓库首屏变慢。
+- **PR/MR 接入**：平台识别只依赖 `origin` URL 与可覆盖的环境变量；拉取走 `git fetch` + 原生 `fetch`，不新增运行时依赖；Review 用 `merge-base(base, head)..head` 三点范围，与 PR 显示 diff 一致；API token 只留在 hub 进程，不下发浏览器；PR 的 ref 视为不可变快照，不参与工作区文件监听。
 - **零依赖**：运行时仍然只用 Node 内置模块，SQL/XML 解析均为手写扫描器。

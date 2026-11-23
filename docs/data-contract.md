@@ -125,6 +125,24 @@
 - `tables/<payload>.json` 内容：`{ "statements": [{ id, operation, sql, file, line, mapper, dynamic }] }`。
 - `/api/data?full=1` 会合并 SQL 文本；默认 `/api/data` 只有元数据。详见 [database.md](database.md)。
 
+## 远端 PR / MR（1.4 起）
+
+Review 的 `meta` 可选带 `pull`：
+
+```json
+"pull": {
+  "provider": "github", "number": 123, "title": "feat: fleet",
+  "author": "maodhui", "sourceBranch": "feature/fleet", "targetBranch": "main",
+  "baseBranch": "main", "host": "github.com", "repoPath": "acme/demo",
+  "url": "https://github.com/acme/demo/pull/123", "draft": false
+}
+```
+
+- 生成方式：hub `POST /api/review` body `{ "projectId": "…", "pull": { "number": 123, "base": "可选目标分支" } }`；或 CLI `--pr/--mr`。hub 会先拉取 PR 详情、fetch `refs/pull/<n>/head`（GitLab `refs/merge-requests/<iid>/head`）和目标分支，再用 `base...head` 走普通 Review 管线。
+- Review id 固定为 `<projectId>-pull-<number>`，重复打开复用同一份 Review/注解。
+- 列表接口：`GET /api/pulls?project=<projectId>[&refresh=1][&limit=30]` → `{ provider, host, repoPath, webUrl, pulls: [...] }`，hub 端缓存 60 秒。
+- `meta.rangeLabel` 为 `PR #N · 标题`、`meta.branch` 为来源分支；`meta.scopeLabel` 为 `pull`。token 只在 hub 进程内使用，不进入浏览器或数据文件。
+
 ## 状态持久化
 
 - 勾选 TODO / 标记 Review：`POST /api/state` → 只重写对应 Review 的清单，不碰节点内容文件。

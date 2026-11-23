@@ -218,10 +218,12 @@ export function App() {
       projectId,
       scope,
       commit,
+      pull,
     }: {
       projectId: string;
-      scope: 'worktree' | 'commit' | 'last' | 'staged' | 'range' | 'base';
+      scope?: 'worktree' | 'commit' | 'last' | 'staged' | 'range' | 'base';
       commit?: string;
+      pull?: { number: number; base?: string };
     }) => {
       setSwitching(true);
       setSwitchError(null);
@@ -229,7 +231,7 @@ export function App() {
         const response = await apiFetch('/api/review', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId, scope, commit }),
+          body: JSON.stringify(pull ? { projectId, pull } : { projectId, scope, commit }),
         });
         if (!response.ok) {
           const detail = await responseErrorDetail(response);
@@ -979,6 +981,9 @@ export function App() {
         onRefreshProjects={refreshProjects}
         onOpenCommit={(projectId, commit) => {
           void requestReview({ projectId, scope: 'commit', commit: commit.sha });
+        }}
+        onOpenPull={(projectId, pull) => {
+          void requestReview({ projectId, pull: { number: pull.number } });
         }}
       />
 

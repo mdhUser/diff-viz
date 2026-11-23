@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { GitRepo, findRepoRoot } from './git.mjs';
 import { applyAnnotations, buildReviewData, mergePreviousState } from './collect.mjs';
+import { detectRepoProvider, listPullRequests, preparePullReview } from './remotes.mjs';
 import { updateReviewState, openInBrowser } from './server.mjs';
 import { computeServiceImpact, detectServiceEdges, loadWorkspace } from './workspace.mjs';
 import {
@@ -355,6 +356,8 @@ export async function startHub({
   const sseClients = new Set();
   const watchers = new Map();
   const lastPayloads = new Map();
+  const pullListCache = new Map();
+  const PULL_LIST_TTL = 60_000;
   const WATCH_IGNORE = /(^|\/)(\.git|node_modules|dist|build|\.next|out|target|vendor|__pycache__|\.venv|venv)(\/|$)/;
 
   const broadcast = (event) => {
@@ -756,6 +759,7 @@ export async function startHub({
   };
 
   const reviewIdFor = (projectId, scope, data, payload) => {
+    if (payload.pull?.number) return `${projectId}-pull-${payload.pull.number}`;
     if (scope === 'worktree') return `${projectId}-worktree`;
     if (scope === 'staged') return `${projectId}-staged`;
     if (scope === 'commit') return `${projectId}-commit-${String(payload.commit).slice(0, 12)}`;
@@ -786,7 +790,14 @@ export async function startHub({
     const reviewId = reviewIdFor(project.id, scope, data, payload);
     data.meta.projectId = project.id;
     data.meta.reviewId = reviewId;
-    data.meta.scopeLabel = scope;
+    data.meta.scopeLabel = payload.pull ? 'pull' : scope;
+    if (payload.pull) {
+      data.meta.pull = payload.pull;
+      data.meta.rangeLabel =
+        `${payload.pull.provider === 'gitlab' ? 'MR' : 'PR'} #${payload.pull.number}` +
+        `${payload.pull.title ? ` · ${payload.pull.title}` : ''}`;
+      if (payload.pull.sourceBranch) data.meta.branch = payload.pull.sourceBranch;
+    }
     const previousStore = loadStore(reviewId);
     if (previousStore) harvestAnnotations(project.id, previousStore);
     backfillProjectAnnotations(project.id);
@@ -799,7 +810,9 @@ export async function startHub({
       scope,
       ...(maxScanFiles ? { maxScanFiles: Number(maxScanFiles) } : {}),
     });
-    watchProject(project);
+    // PR/MR refs are immutable snapshots: watching the working tree would
+    // re-derive them with a plain range and lose the pull metadata.
+    if (!payload.pull) watchProject(project);
     return { reviewId, data };
   };
 
@@ -914,9 +927,11 @@ export async function startHub({
     const inferredScope =
       meta.mode === 'worktree' ? 'worktree' : meta.mode === 'staged' ? 'staged' : 'range';
     const inferredId =
-      inferredScope === 'range'
-        ? `${project.id}-range-${shortId(`${meta.rangeLabel}:${meta.headRef}`, 10)}`
-        : `${project.id}-${inferredScope}`;
+      meta.pull?.number
+        ? `${project.id}-pull-${meta.pull.number}`
+        : inferredScope === 'range'
+          ? `${project.id}-range-${shortId(`${meta.rangeLabel}:${meta.headRef}`, 10)}`
+          : `${project.id}-${inferredScope}`;
     const reviewId = safeReviewId(payload.reviewId || meta.reviewId, inferredId);
     const patch = { projectId: project.id, reviewId };
     const dir = reviewPath(reviewId);
@@ -1009,6 +1024,28 @@ export async function startHub({
           home,
           projects: [...projects.values()].sort((a, b) => a.name.localeCompare(b.name)),
         });
+        return;
+      }
+
+      if (pathname === '/api/pulls') {
+        const project = getProject(url.searchParams.get('project'));
+        const refresh = url.searchParams.get('refresh') === '1';
+        const cached = pullListCache.get(project.id);
+        if (!refresh && cached && Date.now() - cached.at < PULL_LIST_TTL) {
+          sendJson(res, 200, cached.value);
+          return;
+        }
+        const info = detectRepoProvider(new GitRepo(project.root));
+        const pulls = await listPullRequests(info, { limit: Number(url.searchParams.get('limit')) || 30 });
+        const value = {
+          provider: info.provider,
+          host: info.host,
+          repoPath: info.path,
+          webUrl: info.webUrl,
+          pulls,
+        };
+        pullListCache.set(project.id, { at: Date.now(), value });
+        sendJson(res, 200, value);
         return;
       }
 
@@ -1123,6 +1160,20 @@ export async function startHub({
       if (pathname === '/api/review' && req.method === 'POST') {
         const payload = await readBody(req);
         const project = payload.projectId ? getProject(payload.projectId) : registerProject(payload.root);
+        if (payload.pull) {
+          const number = Number(payload.pull.number);
+          if (!Number.isInteger(number) || number <= 0) {
+            sendJson(res, 400, { error: '缺少有效的 PR/MR 编号。' });
+            return;
+          }
+          const prepared = await preparePullReview(new GitRepo(project.root), {
+            number,
+            base: payload.pull.base,
+          });
+          payload.scope = 'range';
+          payload.range = prepared.range;
+          payload.pull = prepared.pull;
+        }
         const { reviewId } = analyzeProject(project, payload);
         sendJson(res, 200, {
           ok: true,

@@ -22,7 +22,9 @@ diff-viz skill install          # 把薄 SKILL.md 注册到 Agent 技能目录
 | `--staged` | 仅查看暂存区 |
 | `--last` | 查看最近一次提交 |
 | `--range <A..B\|A...B>` | 查看提交范围 |
-| `--base <ref>` | 查看与目标分支的差异（`merge-base(ref, HEAD)..HEAD`） |
+| `--base <ref>` | 查看与目标分支的差异（`merge-base(ref, HEAD)..HEAD`）；配合 `--pr/--mr` 可覆盖目标分支 |
+| `--pr <编号\|URL>` | 拉取 GitHub PR（`refs/pull/<n>/head`）并生成 Review |
+| `--mr <编号\|URL>` | 拉取 GitLab MR（`refs/merge-requests/<iid>/head`）并生成 Review |
 | `--no-untracked` | 不把未跟踪的新文件纳入 Review |
 | `--repo <dir>` | 指定仓库目录（默认当前目录） |
 
@@ -105,6 +107,12 @@ hub 的状态目录默认 `~/.diff-viz/`，不可写时（例如 Agent 沙箱）
 | `DIFF_VIZ_TOKEN` | 固定 hub 访问令牌（默认自动生成在 `~/.diff-viz/token`） |
 | `DIFF_VIZ_NO_AUTH=1` | 关闭 `/api/*` 的令牌校验（保留 Host 白名单；不建议） |
 | `DIFF_VIZ_ALLOWED_HOSTS` | 额外允许的 `Host` 主机名，逗号分隔；`--host 0.0.0.0` 之外需要域名访问时使用 |
+| `GITHUB_TOKEN` / `GH_TOKEN` | GitHub API token；私有仓库的 PR 列表/详情需要，公开仓库可省略 |
+| `GITLAB_TOKEN` / `GLAB_TOKEN` | GitLab API token；私有项目需要 `read_api` 权限 |
+| `DIFF_VIZ_PROVIDER` | 强制远端平台 `github` / `gitlab`（自建域名不带关键字时） |
+| `DIFF_VIZ_GITHUB_HOSTS` / `DIFF_VIZ_GITLAB_HOSTS` | 额外识别的远端域名（逗号分隔） |
+| `DIFF_VIZ_GITHUB_API_URL` / `DIFF_VIZ_GITLAB_API_URL` | 覆盖 API 根地址（自建、反向代理、测试） |
+| `DIFF_VIZ_REMOTE_URL` | 覆盖用于识别的远端地址（多远程或调试） |
 
 ## hub 访问控制
 

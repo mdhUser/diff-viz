@@ -2,6 +2,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   GitBranch,
   History,
   PanelLeftClose,
@@ -120,6 +121,18 @@ export function Header({
         <span className="hidden max-w-[230px] truncate rounded-md border border-line bg-ink-850 px-1.5 py-[3px] font-mono text-[10px] text-mist-500 xl:inline">
           {prettyRangeLabel(meta)}
         </span>
+        {meta.pull?.url ? (
+          <a
+            href={meta.pull.url}
+            target="_blank"
+            rel="noreferrer"
+            title={`在 ${meta.pull.host || (meta.pull.provider === 'gitlab' ? 'GitLab' : 'GitHub')} 打开`}
+            className="hidden shrink-0 items-center gap-1 rounded-md border border-[rgba(196,122,44,0.35)] bg-[rgba(196,122,44,0.08)] px-1.5 py-[3px] font-mono text-[9.5px] text-[#a35f14] transition hover:bg-[rgba(196,122,44,0.14)] md:flex"
+          >
+            {meta.pull.provider === 'gitlab' ? 'MR' : 'PR'} #{meta.pull.number}
+            <ExternalLink size={9} />
+          </a>
+        ) : null}
       </div>
 
       <div className="ml-auto flex items-center gap-2">

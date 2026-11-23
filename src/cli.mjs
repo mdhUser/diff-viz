@@ -18,6 +18,7 @@ import { isInside, readReviewStore, reviewLayout, writeReviewStore } from './rev
 import { openInBrowser } from './server.mjs';
 import { AGENTS, agentNames, installSkill } from './skill.mjs';
 import { writeJsonAtomic } from './util.mjs';
+import { parsePullNumber, preparePullReview, pullLabel } from './remotes.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
@@ -39,6 +40,8 @@ diff-viz · 本地代码变更可视化 Review 工具
   --last                  查看最近一次提交
   --range <A..B|A...B>    查看提交范围
   --base <ref>            查看与目标分支的差异 (merge-base..HEAD)
+  --pr <编号|URL>         分析 GitHub PR（自动 fetch refs/pull/<n>/head）
+  --mr <编号|URL>         分析 GitLab MR（自动 fetch refs/merge-requests/<iid>/head）
 
 输出与界面:
   --data <file>           清单文件路径 (默认 <repo>/.diff-review-data.json，节点内容存 <file>.nodes/)
@@ -115,6 +118,8 @@ const BOOLEAN_FLAGS = new Set([
 const VALUE_FLAGS = new Set([
   'range',
   'base',
+  'pr',
+  'mr',
   'data',
   'annotations',
   'summary',
@@ -620,6 +625,22 @@ export async function main(argv = process.argv.slice(2)) {
   const repo = repoFromOptions(options);
   const dataPath = dataPathFor(repo, options);
   const previous = readReviewStore(dataPath, { strict: false })?.manifest ?? null;
+
+  // Remote PR/MR: resolve metadata + fetch refs, then reuse the normal
+  // range-review pipeline. `--base` becomes the target-branch override.
+  let pull = null;
+  if (options.pr || options.mr) {
+    if (options.pr && options.mr) throw new Error('--pr 与 --mr 只能选一个。');
+    const input = options.pr || options.mr;
+    const prepared = await preparePullReview(repo, {
+      number: parsePullNumber(input),
+      base: options.base,
+    });
+    pull = prepared.pull;
+    options.range = prepared.range;
+    delete options.base;
+  }
+
   const data = buildReviewData(repo, {
     staged: options.staged,
     last: options.last,
@@ -641,6 +662,12 @@ export async function main(argv = process.argv.slice(2)) {
     ],
     version: pkg.version,
   });
+  if (pull) {
+    data.meta.pull = pull;
+    data.meta.rangeLabel = pullLabel(pull);
+    data.meta.scopeLabel = 'pull';
+    if (pull.sourceBranch) data.meta.branch = pull.sourceBranch;
+  }
   mergePreviousState(data, previous);
   if (options.summary) data.meta.overallSummary = options.summary;
   writeReviewStore(dataPath, data);
