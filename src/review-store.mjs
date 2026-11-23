@@ -208,6 +208,7 @@ export function writeReviewStore(target, data) {
     edges: Array.isArray(data.edges) ? data.edges : [],
     nodes: stubs,
     ...(tableStubs.length > 0 ? { tables: tableStubs, components: data.components ?? [] } : {}),
+    ...(Array.isArray(data.comments) && data.comments.length > 0 ? { comments: data.comments } : {}),
   };
   writeJsonAtomic(layout.manifestPath, manifest);
   // Only drop old payloads once the new manifest is on disk, so a crash cannot
@@ -243,6 +244,7 @@ export function readReviewStore(target, { strict = true } = {}) {
         edges: Array.isArray(raw.edges) ? raw.edges : [],
         nodes: Array.isArray(raw.nodes) ? raw.nodes : [],
         ...(Array.isArray(raw.tables) ? { tables: raw.tables, components: raw.components ?? [] } : {}),
+        ...(Array.isArray(raw.comments) ? { comments: raw.comments } : {}),
       }
     : raw;
   if (!Array.isArray(data.nodes)) throw new Error(`Review 数据缺少 nodes：${layout.manifestPath}`);
@@ -312,6 +314,7 @@ export function readReviewStore(target, { strict = true } = {}) {
         ...(Array.isArray(data.tables) && data.tables.length > 0
           ? { tables: store.readTables(), components: data.components ?? [] }
           : {}),
+        ...(Array.isArray(data.comments) && data.comments.length > 0 ? { comments: data.comments } : {}),
       };
     },
     save() {
@@ -329,6 +332,7 @@ export function readReviewStore(target, { strict = true } = {}) {
         ...(Array.isArray(data.tables) && data.tables.length > 0
           ? { tables: data.tables, components: data.components ?? [] }
           : {}),
+        ...(Array.isArray(data.comments) && data.comments.length > 0 ? { comments: data.comments } : {}),
       });
       return data;
     },
@@ -392,6 +396,9 @@ export function copyReviewStore(source, targetDir, { metaPatch = {} } = {}) {
       nodes: source.data.nodes,
       ...(sourceTables.length > 0
         ? { tables: source.data.tables, components: source.data.components ?? [] }
+        : {}),
+      ...(Array.isArray(source.data.comments) && source.data.comments.length > 0
+        ? { comments: source.data.comments }
         : {}),
     };
     writeJsonAtomic(layout.manifestPath, manifest);

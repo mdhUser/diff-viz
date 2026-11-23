@@ -44,6 +44,8 @@ export interface ReviewNode {
   impactOrigins?: string[];
   imports?: string[];
   importedBy?: string[];
+  reviewComments?: number;
+  reviewCommentUnresolved?: number;
   // 1.3 additive: tables used by this file's SQL (ids like table:t_order).
   sqlTables?: string[];
   summarySource?: 'auto' | 'agent' | string;
@@ -56,6 +58,25 @@ export interface ReviewNode {
   moduleLabel?: string;
   modulePath?: string;
   packagePath?: string;
+}
+
+export interface ReviewComment {
+  id: string;
+  provider?: 'github' | 'gitlab' | string;
+  kind: 'inline' | 'general';
+  path?: string;
+  oldPath?: string | null;
+  line?: number | null;
+  startLine?: number | null;
+  side?: 'new' | 'old' | string;
+  author?: string;
+  createdAt?: string;
+  body: string;
+  url?: string;
+  resolved?: boolean | null;
+  outdated?: boolean;
+  replyTo?: string | null;
+  threadId?: string;
 }
 
 export interface SqlStatement {
@@ -151,6 +172,7 @@ export interface ReviewMeta {
     scannedFiles?: number;
     configFiles?: number;
     tables?: number;
+    comments?: number;
   };
 }
 
@@ -201,11 +223,12 @@ export interface ReviewData {
   edges: ReviewEdge[];
   tables?: ReviewTable[];
   components?: ReviewComponent[];
+  comments?: ReviewComment[];
 }
 
 export type LayoutDirection = 'LR' | 'TB';
 export type EdgeMode = 'impact' | 'dependency';
-export type DrawerTab = 'summary' | 'diff' | 'todos';
+export type DrawerTab = 'summary' | 'diff' | 'todos' | 'comments';
 
 export interface ReviewModule {
   id: string;
@@ -234,6 +257,8 @@ export interface HubPullRequest {
 }
 
 export interface PullRequestInfo extends HubPullRequest {
+  commentCount?: number;
+  unresolvedCommentCount?: number;
   baseBranch?: string;
   host?: string;
   repoPath?: string;

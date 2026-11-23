@@ -193,7 +193,11 @@ function authHint(provider) {
     : '私有仓库请设置 GITLAB_TOKEN（或 GLAB_TOKEN），或先 glab auth login；公开项目可不配置。';
 }
 
-async function requestJson(info, url, { env = process.env, fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export async function requestJsonRaw(
+  info,
+  url,
+  { env = process.env, fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {},
+) {
   if (typeof fetchImpl !== 'function') throw new Error('当前 Node 版本缺少 fetch，无法访问远端 API。');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -231,7 +235,12 @@ async function requestJson(info, url, { env = process.env, fetchImpl = globalThi
     }
     throw new Error(`${info.provider} API 请求失败（HTTP ${status}）${suffix}`);
   }
-  return response.json();
+  return { data: await response.json(), headers: response.headers };
+}
+
+async function requestJson(info, url, options = {}) {
+  const { data } = await requestJsonRaw(info, url, options);
+  return data;
 }
 
 function safeHttpUrl(value) {

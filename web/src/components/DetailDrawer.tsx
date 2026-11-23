@@ -6,6 +6,7 @@ import {
   FileCode2,
   GitCompareArrows,
   ListChecks,
+  MessageSquare,
   EyeOff,
   Sparkles,
   X,
@@ -17,6 +18,7 @@ import { cn } from '../cn';
 import { SummaryTab } from './tabs/SummaryTab';
 import { DiffTab } from './tabs/DiffTab';
 import { TodosTab } from './tabs/TodosTab';
+import { CommentsTab } from './tabs/CommentsTab';
 
 interface DetailDrawerProps {
   node: ReviewNode;
@@ -58,6 +60,8 @@ export function DetailDrawer({
   const Icon = meta.icon;
   const hunkCount = node.hunkCount ?? (node.diff ? (node.diff.match(/^@@/gm) || []).length : 0);
   const todoOpen = todos.filter((todo) => !isTodoDone(todo)).length;
+  const commentCount = node.reviewComments ?? 0;
+  const unresolvedComments = node.reviewCommentUnresolved ?? 0;
 
   useEffect(() => {
     setCopied(false);
@@ -172,6 +176,15 @@ export function DetailDrawer({
               <span className="font-mono">{languageLabel(node.language)}</span>
             </>
           )}
+          {commentCount > 0 ? (
+            <span
+              className={cn('flex items-center gap-1', unresolvedComments > 0 ? 'text-amber' : 'text-mist-500')}
+              title={`${commentCount} 条 Reviewer 评论${unresolvedComments > 0 ? `，${unresolvedComments} 条未解决` : ''}`}
+            >
+              <MessageSquare size={10} />
+              {commentCount} 评论
+            </span>
+          ) : null}
           <span className="ml-auto flex items-center gap-1">
             <FileCode2 size={10} />
             {todos.length} todos
@@ -199,6 +212,14 @@ export function DetailDrawer({
             badge={todoOpen}
             onClick={() => onTabChange('todos')}
           />
+          <TabButton
+            active={tab === 'comments'}
+            icon={<MessageSquare size={12} />}
+            label="Reviewer 评论"
+            count={commentCount}
+            badge={unresolvedComments}
+            onClick={() => onTabChange('comments')}
+          />
         </div>
       </div>
 
@@ -213,6 +234,7 @@ export function DetailDrawer({
           />
         ) : null}
         {tab === 'diff' ? <DiffTab node={node} /> : null}
+        {tab === 'comments' ? <CommentsTab node={node} data={data} /> : null}
         {tab === 'todos' ? (
           <TodosTab
             node={node}

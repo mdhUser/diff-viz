@@ -4,7 +4,7 @@
 > **模块/包（泳道）→ 代码 → 配置文件 → 数据库表（含 SQL）**。
 > 原则：数据契约只做增量、不破坏 1.x；所有解析保持零运行时依赖、只读、可回退。
 
-## 当前状态（2026-11-23）
+## 当前状态（2026-11-23，v1.5.0）
 
 | 迭代 | 版本 | 状态 |
 | --- | --- | --- |
@@ -12,8 +12,9 @@
 | 1. 泳道分层 | `v1.1.0` / `v1.1.1` | ✅ 完成 |
 | 2. 配置/资源入图 | `v1.2.0` | ✅ 完成 |
 | 3. 数据库表与 SQL 视图 | `v1.3.0` | ✅ 完成 |
-| 4. 远端 PR / MR 接入 | `v1.4.0` | ✅ 完成 |
-| 5. 扩展与硬化 | 未排期 | ⏳ 待做 |
+| 4. 远端 PR / MR 接入 | `v1.4.0` / `v1.4.1` | ✅ 完成 |
+| 5. Reviewer 评论入图 | `v1.5.0` | ✅ 完成 |
+| 6. 扩展与硬化 | 未排期 | ⏳ 待做 |
 
 ## 已完成
 
@@ -47,6 +48,13 @@
 - 新增 `GET /api/pulls`（60s 缓存、可 `refresh=1`）与 `POST /api/review {pull}`；列表/详情/鉴权错误给出可操作提示。
 - 关键文件：`src/remotes.mjs`、`src/cli.mjs`、`src/hub.mjs`、`web/src/components/RepoPanel.tsx`、`web/src/components/Header.tsx`。
 
+### v1.5.0 — Reviewer 评论入图
+
+- 打开 PR/MR 时读取 GitHub 行内评论 + issue 评论、GitLab notes；跳过 system note，保留 resolved/line 信息。
+- 文件节点与侧栏显示评论数徽章（未解决为琥珀色），头部/侧栏汇总总评论数；抽屉新增「Reviewer 评论」Tab；工具栏「有评论」过滤只看评论文件。
+- 评论随 Review 清单持久化；读取失败降级为 `meta.warnings`，不阻断 Review。
+- 关键文件：`src/comments.mjs`、`src/cli.mjs`、`src/hub.mjs`、`src/review-store.mjs`、`web/src/components/tabs/CommentsTab.tsx`、`FileNode.tsx`、`Sidebar.tsx`。
+
 ## 数据契约增量（1.x 兼容）
 
 - 节点：`kind: "code" | "config"`、`resourceKind`、`moduleId/moduleLabel/modulePath`、`packagePath`。
@@ -55,7 +63,7 @@
 - 边 `relation`：`imports | binds | config | class-ref | reads_table | writes_table`，方向统一为「source 依赖 target」；表边固定「代码 → 表」不随视图翻转。
 - 旧数据：无新字段时前端回退（目录泳道、隐藏配置/DB 层）；旧单文件 Review 可读并在写回时升级。
 
-## 后续迭代 v1.5（提议）
+## 后续迭代 v1.6（提议）
 
 1. **properties / yaml 键引用**：`@Value("${key}")`、`@ConfigurationProperties(prefix)` 与配置键建立边，配置改动能命中使用方；keys 已在 v1.2 解析，补键索引与 Java 注解匹配。
 2. **Spring `component-scan` 包映射**：把 `base-package` 映射到包内 Java 文件，补齐 Spring 配置到代码的边。

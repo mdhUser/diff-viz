@@ -19,6 +19,7 @@ import { openInBrowser } from './server.mjs';
 import { AGENTS, agentNames, installSkill } from './skill.mjs';
 import { writeJsonAtomic } from './util.mjs';
 import { parsePullNumber, preparePullReview, pullLabel } from './remotes.mjs';
+import { attachComments, fetchPullComments } from './comments.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
@@ -629,6 +630,7 @@ export async function main(argv = process.argv.slice(2)) {
   // Remote PR/MR: resolve metadata + fetch refs, then reuse the normal
   // range-review pipeline. `--base` becomes the target-branch override.
   let pull = null;
+  let pullInfo = null;
   if (options.pr || options.mr) {
     if (options.pr && options.mr) throw new Error('--pr 与 --mr 只能选一个。');
     const input = options.pr || options.mr;
@@ -637,6 +639,7 @@ export async function main(argv = process.argv.slice(2)) {
       base: options.base,
     });
     pull = prepared.pull;
+    pullInfo = prepared.info;
     options.range = prepared.range;
     delete options.base;
   }
@@ -667,6 +670,20 @@ export async function main(argv = process.argv.slice(2)) {
     data.meta.rangeLabel = pullLabel(pull);
     data.meta.scopeLabel = 'pull';
     if (pull.sourceBranch) data.meta.branch = pull.sourceBranch;
+    if (pullInfo) {
+      try {
+        const fetched = await fetchPullComments(pullInfo, pull.number);
+        attachComments(data, fetched.comments);
+        if (fetched.warnings.length > 0) {
+          data.meta.warnings = [...(data.meta.warnings || []), ...fetched.warnings];
+        }
+      } catch (error) {
+        data.meta.warnings = [
+          ...(data.meta.warnings || []),
+          `读取 PR/MR 评论失败：${error instanceof Error ? error.message : String(error)}`,
+        ];
+      }
+    }
   }
   mergePreviousState(data, previous);
   if (options.summary) data.meta.overallSummary = options.summary;

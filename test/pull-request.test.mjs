@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startHub } from '../src/hub.mjs';
+import { readReviewStore } from '../src/review-store.mjs';
 import { cleanup, commitAll, hubFetch, makeTempRepo, run, write } from './helpers.mjs';
 
 const CLI = fileURLToPath(new URL('../bin/diff-viz.mjs', import.meta.url));
@@ -55,7 +56,38 @@ function mockPullApi(server, fixture) {
   ];
   server.on('request', (req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    if (/\/pulls\/7/.test(req.url || '')) {
+    const url = req.url || '';
+    if (/\/pulls\/7\/comments/.test(url)) {
+      res.end(
+        JSON.stringify([
+          {
+            id: 101,
+            path: 'feature.ts',
+            line: 1,
+            body: '这个改动需要补测试',
+            user: { login: 'alice' },
+            created_at: '2026-11-22T10:00:00Z',
+            html_url: 'https://github.com/acme/demo/pull/7#discussion_r101',
+          },
+        ]),
+      );
+      return;
+    }
+    if (/\/issues\/7\/comments/.test(url)) {
+      res.end(
+        JSON.stringify([
+          {
+            id: 201,
+            body: '整体思路可以',
+            user: { login: 'bob' },
+            created_at: '2026-11-22T09:00:00Z',
+            html_url: 'https://github.com/acme/demo/pull/7#issuecomment-201',
+          },
+        ]),
+      );
+      return;
+    }
+    if (/\/pulls\/7/.test(url)) {
       res.end(JSON.stringify(pulls[0]));
     } else {
       res.end(JSON.stringify(pulls));
@@ -96,6 +128,11 @@ test('CLI --pr analyzes a remote pull request and records meta.pull', async () =
     assert.match(payload.meta.rangeLabel, /PR #7/);
     assert.equal(payload.meta.branch, 'feature');
     assert.ok(payload.nodes >= 1);
+    assert.equal(payload.meta.pull.commentCount, 2);
+    const store = readReviewStore(path.join(fixture.root, '.diff-review-data.json'));
+    assert.equal(store.manifest.meta.pull.commentCount, 2);
+    assert.equal(store.manifest.comments.length, 2);
+    assert.equal(store.manifest.nodes.find((node) => node.path === 'feature.ts')?.reviewComments, 1);
   } finally {
     await new Promise((resolve) => server.close(resolve));
     cleanup(fixture.root);
@@ -141,6 +178,9 @@ test('hub lists remote pulls and opens them as a stable review', async () => {
     assert.equal(data.meta.pull.number, 7);
     assert.match(data.meta.rangeLabel, /PR #7/);
     assert.ok(data.nodes.some((node) => node.path === 'feature.ts'));
+    assert.equal(data.meta.pull.commentCount, 2);
+    assert.equal(data.comments.length, 2);
+    assert.equal(data.nodes.find((node) => node.path === 'feature.ts')?.reviewComments, 1);
 
     const second = await hubFetch(hub, 'api/review', {
       method: 'POST',

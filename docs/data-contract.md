@@ -143,6 +143,25 @@ Review 的 `meta` 可选带 `pull`：
 - 列表接口：`GET /api/pulls?project=<projectId>[&refresh=1][&limit=30]` → `{ provider, host, repoPath, webUrl, pulls: [...] }`，hub 端缓存 60 秒。
 - `meta.rangeLabel` 为 `PR #N · 标题`、`meta.branch` 为来源分支；`meta.scopeLabel` 为 `pull`。token 只在 hub 进程内使用，不进入浏览器或数据文件。
 
+## PR/MR 评论（1.5 起）
+
+打开 PR/MR Review 时会附带 `comments`（最多 500 条，正文单条最多 6000 字符）：
+
+```json
+"comments": [{
+  "id": "gitlab:123", "provider": "gitlab", "kind": "inline",
+  "path": "src/a.ts", "line": 12, "side": "new",
+  "author": "毛狄辉", "createdAt": "2026-11-22T08:00:00Z",
+  "body": "这里建议用新接口", "url": "https://gitlab…/-/merge_requests/9#note_123",
+  "resolved": false, "outdated": false, "threadId": "disc-1"
+}]
+```
+
+- `kind`：`inline`（挂在文件/行）或 `general`（PR 整体讨论，`path` 为空）。
+- 节点新增可选 `reviewComments`（该文件评论数）与 `reviewCommentUnresolved`（未解决数）；`meta.pull.commentCount` / `unresolvedCommentCount`、`meta.stats.comments` 为汇总。
+- 评论随 review 清单保存（`comments` 顶层字段），不单独懒加载；旧 Review 无该字段时界面按 0 处理。
+- 读取失败不阻断 Review，警告写入 `meta.warnings`。
+
 ## 状态持久化
 
 - 勾选 TODO / 标记 Review：`POST /api/state` → 只重写对应 Review 的清单，不碰节点内容文件。

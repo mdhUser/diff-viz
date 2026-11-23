@@ -61,6 +61,7 @@ export function Header({
 }: HeaderProps) {
   const { meta } = data;
   const stats = meta.stats;
+  const commentCount = data.comments?.length ?? 0;
   const current = hasSelection ? selectedIndex + 1 : 0;
 
   return (
@@ -143,6 +144,9 @@ export function Header({
           <div className="h-4 w-px bg-line" />
           <Stat value={String(stats.impactedFiles)} label="受影响" color="#435bc0" />
           <Stat value={String(openTodos)} label="待办" color="#a97418" />
+          {commentCount > 0 ? (
+            <Stat value={String(commentCount)} label="评论" color="#4a5f9e" />
+          ) : null}
         </div>
 
         <div className="flex items-center rounded-lg border border-line bg-ink-900/70 p-0.5">

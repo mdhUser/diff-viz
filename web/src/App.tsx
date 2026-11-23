@@ -78,6 +78,7 @@ interface PanelWidths {
   groupBy: LaneGroupBy;
   showConfig: boolean;
   showDb: boolean;
+  commentsOnly: boolean;
 }
 
 function readPanelWidths(): PanelWidths {
@@ -88,6 +89,7 @@ function readPanelWidths(): PanelWidths {
     groupBy: 'module',
     showConfig: true,
     showDb: true,
+    commentsOnly: false,
   };
   try {
     const raw = window.localStorage.getItem(UI_PREFS_KEY);
@@ -105,6 +107,7 @@ function readPanelWidths(): PanelWidths {
         : 'module',
       showConfig: parsed.showConfig !== false,
       showDb: parsed.showDb !== false,
+      commentsOnly: parsed.commentsOnly === true,
     };
   } catch {
     return fallback;
@@ -390,6 +393,7 @@ export function App() {
   );
 
   const tableCount = data?.tables?.length ?? 0;
+  const commentCount = data?.comments?.length ?? 0;
   const configCount = useMemo(
     () => changedNodes.filter((node) => node.kind === 'config').length,
     [changedNodes],
@@ -405,17 +409,19 @@ export function App() {
 
   const showConfig = panelWidths.showConfig;
   const showDb = panelWidths.showDb;
+  const commentsOnly = panelWidths.commentsOnly;
   const visibleNodes = useMemo(() => {
     if (!data) return [];
     let nodes = showImpacted ? data.nodes : data.nodes.filter((node) => node.status !== 'impacted_only');
     if (!showConfig) nodes = nodes.filter((node) => node.kind !== 'config');
+    if (commentsOnly) nodes = nodes.filter((node) => (node.reviewComments ?? 0) > 0);
     return nodes;
-  }, [data, showImpacted, showConfig]);
+  }, [data, showImpacted, showConfig, commentsOnly]);
 
   const visibleTables = useMemo(() => {
-    if (!data?.tables?.length) return [];
+    if (!data?.tables?.length || commentsOnly) return [];
     return showDb ? data.tables : [];
-  }, [data, showDb]);
+  }, [data, showDb, commentsOnly]);
 
   const visibleEdges = useMemo(() => {
     if (!data) return [];
@@ -839,7 +845,7 @@ export function App() {
 
         <main className="relative min-w-0 flex-1">
           <div className="canvas-shell absolute inset-0">
-            {visibleNodes.length > 0 ? (
+            {data.nodes.length > 0 ? (
               <GraphView
                 positioned={layout.positioned}
                 lanes={layout.lanes}
@@ -873,7 +879,7 @@ export function App() {
             )}
           </div>
 
-          {visibleNodes.length > 0 ? (
+          {data.nodes.length > 0 ? (
             <>
               <CanvasToolbar
                 edgeMode={edgeMode}
@@ -887,6 +893,8 @@ export function App() {
                 configCount={configCount}
                 showDb={showDb}
                 tableCount={tableCount}
+                commentsOnly={commentsOnly}
+                commentCount={commentCount}
                 onEdgeModeChange={setEdgeMode}
                 onDirectionChange={setDirection}
                 onViewModeChange={setViewMode}
@@ -895,6 +903,9 @@ export function App() {
                   setPanelWidths((current) => ({ ...current, showConfig: !current.showConfig }))
                 }
                 onToggleDb={() => setPanelWidths((current) => ({ ...current, showDb: !current.showDb }))}
+                onToggleCommentsOnly={() =>
+                  setPanelWidths((current) => ({ ...current, commentsOnly: !current.commentsOnly }))
+                }
                 onToggleImpacted={() => {
                   const next = !showImpacted;
                   if (!next && selectedNode?.status === 'impacted_only') selectNode(null);

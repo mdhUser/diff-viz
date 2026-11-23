@@ -8,6 +8,18 @@
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-23
+
+### Added
+
+- **PR/MR Reviewer 评论入图**：打开 GitHub PR / GitLab MR 时同步行内 review comments 与整体讨论（GitHub `pulls/<n>/comments` + `issues/<n>/comments`；GitLab `merge_requests/<iid>/notes`，跳过 system note，保留 resolved/行号）。
+- 文件节点与左侧文件列表显示评论数徽章，未解决评论高亮为琥珀色；顶部与侧栏汇总评论总数。
+- 详情抽屉新增「Reviewer 评论」Tab：作者、时间、行号、已解决/未解决、代码已变更标记、远端链接与正文；PR 整体讨论一并展示。
+- 工具栏「有评论 N」开关：只看有 Reviewer 评论的文件（自动隐藏配置/数据库节点）。
+- 评论随 Review 清单保存（`comments` + 节点 `reviewComments/reviewCommentUnresolved` + `meta.pull.commentCount`），读取失败只写 `meta.warnings`，不影响 Review 生成；新增 `test/comments.test.mjs` 与 CLI/hub 集成断言。
+
+## [1.4.1] - 2026-11-23
+
 ## [1.4.1] - 2026-11-23
 
 ### Added

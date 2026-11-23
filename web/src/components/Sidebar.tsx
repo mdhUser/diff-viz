@@ -7,6 +7,7 @@ import {
   Search,
   Sparkles,
   X,
+  MessageSquare,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { ReviewData, ReviewNode, ReviewTodo } from '../types';
@@ -134,6 +135,15 @@ export function Sidebar({ data, selectedId, query, reviewedMap, isTodoDone, onQu
               <ListTodo size={10} className="text-amber" />
               {totalOpenTodos} 待确认
             </span>
+            {(data.comments?.length ?? 0) > 0 ? (
+              <span
+                className="flex items-center gap-1"
+                title={`${data.comments?.length} 条 PR/MR Reviewer 评论`}
+              >
+                <MessageSquare size={10} className="text-[#4a5f9e]" />
+                {data.comments?.length} 评论
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -295,10 +305,28 @@ function FileRow({
             <span className="text-rose">−{node.stats.deletions}</span>
           </span>
         )}
-        {openTodos > 0 ? (
-          <span className="flex items-center gap-0.5 text-[8.5px] text-amber">
-            <ListTodo size={8.5} />
-            {openTodos}
+        {(node.reviewComments ?? 0) > 0 || openTodos > 0 ? (
+          <span className="flex items-center gap-1.5">
+            {(node.reviewComments ?? 0) > 0 ? (
+              <span
+                className={cn(
+                  'flex items-center gap-0.5 text-[8.5px]',
+                  (node.reviewCommentUnresolved ?? 0) > 0 ? 'text-amber' : 'text-[#4a5f9e]',
+                )}
+                title={`${node.reviewComments} 条 Reviewer 评论${
+                  (node.reviewCommentUnresolved ?? 0) > 0 ? `，${node.reviewCommentUnresolved} 条未解决` : ''
+                }`}
+              >
+                <MessageSquare size={8.5} />
+                {node.reviewComments}
+              </span>
+            ) : null}
+            {openTodos > 0 ? (
+              <span className="flex items-center gap-0.5 text-[8.5px] text-amber">
+                <ListTodo size={8.5} />
+                {openTodos}
+              </span>
+            ) : null}
           </span>
         ) : (
           <ChevronRight size={10} className="text-mist-700 opacity-0 transition group-hover:opacity-100" />

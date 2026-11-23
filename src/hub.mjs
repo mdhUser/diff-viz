@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { GitRepo, findRepoRoot } from './git.mjs';
 import { applyAnnotations, buildReviewData, mergePreviousState } from './collect.mjs';
 import { detectRepoProvider, listPullRequests, preparePullReview } from './remotes.mjs';
+import { attachComments, fetchPullComments } from './comments.mjs';
 import { updateReviewState, openInBrowser } from './server.mjs';
 import { computeServiceImpact, detectServiceEdges, loadWorkspace } from './workspace.mjs';
 import {
@@ -798,6 +799,10 @@ export async function startHub({
         `${payload.pull.title ? ` · ${payload.pull.title}` : ''}`;
       if (payload.pull.sourceBranch) data.meta.branch = payload.pull.sourceBranch;
     }
+    if (payload.pullComments) attachComments(data, payload.pullComments);
+    if (payload.pullWarnings?.length) {
+      data.meta.warnings = [...(data.meta.warnings || []), ...payload.pullWarnings];
+    }
     const previousStore = loadStore(reviewId);
     if (previousStore) harvestAnnotations(project.id, previousStore);
     backfillProjectAnnotations(project.id);
@@ -805,8 +810,9 @@ export async function startHub({
     const previous = previousStore?.manifest ?? null;
     if (previous) mergePreviousState(data, previous);
     saveReview(reviewId, data, project.id);
+    const { pullComments: _comments, pullWarnings: _pullWarnings, ...rememberedPayload } = payload;
     lastPayloads.set(project.id, {
-      ...payload,
+      ...rememberedPayload,
       scope,
       ...(maxScanFiles ? { maxScanFiles: Number(maxScanFiles) } : {}),
     });
@@ -1173,6 +1179,15 @@ export async function startHub({
           payload.scope = 'range';
           payload.range = prepared.range;
           payload.pull = prepared.pull;
+          try {
+            const fetched = await fetchPullComments(prepared.info, prepared.pull.number);
+            payload.pullComments = fetched.comments;
+            if (fetched.warnings.length > 0) payload.pullWarnings = fetched.warnings;
+          } catch (error) {
+            payload.pullWarnings = [
+              `读取 PR/MR 评论失败：${error instanceof Error ? error.message : String(error)}`,
+            ];
+          }
         }
         const { reviewId } = analyzeProject(project, payload);
         sendJson(res, 200, {

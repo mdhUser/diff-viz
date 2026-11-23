@@ -90,6 +90,7 @@ diff-viz --pr 123 --base release/1.8   # 目标分支不是默认分支时
 
 - 私有仓库配置 `GITHUB_TOKEN` / `GITLAB_TOKEN` 后重启 hub；自建 GitLab 可设 `DIFF_VIZ_PROVIDER=gitlab` 与 `DIFF_VIZ_GITLAB_HOSTS`。
 - PR/MR 元数据写入 `meta.pull`，顶部范围标签显示 `PR #N · 标题`，并带远端链接。
+- Reviewer 评论会同步进来：有评论的文件在拓扑节点和侧栏显示数量徽章，未解决评论用琥珀色；详情抽屉新增「Reviewer 评论」Tab，工具栏可用「有评论」一键只看有评论的文件。
 - 同一 PR 复用同一个 Review（`<projectId>-pull-<number>`），已有注解会尽量保留。
 
 细节与限制见 [docs/pull-requests.md](https://github.com/mdhUser/diff-viz/blob/main/docs/pull-requests.md)。

@@ -74,6 +74,29 @@ diff-viz --pr 123 --base release/1.8
 - 生成的 Review 里 `meta.pull` 保存 PR/MR 元数据，`meta.rangeLabel` 显示 `PR #N · 标题`，`meta.branch` 显示来源分支。
 - 同一 PR 反复打开复用同一个 Review id（`<projectId>-pull-<number>`），已有 Agent 摘要/待办/审查状态会尽量复用。
 
+## Reviewer 评论
+
+打开 PR/MR 时会一并读取 Review 评论，并挂到对应文件上：
+
+| 平台 | 来源 | 说明 |
+| --- | --- | --- |
+| GitHub | `pulls/<n>/comments` + `issues/<n>/comments` | 行内 review comment + PR 整体讨论（issue comment）；旧行评论标记「代码已变更」 |
+| GitLab | `merge_requests/<iid>/notes` | 跳过 system note；保留 `resolved` 状态与行号（`position.new_path/new_line`），整体讨论归为 general |
+
+展示方式：
+
+- 文件卡片右上角出现 💬 数量徽章；有未解决评论时按琥珀色显示（GitLab 提供 resolved 状态，GitHub REST 不返回 thread 解决状态）
+- 左侧文件列表同样显示评论数；顶部统计与侧栏摘要显示总评论数
+- 详情抽屉新增 **Reviewer 评论** Tab：作者、时间、行号、已解决/未解决、远端链接、评论正文；PR 整体讨论也会显示
+- 工具栏「有评论 N」开关：只看有 Reviewer 评论的文件（同时隐藏配置/数据库节点），方便快速过一遍 review 意见
+
+限制：
+
+- 评论是**打开 Review 时的快照**。Review 打开后新增的评论需要重新打开一次 PR/MR（或重新运行 `--pr/--mr`）才会出现；后续可加「同步评论」按钮。
+- 评论正文只读、纯文本展示，不渲染 Markdown 附件；单条超过 6KB 会截断，最多 500 条。
+- 评论读取失败不会阻断 Review，会写入 `meta.warnings`（常见原因：token 缺少 `read_api`/`repo` 权限）。
+- GitHub 无法通过 REST 拿到 thread 的 resolved 状态，因此 GitHub 评论不显示「已解决/未解决」。
+
 ## 实现与限制
 
 - 不引入运行时依赖：列表用 Node 内置 `fetch`，ref 用 `git fetch`，API token 只进请求头。

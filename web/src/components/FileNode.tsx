@@ -1,9 +1,10 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import { CheckCircle2, CornerUpRight, FileCog, ListTodo } from 'lucide-react';
+import { CheckCircle2, CornerUpRight, FileCog, ListTodo, MessageSquare } from 'lucide-react';
 import type { LayoutDirection, ReviewNode } from '../types';
 import { STATUS_META } from '../status';
 import { dirname } from '../format';
+import { cn } from '../cn';
 
 export interface FileNodeData extends Record<string, unknown> {
   node: ReviewNode;
@@ -106,6 +107,22 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
               title={configLabel}
             >
               配置
+            </span>
+          ) : null}
+          {(node.reviewComments ?? 0) > 0 ? (
+            <span
+              className={cn(
+                'flex items-center gap-0.5 rounded px-1 py-0.5 text-[8.5px] font-medium',
+                (node.reviewCommentUnresolved ?? 0) > 0
+                  ? 'bg-[rgba(169,116,24,0.12)] text-[#a97418]'
+                  : 'bg-[rgba(86,111,208,0.10)] text-[#4a5f9e]',
+              )}
+              title={`${node.reviewComments} 条 Reviewer 评论${
+                (node.reviewCommentUnresolved ?? 0) > 0 ? `，${node.reviewCommentUnresolved} 条未解决` : ''
+              }`}
+            >
+              <MessageSquare size={8.5} />
+              {node.reviewComments}
             </span>
           ) : null}
           <span
