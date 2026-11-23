@@ -13,6 +13,8 @@ import {
   getPullRequest,
   listPullRequests,
   parsePullNumber,
+  parseGhTokenOutput,
+  parseGlabTokenOutput,
   parseRemoteUrl,
   preparePullReview,
 } from '../src/remotes.mjs';
@@ -83,6 +85,17 @@ test('detects GitHub, GitLab and self-hosted providers', () => {
     detectProvider('git@github.example.com:acme/demo.git', { DIFF_VIZ_GITHUB_HOSTS: 'github.example.com' }).provider,
     'github',
   );
+});
+
+test('parses tokens from gh/glab CLI output', () => {
+  assert.equal(parseGhTokenOutput('gho_abc123\n'), 'gho_abc123');
+  assert.equal(parseGhTokenOutput('not-a-token'), '');
+  assert.equal(
+    parseGlabTokenOutput('gitlab.example.com\n  ✓ Token found in operating system keyring: glpat-xyz\n'),
+    'glpat-xyz',
+  );
+  assert.equal(parseGlabTokenOutput('  Token: abcdef'), 'abcdef');
+  assert.equal(parseGlabTokenOutput('no token here'), '');
 });
 
 test('parses PR/MR numbers from numbers and URLs', () => {

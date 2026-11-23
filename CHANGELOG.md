@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-23
+
+### Added
+
+- 远端 PR/MR 鉴权会自动复用已登录的 `gh` / `glab` CLI token（`gh auth token`、`glab auth status --show-token`），私有仓库通常无需再手动配置环境变量；需要禁用时设置 `DIFF_VIZ_DISABLE_CLI_TOKEN=1`。token 仅在 hub 进程内存中使用。
+
+### Fixed
+
+- 修正 `glab` 把登录状态输出到 stderr 导致 token 读取失败的问题（`--show-token` 的输出现在会被正确解析）。
+
 ## [1.4.0] - 2026-11-23
 
 ### Added

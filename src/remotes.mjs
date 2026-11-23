@@ -1,3 +1,5 @@
+import { spawnSync } from 'node:child_process';
+
 // Remote pull-request integration for GitHub and GitLab. The CLI stays
 // dependency-free: HTTP goes through the global fetch, refs are fetched with
 // plain `git fetch`, and provider detection only needs `git remote get-url`.
@@ -114,14 +116,65 @@ export function detectRepoProvider(repo, { remote = 'origin', env = process.env 
   return { ...info, remote };
 }
 
-function providerToken(provider, env) {
-  if (provider === 'github') return env.GITHUB_TOKEN || env.GH_TOKEN || '';
-  return env.GITLAB_TOKEN || env.GLAB_TOKEN || '';
+const cliTokenCache = new Map();
+
+/** Extract the token from `glab auth status --show-token` output. */
+export function parseGlabTokenOutput(output) {
+  const text = String(output || '');
+  const keyring = /Token found in operating system keyring:\s*(\S+)/i.exec(text);
+  if (keyring) return keyring[1];
+  const tokenLine = /\bToken:\s*(\S+)/i.exec(text);
+  return tokenLine ? tokenLine[1] : '';
 }
 
-function authHeaders(provider, env) {
-  const token = providerToken(provider, env);
-  if (provider === 'github') {
+export function parseGhTokenOutput(output) {
+  const token = String(output || '').trim().split(/\s+/)[0] || '';
+  return /^(gh[opsu]_|github_pat_)/.test(token) ? token : '';
+}
+
+// Reuse an existing `gh` / `glab` login instead of forcing everyone to export
+// another environment variable. The token is only held in memory and is never
+// written to review data or sent to the browser.
+function discoverCliToken(provider, host) {
+  if (process.env.DIFF_VIZ_DISABLE_CLI_TOKEN === '1') return '';
+  const key = `${provider}:${host}`;
+  if (cliTokenCache.has(key)) return cliTokenCache.get(key);
+  let token = '';
+  try {
+    if (provider === 'github') {
+      const result = spawnSync('gh', ['auth', 'token', '--hostname', host], {
+        encoding: 'utf8',
+        timeout: 3500,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      token = parseGhTokenOutput(`${result.stdout || ''}\n${result.stderr || ''}`);
+    } else {
+      // `glab` prints the status (including --show-token) on stderr.
+      const result = spawnSync('glab', ['auth', 'status', '--show-token', '--hostname', host], {
+        encoding: 'utf8',
+        timeout: 3500,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      token = parseGlabTokenOutput(`${result.stdout || ''}\n${result.stderr || ''}`);
+    }
+  } catch {
+    token = '';
+  }
+  cliTokenCache.set(key, token);
+  return token;
+}
+
+function providerToken(info, env) {
+  const fromEnv =
+    info.provider === 'github'
+      ? env.GITHUB_TOKEN || env.GH_TOKEN || ''
+      : env.GITLAB_TOKEN || env.GLAB_TOKEN || '';
+  return fromEnv || discoverCliToken(info.provider, info.host);
+}
+
+function authHeaders(info, env) {
+  const token = providerToken(info, env);
+  if (info.provider === 'github') {
     return {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
@@ -136,8 +189,8 @@ function authHeaders(provider, env) {
 
 function authHint(provider) {
   return provider === 'github'
-    ? '私有仓库请设置 GITHUB_TOKEN（或 GH_TOKEN），公开仓库可不配置。'
-    : '私有仓库请设置 GITLAB_TOKEN（或 GLAB_TOKEN），公开项目可不配置。';
+    ? '私有仓库请设置 GITHUB_TOKEN（或 GH_TOKEN），或先 gh auth login；公开仓库可不配置。'
+    : '私有仓库请设置 GITLAB_TOKEN（或 GLAB_TOKEN），或先 glab auth login；公开项目可不配置。';
 }
 
 async function requestJson(info, url, { env = process.env, fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
@@ -148,7 +201,7 @@ async function requestJson(info, url, { env = process.env, fetchImpl = globalThi
   try {
     response = await fetchImpl(url, {
       method: 'GET',
-      headers: authHeaders(info.provider, env),
+      headers: authHeaders(info, env),
       signal: controller.signal,
     });
   } catch (error) {

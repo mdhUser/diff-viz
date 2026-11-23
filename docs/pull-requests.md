@@ -20,9 +20,12 @@ PR/MR 列表**默认 60 秒缓存**，右上角刷新按钮可强制重新拉取
 | GitHub | `GITHUB_TOKEN` 或 `GH_TOKEN` | 公开仓库可不配；私有仓库需要 `repo` 权限 |
 | GitLab | `GITLAB_TOKEN` 或 `GLAB_TOKEN` | 私有项目需要 `read_api` 权限 |
 
+如果本机已经 `gh auth login` / `glab auth login`，diff-viz 会自动复用 CLI 里保存的 token（只读、仅进程内存），通常不用再导出环境变量。需要禁止这种行为时设 `DIFF_VIZ_DISABLE_CLI_TOKEN=1`。
+
 hub 会继承启动时的环境变量：
 
 ```bash
+# 方式 1：已经 gh / glab 登录过，通常直接可用；否则：
 export GITHUB_TOKEN=ghp_xxx        # GitLab 用 GITLAB_TOKEN
 diff-viz stop                     # 让旧 hub 退出
 diff-viz                          # 重新启动，会继承新环境变量

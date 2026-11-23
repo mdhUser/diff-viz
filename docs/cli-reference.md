@@ -113,6 +113,7 @@ hub 的状态目录默认 `~/.diff-viz/`，不可写时（例如 Agent 沙箱）
 | `DIFF_VIZ_GITHUB_HOSTS` / `DIFF_VIZ_GITLAB_HOSTS` | 额外识别的远端域名（逗号分隔） |
 | `DIFF_VIZ_GITHUB_API_URL` / `DIFF_VIZ_GITLAB_API_URL` | 覆盖 API 根地址（自建、反向代理、测试） |
 | `DIFF_VIZ_REMOTE_URL` | 覆盖用于识别的远端地址（多远程或调试） |
+| `DIFF_VIZ_DISABLE_CLI_TOKEN=1` | 不自动复用 `gh` / `glab` 已登录的 token |
 
 ## hub 访问控制
 
