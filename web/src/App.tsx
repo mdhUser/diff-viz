@@ -79,7 +79,6 @@ interface PanelWidths {
   groupBy: LaneGroupBy;
   showConfig: boolean;
   showDb: boolean;
-  commentsOnly: boolean;
 }
 
 function readPanelWidths(): PanelWidths {
@@ -90,7 +89,6 @@ function readPanelWidths(): PanelWidths {
     groupBy: 'module',
     showConfig: true,
     showDb: true,
-    commentsOnly: false,
   };
   try {
     const raw = window.localStorage.getItem(UI_PREFS_KEY);
@@ -108,7 +106,6 @@ function readPanelWidths(): PanelWidths {
         : 'module',
       showConfig: parsed.showConfig !== false,
       showDb: parsed.showDb !== false,
-      commentsOnly: parsed.commentsOnly === true,
     };
   } catch {
     return fallback;
@@ -148,6 +145,7 @@ export function App() {
   const [currentReviewId, setCurrentReviewId] = useState<string | null>(null);
   const [repoPanelOpen, setRepoPanelOpen] = useState(false);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
+  const [commentsOnly, setCommentsOnly] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const sidebarDragStart = useRef(panelWidths.sidebarWidth);
@@ -411,19 +409,29 @@ export function App() {
 
   const showConfig = panelWidths.showConfig;
   const showDb = panelWidths.showDb;
-  const commentsOnly = panelWidths.commentsOnly;
+  const fileCommentCount = useMemo(
+    () => (data?.nodes ?? []).reduce((sum, node) => sum + (node.reviewComments ?? 0), 0),
+    [data],
+  );
+  // The "有评论" filter is a transient exploration tool: it must not carry
+  // over to another MR, and it must never blank a review whose comments are all
+  // MR-wide (no file-level comments to filter on).
+  const effectiveCommentsOnly = commentsOnly && fileCommentCount > 0;
+  useEffect(() => {
+    setCommentsOnly(false);
+  }, [data?.meta.reviewId]);
   const visibleNodes = useMemo(() => {
     if (!data) return [];
     let nodes = showImpacted ? data.nodes : data.nodes.filter((node) => node.status !== 'impacted_only');
     if (!showConfig) nodes = nodes.filter((node) => node.kind !== 'config');
-    if (commentsOnly) nodes = nodes.filter((node) => (node.reviewComments ?? 0) > 0);
+    if (effectiveCommentsOnly) nodes = nodes.filter((node) => (node.reviewComments ?? 0) > 0);
     return nodes;
-  }, [data, showImpacted, showConfig, commentsOnly]);
+  }, [data, showImpacted, showConfig, effectiveCommentsOnly]);
 
   const visibleTables = useMemo(() => {
-    if (!data?.tables?.length || commentsOnly) return [];
+    if (!data?.tables?.length || effectiveCommentsOnly) return [];
     return showDb ? data.tables : [];
-  }, [data, showDb, commentsOnly]);
+  }, [data, showDb, effectiveCommentsOnly]);
 
   const visibleEdges = useMemo(() => {
     if (!data) return [];
@@ -881,6 +889,26 @@ export function App() {
                 </div>
               </div>
             )}
+            {data.nodes.length > 0 && visibleNodes.length === 0 ? (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-8">
+                <div className="pointer-events-auto max-w-[360px] rounded-xl border border-line bg-[#fffdf8] px-4 py-4 text-center shadow-sm">
+                  <div className="text-[12px] font-medium text-mist-100">当前筛选下没有可显示的文件</div>
+                  <p className="mt-1 text-[10px] leading-5 text-mist-600">
+                    Reviewer 评论只出现在 MR 整体讨论中，没有挂在具体文件上，所以「有评论」筛选为空。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCommentsOnly(false);
+                      setPanelWidths((current) => ({ ...current, showConfig: true, showDb: true }));
+                    }}
+                    className="mt-2 rounded-md border border-accent/30 bg-accent-soft px-2.5 py-1 text-[10px] text-accent-bright transition hover:bg-accent/15"
+                  >
+                    显示全部文件
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {data.nodes.length > 0 ? (
@@ -897,8 +925,8 @@ export function App() {
                 configCount={configCount}
                 showDb={showDb}
                 tableCount={tableCount}
-                commentsOnly={commentsOnly}
-                commentCount={commentCount}
+                commentsOnly={effectiveCommentsOnly}
+                commentCount={fileCommentCount}
                 onEdgeModeChange={setEdgeMode}
                 onDirectionChange={setDirection}
                 onViewModeChange={setViewMode}
@@ -907,9 +935,7 @@ export function App() {
                   setPanelWidths((current) => ({ ...current, showConfig: !current.showConfig }))
                 }
                 onToggleDb={() => setPanelWidths((current) => ({ ...current, showDb: !current.showDb }))}
-                onToggleCommentsOnly={() =>
-                  setPanelWidths((current) => ({ ...current, commentsOnly: !current.commentsOnly }))
-                }
+                onToggleCommentsOnly={() => setCommentsOnly((value) => !value)}
                 onToggleImpacted={() => {
                   const next = !showImpacted;
                   if (!next && selectedNode?.status === 'impacted_only') selectNode(null);

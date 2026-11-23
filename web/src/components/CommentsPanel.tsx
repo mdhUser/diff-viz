@@ -90,6 +90,12 @@ export function CommentsPanel({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          {inlineTotal === 0 && comments.length > 0 ? (
+            <div className="mb-3 rounded-lg border border-line/70 bg-ink-850/40 px-3 py-2 text-[10px] leading-5 text-mist-500">
+              该 MR 的评论都是整体讨论，没有挂在具体文件/行上，因此文件不会显示评论徽章。
+            </div>
+          ) : null}
+
           {visible.length === 0 ? (
             <div className="rounded-lg border border-dashed border-line bg-ink-850/40 px-4 py-8 text-center text-[10.5px] text-mist-600">
               {unresolvedOnly ? '没有未解决的评论。' : '本次 Review 没有同步到 PR/MR 评论。'}
