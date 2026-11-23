@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -31,6 +32,7 @@ interface HeaderProps {
   onToggleSidebar: () => void;
   onRefresh: () => void;
   onOpenComments: () => void;
+  onBackToWorkspace?: () => void;
 }
 
 function Stat({ value, label, color }: { value: string; label: string; color?: string }) {
@@ -61,6 +63,7 @@ export function Header({
   onToggleSidebar,
   onRefresh,
   onOpenComments,
+  onBackToWorkspace,
 }: HeaderProps) {
   const { meta } = data;
   const stats = meta.stats;
@@ -69,6 +72,17 @@ export function Header({
 
   return (
     <header className="topbar relative z-30 flex h-[58px] shrink-0 items-center gap-3 border-b border-line/80 px-3.5">
+      {onBackToWorkspace ? (
+        <button
+          type="button"
+          onClick={onBackToWorkspace}
+          className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-accent/25 bg-accent-soft px-2 text-[10.5px] font-medium text-accent-bright transition hover:bg-accent/15"
+          title="返回工作区总览"
+        >
+          <ArrowLeft size={13} />
+          工作区
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={onToggleSidebar}

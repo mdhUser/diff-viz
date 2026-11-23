@@ -143,6 +143,9 @@ export function App() {
   const [projects, setProjects] = useState<HubProject[]>([]);
   const [hubAvailable, setHubAvailable] = useState(false);
   const [currentReviewId, setCurrentReviewId] = useState<string | null>(null);
+  const [workspaceReturnId, setWorkspaceReturnId] = useState<string | null>(null);
+  const currentReviewIdRef = useRef<string | null>(null);
+  currentReviewIdRef.current = currentReviewId;
   const [repoPanelOpen, setRepoPanelOpen] = useState(false);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const [commentsOnly, setCommentsOnly] = useState(false);
@@ -196,7 +199,11 @@ export function App() {
   }, []);
 
   const fetchReview = useCallback(
-    async (reviewId: string, reset = false) => {
+    async (
+      reviewId: string,
+      reset = false,
+      options: { fromWorkspace?: string | null; history?: 'replace' | 'push' | 'none' } = {},
+    ) => {
       const response = await apiFetch(`/api/data?review=${encodeURIComponent(reviewId)}&t=${Date.now()}`, {
         cache: 'no-store',
       });
@@ -207,7 +214,16 @@ export function App() {
       const payload = (await response.json()) as ReviewData;
       hydrateData(payload);
       setCurrentReviewId(reviewId);
-      window.history.replaceState(null, '', `/?review=${encodeURIComponent(reviewId)}`);
+      const fromWorkspace = options.fromWorkspace ?? null;
+      setWorkspaceReturnId(fromWorkspace);
+      const historyMode = options.history ?? 'replace';
+      if (historyMode !== 'none') {
+        const url = `/?review=${encodeURIComponent(reviewId)}${
+          fromWorkspace ? `&from=${encodeURIComponent(fromWorkspace)}` : ''
+        }`;
+        if (historyMode === 'push') window.history.pushState(null, '', url);
+        else window.history.replaceState(null, '', url);
+      }
       if (reset) {
         setSelectedId(null);
         setTab('summary');
@@ -215,6 +231,22 @@ export function App() {
     },
     [hydrateData],
   );
+
+  // Browser Back from a repository opened via the workspace overview should
+  // return to the overview instead of leaving the app.
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const reviewId = params.get('review');
+      if (!reviewId || reviewId === currentReviewIdRef.current) return;
+      void fetchReview(reviewId, true, {
+        fromWorkspace: params.get('from'),
+        history: 'none',
+      });
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [fetchReview]);
 
   const requestReview = useCallback(
     async ({
@@ -268,9 +300,10 @@ export function App() {
           setProjects(hubProjects);
           setHubAvailable(true);
 
-          const reviewId = new URLSearchParams(window.location.search).get('review');
+          const initialParams = new URLSearchParams(window.location.search);
+          const reviewId = initialParams.get('review');
           if (reviewId) {
-            await fetchReview(reviewId);
+            await fetchReview(reviewId, false, { fromWorkspace: initialParams.get('from') });
             return;
           }
           if (hubProjects.length > 0) {
@@ -332,13 +365,13 @@ export function App() {
     if (!currentReviewId) return;
     setRefreshing(true);
     try {
-      await fetchReview(currentReviewId);
+      await fetchReview(currentReviewId, false, { fromWorkspace: workspaceReturnId });
     } catch {
       setServerOnline(false);
     } finally {
       setRefreshing(false);
     }
-  }, [currentReviewId, fetchReview]);
+  }, [currentReviewId, fetchReview, workspaceReturnId]);
 
   // The hub re-analyzes on file changes and pushes a review id over SSE; pull the
   // new data only when it belongs to the review currently open in this tab.
@@ -796,8 +829,12 @@ export function App() {
         data={data}
         refreshing={refreshing}
         onOpenReview={(reviewId) => {
+          const workspaceId = currentReviewId;
           setCurrentReviewId(reviewId);
-          void fetchReview(reviewId);
+          void fetchReview(reviewId, true, {
+            fromWorkspace: workspaceId,
+            history: 'push',
+          });
         }}
         onRefresh={() => void refreshReview()}
       />
@@ -821,6 +858,13 @@ export function App() {
         currentProjectId={currentProjectId}
         onOpenRepoPanel={() => void openRepoPanel()}
         onOpenComments={() => setCommentsPanelOpen(true)}
+        onBackToWorkspace={
+          workspaceReturnId
+            ? () => {
+                void fetchReview(workspaceReturnId, true, { history: 'replace' });
+              }
+            : undefined
+        }
         onPrev={() => stepReview(-1)}
         onNext={() => stepReview(1)}
         onToggleSidebar={() => setSidebarOpen((value) => !value)}
