@@ -1,6 +1,6 @@
 {
   "name": "diff-viz-cli",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "type": "module",
   "description": "Local git change review visualizer: dependency topology, code diffs, impact analysis and review todos.",
   "bin": {

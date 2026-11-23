@@ -117,6 +117,7 @@ export function detectRepoProvider(repo, { remote = 'origin', env = process.env 
 }
 
 const cliTokenCache = new Map();
+const CLI_TOKEN_TTL_MS = 5 * 60_000;
 
 /** Extract the token from `glab auth status --show-token` output. */
 export function parseGlabTokenOutput(output) {
@@ -138,7 +139,8 @@ export function parseGhTokenOutput(output) {
 function discoverCliToken(provider, host) {
   if (process.env.DIFF_VIZ_DISABLE_CLI_TOKEN === '1') return '';
   const key = `${provider}:${host}`;
-  if (cliTokenCache.has(key)) return cliTokenCache.get(key);
+  const cached = cliTokenCache.get(key);
+  if (cached && Date.now() - cached.at < CLI_TOKEN_TTL_MS) return cached.token;
   let token = '';
   try {
     if (provider === 'github') {
@@ -160,7 +162,7 @@ function discoverCliToken(provider, host) {
   } catch {
     token = '';
   }
-  cliTokenCache.set(key, token);
+  cliTokenCache.set(key, { token, at: Date.now() });
   return token;
 }
 
@@ -225,6 +227,9 @@ export async function requestJsonRaw(
     }
     const suffix = detail ? `（${detail}）` : '';
     if (status === 401 || status === 403) {
+      // A cached `gh`/`glab` token may have expired; drop it so the next
+      // attempt rediscovers a fresh token instead of failing until hub restart.
+      cliTokenCache.delete(`${info.provider}:${info.host}`);
       throw new Error(`${info.provider === 'github' ? 'GitHub' : 'GitLab'} 鉴权失败：${authHint(info.provider)}${suffix}`);
     }
     if (status === 404) {
@@ -330,6 +335,39 @@ export function parsePullNumber(input, info) {
   return Number(match[1]);
 }
 
+/**
+ * Turn user-facing refs such as `origin/main` or `refs/heads/release/1` into a
+ * plain branch name. GitHub/GitLab forks and the fetch refspec require a branch.
+ */
+export function normalizeBranchRef(value, remote = 'origin') {
+  let ref = String(value || '').trim();
+  if (!ref) return '';
+  ref = ref.replace(/^refs\/remotes\/[^/]+\//, '').replace(/^refs\/heads\//, '');
+  if (remote && ref.startsWith(`${remote}/`)) ref = ref.slice(remote.length + 1);
+  return ref;
+}
+
+/** Reject pasting a PR/MR URL that belongs to another repository. */
+function validatePullUrl(input, info) {
+  const raw = String(input || '').trim();
+  if (!raw || /^\d+$/.test(raw)) return;
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return; // bare branch/ref-like input; the number parser handles the rest
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+  const host = parsed.hostname.toLowerCase();
+  const path = parsed.pathname.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\.git$/i, '');
+  if (host !== info.host || !(path === info.path || path.startsWith(`${info.path}/`))) {
+    throw new Error(
+      `PR/MR URL 与当前仓库不匹配：\n  URL     ${raw}\n  当前仓库 ${info.host}/${info.path}\n` +
+        '请切到对应仓库再运行，或只传 PR/MR 编号。',
+    );
+  }
+}
+
 function defaultBaseBranch(repo, remote = 'origin') {
   const symbolic = repo.run(['symbolic-ref', '--quiet', '--short', `refs/remotes/${remote}/HEAD`], {
     allowFailure: true,
@@ -373,10 +411,17 @@ export function fetchPullRefs(repo, info, number, baseBranch, { remote = 'origin
  * Resolve everything needed to analyze a PR/MR: provider, metadata, base
  * branch, fetched refs and the `base...head` range used by the review pipeline.
  */
-export async function preparePullReview(repo, { number, base, remote = 'origin', env = process.env, ...options } = {}) {
+export async function preparePullReview(
+  repo,
+  { number, base, input, remote = 'origin', env = process.env, ...options } = {},
+) {
   const info = detectRepoProvider(repo, { remote, env });
+  validatePullUrl(input, info);
   const pull = await getPullRequest(info, number, { env, ...options });
-  const baseBranch = String(base || pull.targetBranch || defaultBaseBranch(repo, remote) || '').trim();
+  const baseBranch = normalizeBranchRef(
+    base || pull.targetBranch || defaultBaseBranch(repo, remote) || '',
+    remote,
+  );
   if (!baseBranch) {
     throw new Error('无法确定 PR/MR 的目标分支；请用 --base <branch> 指定。');
   }

@@ -8,6 +8,17 @@
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-11-23
+
+### Fixed
+
+- 文件监听触发的自动重算不再把 PR/MR Review 当成项目「记住的范围」重放：此前如果先打开过工作区 Review（启动了 watcher），再打开 PR/MR 后保存文件，watcher 会用 pull 的 range 重建该 Review，导致评论全部丢失（用模拟 fs.watch 事件复现，新增回归测试）。
+- `--pr/--mr` 传完整 URL 时校验仓库归属：粘贴其他仓库的 PR/MR 链接会直接报错，而不是默默分析当前仓库同编号的 PR/MR。
+- `--base origin/main` / `--base refs/heads/main` 现在会归一成 `main` 再 fetch 目标分支，不再因 refspec 拼接错误 fetch 失败。
+- `gh` / `glab` token 缓存增加 5 分钟有效期，并在 401/403 后立即失效重取：登录新账号或 token 过期后不需要重启 hub。
+
+## [1.5.2] - 2026-11-23
+
 ## [1.5.2] - 2026-11-23
 
 ### Fixed

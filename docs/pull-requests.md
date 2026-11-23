@@ -63,10 +63,11 @@ diff-viz --pr https://github.com/acme/demo/pull/123
 diff-viz --mr 7
 diff-viz --mr https://git.mycorp.com/group/proj/-/merge_requests/7
 
-# 目标分支不是仓库默认分支时显式指定
-diff-viz --pr 123 --base release/1.8
+# 目标分支不是仓库默认分支时显式指定（origin/xxx、refs/heads/xxx 也可以）
+diff-viz --pr 123 --base origin/release/1.8
 ```
 
+- 传入完整 URL 时会校验它属于当前仓库，避免把别的仓库的 `#123` 误当成当前仓库的 PR/MR。
 - `--pr` / `--mr` 会先查远端 API 确认标题与目标分支，再自动 `git fetch`：
   - GitHub：`refs/pull/<n>/head`（fork PR 也可用，取目标仓库的 ref）
   - GitLab：`refs/merge-requests/<iid>/head`

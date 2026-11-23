@@ -379,7 +379,7 @@ export async function startHub({
     entry.timer = setTimeout(() => {
       entry.timer = null;
       const payload = lastPayloads.get(project.id);
-      if (!payload) return;
+      if (!payload || payload.pull) return;
       try {
         const { reviewId } = analyzeProject(project, payload);
         broadcast({ type: 'review-updated', projectId: project.id, reviewId, at: Date.now() });
@@ -810,15 +810,19 @@ export async function startHub({
     const previous = previousStore?.manifest ?? null;
     if (previous) mergePreviousState(data, previous);
     saveReview(reviewId, data, project.id);
-    const { pullComments: _comments, pullWarnings: _pullWarnings, ...rememberedPayload } = payload;
-    lastPayloads.set(project.id, {
-      ...rememberedPayload,
-      scope,
-      ...(maxScanFiles ? { maxScanFiles: Number(maxScanFiles) } : {}),
-    });
-    // PR/MR refs are immutable snapshots: watching the working tree would
-    // re-derive them with a plain range and lose the pull metadata.
-    if (!payload.pull) watchProject(project);
+    // Only worktree/staged payloads are safe to replay from the file watcher.
+    // Replaying a pull review would rebuild it without comments (the comments
+    // come from a separate API call) and would replace the active review id, so
+    // a PR/MR must never become the project's remembered payload.
+    if (!payload.pull) {
+      const { pullComments: _comments, pullWarnings: _pullWarnings, ...rememberedPayload } = payload;
+      lastPayloads.set(project.id, {
+        ...rememberedPayload,
+        scope,
+        ...(maxScanFiles ? { maxScanFiles: Number(maxScanFiles) } : {}),
+      });
+      watchProject(project);
+    }
     return { reviewId, data };
   };
 

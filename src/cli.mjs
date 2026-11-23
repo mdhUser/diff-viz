@@ -636,6 +636,7 @@ export async function main(argv = process.argv.slice(2)) {
     const input = options.pr || options.mr;
     const prepared = await preparePullReview(repo, {
       number: parsePullNumber(input),
+      input,
       base: options.base,
     });
     pull = prepared.pull;

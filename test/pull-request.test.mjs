@@ -200,3 +200,76 @@ test('hub lists remote pulls and opens them as a stable review', async () => {
     Object.assign(process.env, previousEnv);
   }
 });
+
+test('file-watch re-analysis never overwrites a pull review', async () => {
+  const fixture = makeRemoteRepo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-viz-pr-watch-'));
+  const server = http.createServer();
+  mockPullApi(server, fixture);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const apiUrl = `http://127.0.0.1:${server.address().port}`;
+  const previousEnv = { ...process.env };
+  Object.assign(process.env, pullEnv(apiUrl), { DIFF_VIZ_HOME: home });
+
+  // Trigger the hub watcher deterministically instead of relying on FSEvents.
+  const originalWatch = fs.watch;
+  const fakeWatchers = [];
+  class FakeWatcher {
+    constructor(listener) {
+      this.listener = listener;
+    }
+    on() {
+      return this;
+    }
+    close() {}
+  }
+  fs.watch = (_dir, _options, listener) => {
+    const watcher = new FakeWatcher(listener);
+    fakeWatchers.push(watcher);
+    return watcher;
+  };
+
+  const hub = await startHub({ port: 0, host: '127.0.0.1', open: false, quiet: true, home });
+  try {
+    const project = await hubFetch(hub, 'api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ root: fixture.root }),
+    })
+      .then((response) => response.json())
+      .then((payload) => payload.project);
+    await hubFetch(hub, 'api/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: project.id, scope: 'worktree' }),
+    });
+    const pull = await hubFetch(hub, 'api/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: project.id, pull: { number: 7 } }),
+    }).then((response) => response.json());
+    assert.equal(fakeWatchers.length, 1, 'worktree review should start a watcher');
+
+    const reviewDir = path.join(home, 'reviews', pull.reviewId);
+    const before = readReviewStore(reviewDir).manifest.comments?.length;
+    assert.ok(before > 0, 'pull review should have comments');
+
+    fakeWatchers[0].listener('change', 'base.ts');
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    const after = readReviewStore(reviewDir).manifest.comments?.length;
+    assert.equal(after, before, 'watcher must not rebuild the pull review without comments');
+    assert.equal(readReviewStore(reviewDir).manifest.meta.pull.number, 7);
+  } finally {
+    fs.watch = originalWatch;
+    await hub.close();
+    await new Promise((resolve) => server.close(resolve));
+    cleanup(fixture.root);
+    cleanup(fixture.remote);
+    fs.rmSync(home, { recursive: true, force: true });
+    for (const key of Object.keys(process.env)) {
+      if (!(key in previousEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, previousEnv);
+  }
+});

@@ -15,6 +15,7 @@ import {
   parsePullNumber,
   parseGhTokenOutput,
   parseGlabTokenOutput,
+  normalizeBranchRef,
   parseRemoteUrl,
   preparePullReview,
 } from '../src/remotes.mjs';
@@ -96,6 +97,14 @@ test('parses tokens from gh/glab CLI output', () => {
   );
   assert.equal(parseGlabTokenOutput('  Token: abcdef'), 'abcdef');
   assert.equal(parseGlabTokenOutput('no token here'), '');
+});
+
+test('normalizes user-facing branch refs', () => {
+  assert.equal(normalizeBranchRef('origin/main'), 'main');
+  assert.equal(normalizeBranchRef('refs/heads/release/1.8'), 'release/1.8');
+  assert.equal(normalizeBranchRef('refs/remotes/upstream/main', 'upstream'), 'main');
+  assert.equal(normalizeBranchRef('main'), 'main');
+  assert.equal(normalizeBranchRef(''), '');
 });
 
 test('parses PR/MR numbers from numbers and URLs', () => {
@@ -236,9 +245,22 @@ test('fetches PR refs and prepares a base...head range', async () => {
     assert.ok(fixture.repo.revParse(refs.headRef));
     assert.ok(fixture.repo.revParse(refs.baseRef));
 
-    const prepared = await preparePullReview(fixture.repo, { number: 7, env });
+    const prepared = await preparePullReview(fixture.repo, {
+      number: 7,
+      env,
+      base: `origin/${fixture.defaultBranch}`,
+    });
     assert.equal(prepared.pull.baseBranch, fixture.defaultBranch);
     assert.match(prepared.range, /\.\.\./);
+    await assert.rejects(
+      () =>
+        preparePullReview(fixture.repo, {
+          number: 7,
+          env,
+          input: 'https://github.com/other/repo/pull/7',
+        }),
+      /与当前仓库不匹配/,
+    );
     const data = buildReviewData(fixture.repo, { range: prepared.range });
     assert.ok(data.nodes.some((node) => node.path === 'feature.ts' && node.status === 'added'));
   } finally {
