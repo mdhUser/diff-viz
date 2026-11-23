@@ -1,11 +1,13 @@
 ---
 name: diff-viz
-description: Use after completing code changes when the user wants to review a git diff visually, understand change impact/topology, inspect TODO/FIXME items, or hand off a change for human review. Generates a dependency graph of modified and impacted files, a local interactive Web UI with code diffs, and supports agent-written summaries/impact analysis/review todos. Trigger phrases include 变更 review、代码改动可视化、diff 拓扑、影响分析、查看改动/待办、谁依赖这个文件、diff-viz.
+description: Use after completing code changes when the user wants to review a git diff visually, understand change impact/topology in swimlanes, inspect config/database changes, read GitHub PR / GitLab MR reviewer comments, inspect TODO/FIXME items, or hand off a change for human review. Generates a dependency graph of modified and impacted files, a local interactive Web UI with code diffs, reviewer comments and agent-written summaries/review todos. Trigger phrases include 变更 review、代码改动可视化、diff 拓扑、影响分析、PR review、MR 评论、泳道图、数据库表、查看改动/待办、谁依赖这个文件、diff-viz.
 ---
 
 # diff-viz
 
 把一次 Git 变更转成「变更 + 依赖拓扑 + Diff + 待确认项」的可视化 Review 页面。工具是零运行时依赖的 Node CLI，自带构建好的前端；在本机启动 HTTP 服务并打开浏览器。
+
+> 本 SKILL.md 适用于 **diff-viz CLI >= 1.5.3**（含泳道、配置/数据库视图、GitHub PR / GitLab MR 与 Reviewer 评论）。用 `diff-viz --version` 检查；技能内容与源码同步更新，重新执行 `diff-viz skill install --force` 可刷新已安装的副本。
 
 ## 安装
 
@@ -34,6 +36,8 @@ diff-viz skill install --agent dsh      # dsh | claude | cursor | agents
 - 需要把 Agent 的改动总结、风险点、待确认 TODO 与代码 Diff 放在同一页面上。
 - 需要快速定位本次新增的 `TODO` / `FIXME` 注释。
 - **改动横跨多个仓库**，或者用户要看服务之间的依赖与影响 → 走「多仓库工作区」。
+- 用户给的是 **GitHub Pull Request / GitLab Merge Request**，希望直接看 diff 拓扑和 Reviewer 评论。
+- 用户想按 **模块/目录/包泳道**、**配置绑定** 或 **数据库表/SQL** 来理解改动。
 
 ## 前置条件
 
@@ -108,6 +112,28 @@ diff-viz \
 - Review URL（实际端口）。
 - 本次变更的文件数、受影响文件数、待办数（可从 `--json-only --quiet` 的 JSON 输出读取）。
 - 最需要人工确认的 1–3 个风险点。
+
+## 远端 GitHub PR / GitLab MR
+
+```bash
+diff-viz --pr 123                       # GitHub PR 编号或 URL
+diff-viz --mr 7                         # GitLab MR
+diff-viz --pr 123 --base origin/release/1.8   # 目标分支不是默认分支时
+```
+
+- 会先查远端 API 确认标题/目标分支，自动 fetch `refs/pull/<n>/head`（GitLab 为 `refs/merge-requests/<iid>/head`）和目标分支，再按 `merge-base` 生成 Review。
+- 传入完整 URL 时会校验仓库归属；URL 与当前 `origin` 不一致会直接报错，只传编号则使用当前仓库。
+- 私有仓库鉴权：设置 `GITHUB_TOKEN` / `GITLAB_TOKEN`，或复用已登录的 `gh` / `glab`；自建实例用 `DIFF_VIZ_PROVIDER=github|gitlab`、`DIFF_VIZ_GITLAB_HOSTS`、`DIFF_VIZ_GITHUB_HOSTS`（详见 docs/pull-requests.md）。
+- **Reviewer 评论**：行内评论挂到对应文件，文件节点/侧栏显示数量徽章（未解决为琥珀色）；详情抽屉「Reviewer 评论」只看当前文件；整体讨论在顶部「评论 N」的全局面板。工具栏「有评论」可只看有文件级评论的文件。
+- 评论是**打开 Review 时的快照**，之后新增的评论需要重新点一次该 MR（或重新执行 `--pr/--mr`）。
+
+## 拓扑视图：泳道 / 配置 / 数据库
+
+- **泳道视图**：存在多个模块时自动按模块分层（构建标记识别 Maven/Gradle/npm/go.mod/pyproject），按依赖深度排序；工具栏可切「模块 / 目录 / 包」粒度和「流向 / 泳道」。
+- **配置视图**：`.xml`（MyBatis namespace → Mapper 接口、Spring bean/import）、`.properties` / `.yml` / `.yaml` / `.sql` 作为配置节点入图；改 Mapper XML 会让接口与调用方进入「受影响」。工具栏「配置」可开关。
+- **数据库视图**：MyBatis XML / Java 注解 / `.sql` 里的 SQL 聚合成表节点，生成「读取/写入」边和数据库泳道；悬停表节点看 SQL，点击打开表详情抽屉。工具栏「数据表」可开关。
+
+细节见 `docs/pull-requests.md`、`docs/resources.md`、`docs/database.md`。
 
 ## 多仓库工作区（跨服务）
 
@@ -241,10 +267,13 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 | `--staged` | 只分析暂存区 |
 | `--last` | 分析最近一次提交 |
 | `--range <A..B \| A...B>` | 分析提交范围 |
-| `--base <ref>` | 与目标分支 merge-base 对比 |
+| `--base <ref>` | 与目标分支 merge-base 对比；配合 `--pr/--mr` 覆盖目标分支（`origin/main` 也可以） |
+| `--pr <编号\|URL>` | 分析 GitHub PR（自动 fetch refs 与评论） |
+| `--mr <编号\|URL>` | 分析 GitLab MR（自动 fetch refs 与评论） |
 | `--impact-depth <n>` | 下游影响深度，默认 3（最多 6） |
 | `--max-impact <n>` | 受影响文件上限，默认 120 |
 | `--no-untracked` | 排除未跟踪的新文件 |
+| `--max-scan-files <n>` | 依赖扫描代码文件上限，默认 15000（超出时页面顶部警告） |
 | `--data <file>` | 数据文件位置 |
 | `--port <n>` / `--host <addr>` | 本地服务地址 |
 | `--no-open` | 不自动打开浏览器 |
@@ -261,7 +290,11 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 
 ```json
 {
-  "storage": { "format": 2, "nodesDir": ".diff-review-data.json.nodes" },
+  "storage": {
+    "format": 2,
+    "nodesDir": ".diff-review-data.json.nodes",
+    "tablesDir": ".diff-review-data.json.tables"   // 有数据库表时才存在
+  },
   "meta": {
     "timestamp": "2026-11-13T10:00:00Z",
     "branch": "feature/x",
@@ -282,12 +315,25 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
         { "id": "c-todo-17", "text": "TODO: ...", "source": "code_comment", "completed": false, "line": 17 }
       ],
       "hunkCount": 3,
+      "kind": "code",                    // 或 config（配置节点）
+      "resourceKind": "xml-mybatis",    // 配置节点类型，代码节点没有
+      "moduleId": "order-service",       // 泳道信息（可选）
+      "packagePath": "com.acme.order",
+      "reviewComments": 2,               // 该文件的 PR/MR 评论数（无则 0/省略）
+      "reviewCommentUnresolved": 1,
       "payload": "0f2a6c8d1e3b4a5c6d7e"
     }
   ],
   "edges": [
     { "id": "e-...", "source": "src/api/routes.ts", "target": "src/auth/jwt.ts", "relation": "imports" }
-  ]
+  ],
+  // 以下为可选字段：PR/MR 元数据、Reviewer 评论、配置/数据库/模块
+  "meta": { "pull": { "provider": "gitlab", "number": 7, "title": "...", "commentCount": 5 }, "modules": [], "stats": {} },
+  "comments": [
+    { "id": "gitlab:123", "kind": "inline", "path": "src/a.ts", "line": 12, "author": "alice", "body": "...", "resolved": false }
+  ],
+  "tables": [{ "id": "table:t_order", "name": "t_order", "operations": ["select"], "sources": ["mapper/OrderMapper.xml"] }],
+  "components": [{ "id": "db:default", "kind": "database", "label": "MySQL" }]
 }
 ```
 
@@ -299,6 +345,8 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 - `impacted_only` 是未改动、但依赖链上受影响的文件；不要给它写 `summary`。
 - `nodes[].imports` / `importedBy` 是完整直接依赖列表（可能包含未画进图里的文件），详情抽屉会标「图外」。
 - 清单里没有 `diff` / `oldContent` / `newContent`：`nodes[].payload` 指向内容文件，浏览器打开详情时才加载（`GET /api/node?review=<id>&id=<path>`）。
+- `edges.relation` 除 `imports` 外还有 `binds`（Mapper 接口↔XML）、`config`（Spring import）、`class-ref`（Spring bean）、`reads_table` / `writes_table`（SQL 来源→表）。
+- `comments` 是 PR/MR Reviewer 评论（最多 500 条、正文单条最多 6KB）；`kind: inline` 挂在文件/行，`general` 是整体讨论。SQL 文本在 `tablesDir` 按表懒加载，清单只留元数据。
 - 完整字段定义见 [docs/data-contract.md](https://github.com/mdhUser/diff-viz/blob/main/docs/data-contract.md)。
 
 ## 支持的语言
@@ -321,9 +369,14 @@ hub 的状态目录默认是 `~/.diff-viz/`；Agent 沙箱不允许写 home 时�
 - **页面 404 / 空白**：npm 包已包含 `dist/`；如果是源码运行，执行 `npm run build`。
 - **端口占用**：CLI 会自动 +1；从输出里读取实际 URL，或显式 `--port 5180`。
 - **没有依赖边**：确认 import 路径能被静态解析（别名需要根目录 tsconfig/jsconfig 的 `baseUrl`/`paths`），以及文件在仓库内。
+- **PR/MR 列表为空或 401**：私有仓库需要 `GITHUB_TOKEN` / `GITLAB_TOKEN`（或先 `gh auth login` / `glab auth login`）；自建实例还要设 `DIFF_VIZ_PROVIDER` / `DIFF_VIZ_*_HOSTS`。
+- **PR/MR URL 与当前仓库不匹配**：切到对应仓库再运行，或只传编号。
+- **Reviewer 评论没有更新**：评论是打开时快照；重新点一次该 PR/MR，或重新执行 `diff-viz --pr/--mr`。
+- **拓扑图空白**：如果是「有评论」筛选导致的，点画布中央「显示全部文件」；先确认 `data.nodes.length > 0`。
 - **TODO 没出现**：只扫描本次 Diff 的**新增行**；已有代码里的 TODO 不会重复列出。
 
 ## 安全
 
 - 服务只绑定 `127.0.0.1`，但数据文件包含完整的旧/新文件内容，节点内容拆在 `<data>.nodes/` 目录里。
-- 不要把 `.diff-review-data.json`、`.diff-review-data.json.nodes/`、`.diff-review-annotations.json` 提交到 Git、上传或贴到公开渠道。
+- 不要把 `.diff-review-data.json`、`.diff-review-data.json.nodes/`、`.diff-review-data.json.tables/`、`.diff-review-annotations.json` 提交到 Git、上传或贴到公开渠道。
+- PR/MR 评论正文会写入 Review 数据，可能包含内部 review 意见；同样不要外传。API token 只由 hub 进程使用，不要写进注解文件或页面。

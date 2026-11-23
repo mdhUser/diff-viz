@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+## [1.5.4] - 2026-11-23
+
+### Changed
+
+- 更新 Agent Skill（`SKILL.md`）到与 CLI 1.5.3 对齐：补充 GitHub PR / GitLab MR（`--pr/--mr`、鉴权、自建实例、Reviewer 评论与快照限制）、泳道/配置/数据库视图、`--max-scan-files`、`comments/tables/components/meta.pull` 数据契约、PR/MR 故障排查与评论数据安全说明。旧的 Cursor 用户级 Skill 是 11 月 18 日的自包含副本（含 bin/src/dist），重新执行 `diff-viz skill install --force` 后会替换为指向仓库薄 `SKILL.md` 的链接，后续更新自动同步。
+
+## [1.5.3] - 2026-11-23
+
 ## [1.5.3] - 2026-11-23
 
 ### Fixed
