@@ -23,6 +23,7 @@ interface SidebarProps {
   isTodoDone: (nodeId: string, todo: ReviewTodo) => boolean;
   onQueryChange: (value: string) => void;
   onSelect: (id: string) => void;
+  onOpenComments: () => void;
 }
 
 function matches(node: ReviewNode, query: string) {
@@ -31,7 +32,8 @@ function matches(node: ReviewNode, query: string) {
   return node.path.toLowerCase().includes(needle) || node.label.toLowerCase().includes(needle);
 }
 
-export function Sidebar({ data, selectedId, query, reviewedMap, isTodoDone, onQueryChange, onSelect }: SidebarProps) {
+export function Sidebar({
+  onOpenComments, data, selectedId, query, reviewedMap, isTodoDone, onQueryChange, onSelect }: SidebarProps) {
   const { meta, nodes } = data;
   const changed = nodes.filter((node) => node.status !== 'impacted_only');
   const impacted = nodes.filter((node) => node.status === 'impacted_only');
@@ -136,13 +138,15 @@ export function Sidebar({ data, selectedId, query, reviewedMap, isTodoDone, onQu
               {totalOpenTodos} 待确认
             </span>
             {(data.comments?.length ?? 0) > 0 ? (
-              <span
-                className="flex items-center gap-1"
-                title={`${data.comments?.length} 条 PR/MR Reviewer 评论`}
+              <button
+                type="button"
+                onClick={onOpenComments}
+                className="flex items-center gap-1 transition hover:text-mist-300"
+                title={`${data.comments?.length} 条 PR/MR Reviewer 评论，点击查看全部`}
               >
                 <MessageSquare size={10} className="text-[#4a5f9e]" />
                 {data.comments?.length} 评论
-              </span>
+              </button>
             ) : null}
           </div>
         </div>

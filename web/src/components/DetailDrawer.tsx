@@ -36,6 +36,7 @@ interface DetailDrawerProps {
   onToggleReviewed: () => void;
   onToggleIgnored: () => void;
   onAddTodo: (text: string) => Promise<boolean>;
+  onOpenAllComments?: () => void;
 }
 
 export function DetailDrawer({
@@ -54,6 +55,7 @@ export function DetailDrawer({
   onToggleReviewed,
   onToggleIgnored,
   onAddTodo,
+  onOpenAllComments,
 }: DetailDrawerProps) {
   const [copied, setCopied] = useState(false);
   const meta = STATUS_META[node.status];
@@ -234,7 +236,9 @@ export function DetailDrawer({
           />
         ) : null}
         {tab === 'diff' ? <DiffTab node={node} /> : null}
-        {tab === 'comments' ? <CommentsTab node={node} data={data} /> : null}
+        {tab === 'comments' ? (
+          <CommentsTab node={node} data={data} onOpenAllComments={onOpenAllComments} />
+        ) : null}
         {tab === 'todos' ? (
           <TodosTab
             node={node}

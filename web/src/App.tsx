@@ -18,6 +18,7 @@ import { CanvasToolbar } from './components/CanvasToolbar';
 import { Legend } from './components/Legend';
 import { DetailDrawer } from './components/DetailDrawer';
 import { TableDetail } from './components/TableDetail';
+import { CommentsPanel } from './components/CommentsPanel';
 import { ResizeHandle } from './components/ResizeHandle';
 import { RepoPanel } from './components/RepoPanel';
 import { ScanLimitBanner } from './components/ScanLimitBanner';
@@ -146,6 +147,7 @@ export function App() {
   const [hubAvailable, setHubAvailable] = useState(false);
   const [currentReviewId, setCurrentReviewId] = useState<string | null>(null);
   const [repoPanelOpen, setRepoPanelOpen] = useState(false);
+  const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const sidebarDragStart = useRef(panelWidths.sidebarWidth);
@@ -810,6 +812,7 @@ export function App() {
         hubAvailable={hubAvailable}
         currentProjectId={currentProjectId}
         onOpenRepoPanel={() => void openRepoPanel()}
+        onOpenComments={() => setCommentsPanelOpen(true)}
         onPrev={() => stepReview(-1)}
         onNext={() => stepReview(1)}
         onToggleSidebar={() => setSidebarOpen((value) => !value)}
@@ -829,6 +832,7 @@ export function App() {
               isTodoDone={isTodoDone}
               onQueryChange={setQuery}
               onSelect={(id) => selectNode(id)}
+        onOpenComments={() => setCommentsPanelOpen(true)}
             />
             <ResizeHandle
               position="right"
@@ -969,11 +973,24 @@ export function App() {
               onToggleReviewed={toggleReviewed}
               onToggleIgnored={toggleIgnored}
               onAddTodo={addTodo}
+              onOpenAllComments={() => setCommentsPanelOpen(true)}
             />
             ) : null}
           </div>
         ) : null}
       </div>
+
+      {commentsPanelOpen && data ? (
+        <CommentsPanel
+          data={data}
+          onClose={() => setCommentsPanelOpen(false)}
+          onSelectNode={(path) => {
+            selectNode(path);
+            setTab('comments');
+            setCommentsPanelOpen(false);
+          }}
+        />
+      ) : null}
 
       <RepoPanel
         open={repoPanelOpen}

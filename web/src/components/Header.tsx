@@ -5,6 +5,7 @@ import {
   ExternalLink,
   GitBranch,
   History,
+  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
@@ -29,6 +30,7 @@ interface HeaderProps {
   onNext: () => void;
   onToggleSidebar: () => void;
   onRefresh: () => void;
+  onOpenComments: () => void;
 }
 
 function Stat({ value, label, color }: { value: string; label: string; color?: string }) {
@@ -58,6 +60,7 @@ export function Header({
   onNext,
   onToggleSidebar,
   onRefresh,
+  onOpenComments,
 }: HeaderProps) {
   const { meta } = data;
   const stats = meta.stats;
@@ -122,6 +125,17 @@ export function Header({
         <span className="hidden max-w-[230px] truncate rounded-md border border-line bg-ink-850 px-1.5 py-[3px] font-mono text-[10px] text-mist-500 xl:inline">
           {prettyRangeLabel(meta)}
         </span>
+        {commentCount > 0 ? (
+          <button
+            type="button"
+            onClick={onOpenComments}
+            className="flex shrink-0 items-center gap-1 rounded-md border border-[rgba(74,95,158,0.35)] bg-[rgba(74,95,158,0.08)] px-1.5 py-[3px] text-[9.5px] text-[#4a5f9e] transition hover:bg-[rgba(74,95,158,0.14)]"
+            title={`${commentCount} 条 Reviewer 评论，点击查看全部`}
+          >
+            <MessageSquare size={9} />
+            评论 {commentCount}
+          </button>
+        ) : null}
         {meta.pull?.url ? (
           <a
             href={meta.pull.url}
@@ -144,9 +158,7 @@ export function Header({
           <div className="h-4 w-px bg-line" />
           <Stat value={String(stats.impactedFiles)} label="受影响" color="#435bc0" />
           <Stat value={String(openTodos)} label="待办" color="#a97418" />
-          {commentCount > 0 ? (
-            <Stat value={String(commentCount)} label="评论" color="#4a5f9e" />
-          ) : null}
+
         </div>
 
         <div className="flex items-center rounded-lg border border-line bg-ink-900/70 p-0.5">
