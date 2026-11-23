@@ -836,6 +836,10 @@ export function App() {
             history: 'push',
           });
         }}
+        onOpenWorkspaceReview={(reviewId) => {
+          setCurrentReviewId(reviewId);
+          void fetchReview(reviewId, true, { history: 'replace' });
+        }}
         onRefresh={() => void refreshReview()}
       />
     );

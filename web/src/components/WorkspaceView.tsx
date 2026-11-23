@@ -1,6 +1,17 @@
-import { useMemo, useState } from 'react';
-import { FolderGit2, GitBranch, Info, NotebookText, RefreshCw, TriangleAlert } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  FolderGit2,
+  GitBranch,
+  History,
+  Info,
+  Loader2,
+  NotebookText,
+  RefreshCw,
+  TriangleAlert,
+} from 'lucide-react';
 import type { ReviewData, ServiceEdge, WorkspaceMeta, WorkspaceRepo } from '../types';
+import { apiFetch, describeResponseFailure, responseErrorDetail } from '../api';
 import { cn } from '../cn';
 
 const CARD_W = 264;
@@ -9,10 +20,19 @@ const GAP_X = 168;
 const GAP_Y = 42;
 const PAD = 56;
 
+interface WorkspaceVersion {
+  reviewId: string;
+  timestamp?: string;
+  archived?: boolean;
+  stats?: { repos?: number; changed?: number; impacted?: number };
+  scopes?: Array<{ name?: string; mode?: string; label?: string }>;
+}
+
 interface WorkspaceViewProps {
   data: ReviewData;
   refreshing?: boolean;
   onOpenReview: (reviewId: string) => void;
+  onOpenWorkspaceReview: (reviewId: string) => void;
   onRefresh: () => void;
 }
 
@@ -42,12 +62,50 @@ function rankColumns(repos: WorkspaceRepo[], edges: ServiceEdge[]) {
   return columns;
 }
 
-export function WorkspaceView({ data, refreshing, onOpenReview, onRefresh }: WorkspaceViewProps) {
+export function WorkspaceView({
+  data,
+  refreshing,
+  onOpenReview,
+  onOpenWorkspaceReview,
+  onRefresh,
+}: WorkspaceViewProps) {
   const meta = data.meta as unknown as WorkspaceMeta;
   const repos = meta.repos ?? [];
   const edges = meta.serviceEdges ?? [];
   const summary = (meta.overallSummary || '').trim();
   const [summaryOpen, setSummaryOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [versions, setVersions] = useState<WorkspaceVersion[]>([]);
+
+  const loadHistory = async (file: string) => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const response = await apiFetch(`/api/workspace/history?file=${encodeURIComponent(file)}`, {
+        cache: 'no-store',
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        versions?: WorkspaceVersion[];
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(describeResponseFailure(response, payload.error || (await responseErrorDetail(response))));
+      }
+      setVersions(payload.versions ?? []);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!meta.file) return;
+    void loadHistory(meta.file);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta.file, data.meta.reviewId]);
 
   const layout = useMemo(() => {
     const columns = rankColumns(repos, edges);
@@ -84,6 +142,101 @@ export function WorkspaceView({ data, refreshing, onOpenReview, onRefresh }: Wor
           <span>{meta.stats.repos} 个仓库</span>
           <span className="text-amber">{meta.stats.changed} 个有改动</span>
           <span className="text-accent">{meta.stats.impacted} 个受影响</span>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setHistoryOpen((open) => !open);
+                if (!historyOpen && meta.file) void loadHistory(meta.file);
+              }}
+              className={cn(
+                'flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] transition',
+                historyOpen
+                  ? 'border-accent/35 bg-accent-soft text-accent-bright'
+                  : 'border-line bg-ink-850 text-mist-400 hover:border-accent/30 hover:text-mist-200',
+              )}
+              title="查看这个工作区的历史分析版本"
+            >
+              <History size={11} />
+              历史 {versions.length > 0 ? versions.length : ''}
+              <ChevronDown size={9} />
+            </button>
+            {historyOpen ? (
+              <div className="absolute right-0 top-[calc(100%+6px)] z-40 w-[340px] overflow-hidden rounded-xl border border-line bg-[#fffdf8] shadow-[0_18px_40px_-24px_rgba(60,50,30,0.45)]">
+                <div className="flex items-center justify-between border-b border-line/70 px-3 py-2">
+                  <span className="text-[10px] font-medium text-mist-200">工作区历史版本</span>
+                  <button
+                    type="button"
+                    onClick={() => meta.file && void loadHistory(meta.file)}
+                    className="text-[9px] text-mist-600 transition hover:text-mist-200"
+                  >
+                    刷新
+                  </button>
+                </div>
+                <div className="max-h-[320px] overflow-y-auto p-1.5">
+                  {historyLoading ? (
+                    <div className="flex items-center gap-2 px-2 py-3 text-[10px] text-mist-600">
+                      <Loader2 size={11} className="animate-spin text-accent" />
+                      正在读取历史…
+                    </div>
+                  ) : null}
+                  {historyError ? (
+                    <div className="px-2 py-3 text-[10px] leading-5 text-rose">读取历史失败：{historyError}</div>
+                  ) : null}
+                  {!historyLoading && !historyError && versions.length === 0 ? (
+                    <div className="px-2 py-3 text-[10px] leading-5 text-mist-600">
+                      还没有历史版本。每次重新执行 `diff-viz workspace` 都会把上一版归档。
+                    </div>
+                  ) : null}
+                  {versions.map((version) => {
+                    const current = version.reviewId === meta.reviewId;
+                    const changed = version.stats?.changed ?? 0;
+                    const impacted = version.stats?.impacted ?? 0;
+                    return (
+                      <button
+                        key={version.reviewId}
+                        type="button"
+                        onClick={() => {
+                          setHistoryOpen(false);
+                          if (!current) onOpenWorkspaceReview(version.reviewId);
+                        }}
+                        className={cn(
+                          'mb-1 flex w-full flex-col gap-1 rounded-lg border px-2.5 py-2 text-left transition',
+                          current
+                            ? 'border-accent/30 bg-accent-soft'
+                            : 'border-transparent hover:border-line hover:bg-ink-850/50',
+                        )}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] text-mist-300">
+                            {version.timestamp || '未知时间'}
+                          </span>
+                          {version.archived ? (
+                            <span className="rounded border border-line px-1 py-0.5 text-[8px] text-mist-600">归档</span>
+                          ) : (
+                            <span className="rounded border border-mint/30 bg-mint/10 px-1 py-0.5 text-[8px] text-mint">
+                              最新
+                            </span>
+                          )}
+                          {current ? <span className="ml-auto text-[8.5px] text-accent">当前</span> : null}
+                        </span>
+                        <span className="flex flex-wrap items-center gap-x-2 text-[9px] text-mist-600">
+                          <span>{version.stats?.repos ?? 0} 仓库</span>
+                          <span className="text-amber">{changed} 有改动</span>
+                          <span className="text-accent">{impacted} 受影响</span>
+                        </span>
+                        {version.scopes?.length ? (
+                          <span className="truncate font-mono text-[8px] text-mist-600">
+                            {version.scopes.map((scope) => `${scope.name || ''}:${scope.mode || 'worktree'}`).join(' · ')}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={onRefresh}

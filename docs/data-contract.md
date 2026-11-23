@@ -162,6 +162,24 @@ Review 的 `meta` 可选带 `pull`：
 - 评论随 review 清单保存（`comments` 顶层字段），不单独懒加载；旧 Review 无该字段时界面按 0 处理。
 - 读取失败不阻断 Review，警告写入 `meta.warnings`。
 
+## 工作区历史（1.6 起）
+
+hub 每次重新分析同一个 workspace 文件时，会先把上一版快照归档为 `workspace-<hash>-<timestamp>`，最新版仍使用稳定的 `workspace-<hash>` id。查询：
+
+```json
+GET /api/workspace/history?file=<workspace 文件的绝对路径>
+{
+  "ok": true,
+  "file": "/path/to/diff-viz.workspace.json",
+  "versions": [
+    { "reviewId": "workspace-83ae372a8e", "timestamp": "...", "archived": false, "stats": { "repos": 2, "changed": 1, "impacted": 1 }, "scopes": [] },
+    { "reviewId": "workspace-83ae372a8e-20261123100211", "timestamp": "...", "archived": true, "stats": { "repos": 2, "changed": 2, "impacted": 0 } }
+  ]
+}
+```
+
+归档快照的 `meta` 带 `archived: true`、`archivedAt`、`archivedFrom`；`meta.file` 与 `stats` 保持不变，可直接用 `GET /api/data?review=<归档 id>` 读取。
+
 ## 状态持久化
 
 - 勾选 TODO / 标记 Review：`POST /api/state` → 只重写对应 Review 的清单，不碰节点内容文件。

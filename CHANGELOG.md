@@ -8,6 +8,16 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-23
+
+### Added
+
+- **工作区历史版本**：每次重新执行 `diff-viz workspace` 都会把上一版工作区快照归档（`workspace-<hash>-<timestamp>`），最新版继续使用稳定 id。工作区页面右上角新增「历史 N」下拉，显示每个版本的时间、仓库数、改动/受影响数、各仓库比较范围，可一键切回任一历史版本；归档版同样保留服务拓扑和仓库卡片，可继续点进仓库 Review。
+- 新增 `GET /api/workspace/history?file=<workspace 文件>`，返回最新版与归档版列表（含 `archived`、`stats`、`scopes`）；归档快照带 `meta.archived / archivedAt / archivedFrom`，可直接通过 `/api/data?review=` 读取。
+- 新增 `test/workspace-history.test.mjs`：验证重复分析生成归档、稳定 id 不被替换、历史 API 与归档数据可读。
+
+## [1.5.5] - 2026-11-23
+
 ## [1.5.5] - 2026-11-23
 
 ### Added

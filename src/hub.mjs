@@ -826,6 +826,76 @@ export async function startHub({
     return { reviewId, data };
   };
 
+  // Workspace analyses used to overwrite a single snapshot per workspace file,
+  // so committing the change made the previous graph unreachable. Archive the
+  // previous stable snapshot before writing the new one; the history endpoint
+  // lists those archives plus the current version.
+  const archiveWorkspaceReview = (reviewId) => {
+    const existing = loadStore(reviewId);
+    if (!existing?.manifest?.meta?.workspace) return null;
+    const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+    let archiveId = `${reviewId}-${stamp}`;
+    let suffix = 1;
+    while (fs.existsSync(reviewPath(archiveId))) {
+      archiveId = `${reviewId}-${stamp}-${suffix}`;
+      suffix += 1;
+    }
+    try {
+      copyReviewStore(existing, reviewPath(archiveId), {
+        metaPatch: {
+          reviewId: archiveId,
+          archived: true,
+          archivedAt: formatTimestamp(),
+          archivedFrom: reviewId,
+        },
+      });
+      reviews.delete(reviewId);
+      return archiveId;
+    } catch {
+      // History is best effort: never fail a fresh analysis because archiving
+      // the previous one failed.
+      return null;
+    }
+  };
+
+  const workspaceHistory = (file) => {
+    const canonicalPath = (value) => {
+      const resolved = path.resolve(String(value || ''));
+      try {
+        return fs.realpathSync.native(resolved);
+      } catch {
+        try {
+          return fs.realpathSync(resolved);
+        } catch {
+          return resolved;
+        }
+      }
+    };
+    const resolvedFile = canonicalPath(file);
+    const versions = [];
+    for (const snapshot of listReviewSnapshots(reviewsDir)) {
+      try {
+        const store = readReviewStore(snapshot.path, { strict: false });
+        const meta = store?.manifest?.meta;
+        if (!meta?.workspace || !meta.file) continue;
+        if (canonicalPath(meta.file) !== resolvedFile) continue;
+        const repos = Array.isArray(meta.repos) ? meta.repos : [];
+        versions.push({
+          reviewId: String(meta.reviewId || snapshot.id),
+          timestamp: String(meta.timestamp || ''),
+          archived: Boolean(meta.archived),
+          stats: meta.stats || {},
+          scopes: repos.map((repo) => ({ name: repo.name, mode: repo.scopeMode, label: repo.scopeLabel })),
+          mtime: snapshot.mtime,
+        });
+      } catch {
+        /* a broken snapshot must not hide the rest of the history */
+      }
+    }
+    versions.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)) || b.mtime - a.mtime);
+    return versions.slice(0, 30);
+  };
+
   // Multi-repository review: analyze each repo with the existing pipeline, then
   // merge into one service-level graph. Links come from manifests plus whatever
   // the workspace file declares.
@@ -908,6 +978,7 @@ export async function startHub({
       nodes: [],
       edges: [],
     };
+    archiveWorkspaceReview(reviewId);
     saveReview(reviewId, data);
     return { reviewId, data };
   };
@@ -1147,6 +1218,16 @@ export async function startHub({
           stats: data.meta.stats,
           warnings: data.meta.warnings,
         });
+        return;
+      }
+
+      if (pathname === '/api/workspace/history') {
+        const file = url.searchParams.get('file');
+        if (!file) {
+          sendJson(res, 400, { error: '缺少 file 参数。' });
+          return;
+        }
+        sendJson(res, 200, { ok: true, file: path.resolve(file), versions: workspaceHistory(file) });
         return;
       }
 

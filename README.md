@@ -117,6 +117,8 @@ diff-viz workspace           # 分析并打开服务级拓扑
 
 diff-viz 会从 `package.json` / `pom.xml` / `go.mod` / `build.gradle(.kts)` / `*.csproj` / `composer.json` 自动识别包依赖，静态解析不可靠的 RPC / HTTP 调用可在 `diff-viz.workspace.json` 的 `links` 里声明；某个服务有改动时，依赖它的服务会标记为「受影响」并给出层级。点服务卡片可进入该仓库原来的文件级拓扑。
 
+提交后想看旧的工作区拓扑：重新运行 `diff-viz workspace` 会归档上一版，页面右上角「历史 N」可切回任意历史版本；服务卡片进入仓库后，「← 工作区」或浏览器后退可回到总览。
+
 配置格式和比较范围（`worktree` / `staged` / `last` / `range` / `base` / `commit`，支持 per-repo 覆盖）见 **[docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md)**。
 
 ## 让 AI Agent 接进来

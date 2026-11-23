@@ -82,6 +82,7 @@ diff-viz skill install          # 把薄 SKILL.md 注册到 Agent 技能目录
 - **包依赖自动识别**：读 `package.json` / `pom.xml` / `go.mod` / `build.gradle(.kts)` / `*.csproj` / `composer.json`，把依赖坐标对上兄弟仓库的产物坐标，生成 `kind: manifest` 的边。
 - **RPC / HTTP 手工补充**：静态解析跨服务调用误报太高，这类边写在 `links` 里（`kind` 自定，`via` 显示在图上）；指向未声明仓库的 link 会被忽略并给出警告。
 - 某个仓库有改动时，依赖它的仓库标记为「受影响」并给出层级；点服务卡片进入该仓库原有的文件级拓扑。
+- **工作区历史**：每次重新执行 `diff-viz workspace` 都会把上一版工作区快照归档，页面右上角「历史 N」可切换历史版本；归档与最新版都保留各自的仓库统计/比较范围。重启 hub 不会丢失历史（快照在 `~/.diff-viz/reviews/`）。
 
 ## Skill 安装
 

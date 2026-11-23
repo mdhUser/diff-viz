@@ -4,7 +4,7 @@
 > **模块/包（泳道）→ 代码 → 配置文件 → 数据库表（含 SQL）**。
 > 原则：数据契约只做增量、不破坏 1.x；所有解析保持零运行时依赖、只读、可回退。
 
-## 当前状态（2026-11-23，v1.5.0）
+## 当前状态（2026-11-23，v1.6.0）
 
 | 迭代 | 版本 | 状态 |
 | --- | --- | --- |
@@ -14,7 +14,8 @@
 | 3. 数据库表与 SQL 视图 | `v1.3.0` | ✅ 完成 |
 | 4. 远端 PR / MR 接入 | `v1.4.0` / `v1.4.1` | ✅ 完成 |
 | 5. Reviewer 评论入图 | `v1.5.0` | ✅ 完成 |
-| 6. 扩展与硬化 | 未排期 | ⏳ 待做 |
+| 6. 工作区历史版本 | `v1.6.0` | ✅ 完成 |
+| 7. 扩展与硬化 | 未排期 | ⏳ 待做 |
 
 ## 已完成
 
@@ -54,6 +55,12 @@
 - 文件节点与侧栏显示评论数徽章（未解决为琥珀色），头部/侧栏汇总总评论数；抽屉新增「Reviewer 评论」Tab；工具栏「有评论」过滤只看评论文件。
 - 评论随 Review 清单持久化；读取失败降级为 `meta.warnings`，不阻断 Review。
 - 关键文件：`src/comments.mjs`、`src/cli.mjs`、`src/hub.mjs`、`src/review-store.mjs`、`web/src/components/tabs/CommentsTab.tsx`、`FileNode.tsx`、`Sidebar.tsx`。
+
+### v1.6.0 — 工作区历史版本
+
+- 每次重新分析同一个 workspace 文件时归档上一版快照，最新版保留稳定 id；页面「历史 N」切换历史版本（时间、仓库统计、比较范围、归档标记）。
+- `GET /api/workspace/history?file=` 返回最新与归档版本；归档 `meta` 带 `archived/archivedAt/archivedFrom`。
+- 关键文件：`src/hub.mjs`（归档与历史 API）、`web/src/components/WorkspaceView.tsx`（历史下拉）、`test/workspace-history.test.mjs`。
 
 ## 数据契约增量（1.x 兼容）
 

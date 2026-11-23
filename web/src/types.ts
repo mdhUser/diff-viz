@@ -206,6 +206,7 @@ export interface ServiceEdge {
 }
 
 export interface WorkspaceMeta {
+  reviewId?: string;
   workspace: true;
   name: string;
   file?: string;
