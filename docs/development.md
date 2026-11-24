@@ -24,7 +24,8 @@ diff-viz/
 ├── scripts/demo.mjs        # 生成演示仓库并启动
 ├── docs/                   # CLI 参考、数据契约、语言解析等文档
 ├── SKILL.md                # Agent Skill 说明
-├── CHANGELOG.md
+├── CHANGELOG.md          # English changelog (release-notes source)
+├── CHANGELOG.zh-CN.md    # 中文 changelog
 ├── README.md          # English README (GitHub/npm entry)
 ├── README.zh-CN.md    # 中文 README
 ```
@@ -56,7 +57,7 @@ CI（`.github/workflows/ci.yml`）在 ubuntu / macOS / Windows 上跑 `release:c
 
 ## 发布新版本
 
-1. 在 `CHANGELOG.md` 的 `## [Unreleased]` 下写清 `Added` / `Changed` / `Fixed`，说明用户能感知到什么。
+1. 在英文 `CHANGELOG.md` 的 `## [Unreleased]` 下写清 `Added` / `Changed` / `Fixed`，说明用户能感知到什么；中文镜像 `CHANGELOG.zh-CN.md` 同步翻译。**从 v1.8.0 起对外发布信息以英文为主。**
 2. 把 `Unreleased` 改成新版本号并补日期，同时更新 `package.json` 的 `version`（两者必须一致）。
 3. 跑检查：
 
@@ -77,7 +78,7 @@ CI（`.github/workflows/ci.yml`）在 ubuntu / macOS / Windows 上跑 `release:c
    git push origin vX.Y.Z
    ```
 
-5. 在 GitHub Releases 创建对应 tag 的 release，把 CHANGELOG 该版本内容作为 notes（可上传 `release/diff-viz-skill.zip`）。
+5. 在 GitHub Releases 创建对应 tag 的 release：**标题和 notes 一律用英文**，notes 直接取英文 `CHANGELOG.md` 对应版本内容；旧的中文/英文 release 信息也应保持英文（可上传 `release/diff-viz-skill.zip`）。
 6. 发布 npm（包名 `diff-viz-cli`，命令仍是 `diff-viz`）：
 
    ```bash

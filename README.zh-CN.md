@@ -5,7 +5,7 @@
 [![CI](https://github.com/mdhUser/diff-viz/actions/workflows/ci.yml/badge.svg)](https://github.com/mdhUser/diff-viz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/mdhUser/diff-viz/blob/main/LICENSE)
 [![npm](https://img.shields.io/npm/v/diff-viz-cli.svg)](https://www.npmjs.com/package/diff-viz-cli)
-[更新日志](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md)
+[更新日志](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.zh-CN.md)
 
 **改完代码，先看清「这次改动会影响谁」，再开始 Review。**
 
@@ -158,7 +158,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor
 
 当前版本 **1.8.0**：从 1.0.0 起冻结对外契约（CLI 参数、数据格式 v2、hub HTTP API、Agent 注解 JSON），1.x 内不做破坏性改动，破坏性变更进入 2.0.0。旧版单文件数据仍可读取并自动升级。
 
-版本历史见 [CHANGELOG.md](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md)。
+版本历史见 [CHANGELOG.zh-CN.md](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.zh-CN.md)。
 
 ## 更多文档
 
