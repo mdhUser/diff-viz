@@ -4,6 +4,7 @@ import { Columns2, FileWarning, Loader2, Rows3, ScanLine } from 'lucide-react';
 import type { ReviewNode } from '../../types';
 import { highlightLanguage } from '../../format';
 import { cn } from '../../cn';
+import { useI18n } from '../../i18n';
 
 const diffStyles: ReactDiffViewerStylesOverride = {
   variables: {
@@ -54,6 +55,7 @@ interface DiffTabProps {
 }
 
 export function DiffTab({ node }: DiffTabProps) {
+  const { t } = useI18n();
   const [splitView, setSplitView] = useState(false);
   const [fullFile, setFullFile] = useState(false);
 
@@ -70,8 +72,8 @@ export function DiffTab({ node }: DiffTabProps) {
     return (
       <EmptyPanel
         icon={<ScanLine size={22} />}
-        title="该文件没有代码改动"
-        description="它因为依赖了变更文件而被纳入 Review。可以回到「摘要」查看依赖关系与影响说明。"
+        title={t('该文件没有代码改动')}
+        description={t('它因为依赖了变更文件而被纳入 Review。可以回到「摘要」查看依赖关系与影响说明。')}
       />
     );
   }
@@ -80,8 +82,8 @@ export function DiffTab({ node }: DiffTabProps) {
     return (
       <EmptyPanel
         icon={<FileWarning size={22} />}
-        title="二进制文件"
-        description="diff-viz 不渲染二进制内容的文本 Diff，请在本地工具中对比该文件。"
+        title={t('二进制文件')}
+        description={t('diff-viz 不渲染二进制内容的文本 Diff，请在本地工具中对比该文件。')}
       />
     );
   }
@@ -90,8 +92,8 @@ export function DiffTab({ node }: DiffTabProps) {
     return (
       <EmptyPanel
         icon={<FileWarning size={22} />}
-        title="节点内容缺失"
-        description="这个节点的内容文件已被清理或损坏，重新运行一次 diff-viz 即可恢复。"
+        title={t('节点内容缺失')}
+        description={t('这个节点的内容文件已被清理或损坏，重新运行一次 diff-viz 即可恢复。')}
       />
     );
   }
@@ -100,8 +102,8 @@ export function DiffTab({ node }: DiffTabProps) {
     return (
       <EmptyPanel
         icon={<Loader2 size={22} className="animate-spin text-accent" />}
-        title="正在加载文件内容"
-        description="大仓库的节点内容按需读取，只会加载当前文件。"
+        title={t('正在加载文件内容')}
+        description={t('大仓库的节点内容按需读取，只会加载当前文件。')}
       />
     );
   }
@@ -110,11 +112,11 @@ export function DiffTab({ node }: DiffTabProps) {
     return (
       <EmptyPanel
         icon={<ScanLine size={22} />}
-        title="没有文本差异"
+        title={t('没有文本差异')}
         description={
           node.renamed
-            ? `文件从 ${node.oldPath} 重命名，内容未发生变化。`
-            : '该文件只有模式（权限）等元数据变更，没有可展示的文本 Diff。'
+            ? t('文件从 {path} 重命名，内容未发生变化。', { path: node.oldPath ?? '' })
+            : t('该文件只有模式（权限）等元数据变更，没有可展示的文本 Diff。')
         }
       />
     );
@@ -131,10 +133,10 @@ export function DiffTab({ node }: DiffTabProps) {
               'flex h-7 items-center gap-1 rounded-md px-2 text-[10px] transition',
               splitView ? 'bg-ink-750 text-mist-100' : 'text-mist-600 hover:text-mist-300',
             )}
-            title="双栏对比"
+            title={t('双栏对比')}
           >
             <Columns2 size={11} />
-            双栏
+            {t('双栏')}
           </button>
           <button
             type="button"
@@ -143,10 +145,10 @@ export function DiffTab({ node }: DiffTabProps) {
               'flex h-7 items-center gap-1 rounded-md px-2 text-[10px] transition',
               !splitView ? 'bg-ink-750 text-mist-100' : 'text-mist-600 hover:text-mist-300',
             )}
-            title="单栏对比"
+            title={t('单栏对比')}
           >
             <Rows3 size={11} />
-            单栏
+            {t('单栏')}
           </button>
         </div>
 
@@ -159,7 +161,7 @@ export function DiffTab({ node }: DiffTabProps) {
               ? 'border-accent/30 bg-accent-soft text-accent-bright'
               : 'border-line bg-ink-900/50 text-mist-500 hover:text-mist-300',
           )}
-          title="显示完整文件，而不是只显示改动上下文"
+          title={t('显示完整文件，而不是只显示改动上下文')}
         >
           <span
             className={cn(
@@ -174,20 +176,20 @@ export function DiffTab({ node }: DiffTabProps) {
               )}
             />
           </span>
-          完整文件
+          {t('完整文件')}
         </button>
 
         <div className="ml-auto flex items-center gap-2 font-mono text-[9.5px]">
           <span className="text-mint">+{node.stats.additions}</span>
           <span className="text-rose">−{node.stats.deletions}</span>
-          {hunkCount > 0 ? <span className="text-mist-600">{hunkCount} 处</span> : null}
+          {hunkCount > 0 ? <span className="text-mist-600">{t('{count} 处', { count: hunkCount })}</span> : null}
         </div>
       </div>
 
       {node.contentTruncated ? (
         <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-amber/20 bg-amber/5 px-2.5 py-1.5 text-[10px] text-amber">
           <FileWarning size={11} />
-          文件内容超过展示上限，Diff 仅基于前 400,000 个字符计算。
+          {t('文件内容超过展示上限，Diff 仅基于前 400,000 个字符计算。')}
         </div>
       ) : null}
 
@@ -204,12 +206,12 @@ export function DiffTab({ node }: DiffTabProps) {
           highlightLanguage={highlightLanguage(node.language)}
           styles={diffStyles}
           codeFoldMessageRenderer={(totalFoldedLines) => (
-            <span className="diff-fold-label">展开 {totalFoldedLines} 行未改动</span>
+            <span className="diff-fold-label">{t('展开 {count} 行未改动', { count: totalFoldedLines })}</span>
           )}
           loadingElement={() => (
             <div className="flex items-center gap-2 px-4 py-8 text-[10.5px] text-mist-500">
               <Loader2 size={13} className="animate-spin text-accent" />
-              正在计算 Diff…
+              {t('正在计算 Diff…')}
             </div>
           )}
         />

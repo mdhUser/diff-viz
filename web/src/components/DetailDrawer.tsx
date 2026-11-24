@@ -15,6 +15,7 @@ import type { DrawerTab, ReviewData, ReviewNode, ReviewTodo } from '../types';
 import { STATUS_META } from '../status';
 import { languageLabel } from '../language';
 import { cn } from '../cn';
+import { useI18n } from '../i18n';
 import { SummaryTab } from './tabs/SummaryTab';
 import { DiffTab } from './tabs/DiffTab';
 import { TodosTab } from './tabs/TodosTab';
@@ -57,6 +58,7 @@ export function DetailDrawer({
   onAddTodo,
   onOpenAllComments,
 }: DetailDrawerProps) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const meta = STATUS_META[node.status];
   const Icon = meta.icon;
@@ -89,7 +91,7 @@ export function DetailDrawer({
               style={{ color: meta.color, background: meta.soft, borderColor: meta.border }}
             >
               <Icon size={10} />
-              {meta.label}
+              {t(meta.label)}
             </span>
             {node.status === 'impacted_only' ? (
               <span className="rounded border border-line px-1.5 py-0.5 font-mono text-[8.5px] text-mist-600">
@@ -108,16 +110,16 @@ export function DetailDrawer({
               type="button"
               onClick={copyPath}
               className="flex h-7 items-center gap-1 rounded-md px-1.5 text-[9.5px] text-mist-600 transition hover:bg-ink-800 hover:text-mist-200"
-              title="复制路径"
+              title={t('复制路径')}
             >
               <Copy size={11} />
-              {copied ? '已复制' : '复制路径'}
+              {copied ? t('已复制') : t('复制路径')}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="flex h-7 w-7 items-center justify-center rounded-md text-mist-500 transition hover:bg-ink-800 hover:text-mist-100"
-              aria-label="关闭详情"
+              aria-label={t('关闭详情')}
             >
               <X size={15} />
             </button>
@@ -134,7 +136,7 @@ export function DetailDrawer({
             </div>
             {node.renamed && node.oldPath ? (
               <div className="mt-1 font-mono text-[9px] text-mist-600">
-                原路径 <span className="text-mist-500">{node.oldPath}</span>
+                {t('原路径')} <span className="text-mist-500">{node.oldPath}</span>
               </div>
             ) : null}
           </div>
@@ -149,12 +151,12 @@ export function DetailDrawer({
             )}
           >
             {reviewed ? <CheckCircle2 size={11} /> : <Circle size={11} />}
-            {reviewed ? '已 Review' : '标记 Review'}
+            {reviewed ? t('已 Review') : t('标记 Review')}
           </button>
           <button
             type="button"
             onClick={onToggleIgnored}
-            title={ignored ? '取消忽略' : '标记为无关改动，图上弱化显示'}
+            title={ignored ? t('取消忽略') : t('标记为无关改动，图上弱化显示')}
             className={cn(
               'flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-[9.5px] transition',
               ignored
@@ -163,28 +165,28 @@ export function DetailDrawer({
             )}
           >
             <EyeOff size={11} />
-            {ignored ? '已忽略' : '忽略'}
+            {ignored ? t('已忽略') : t('忽略')}
           </button>
         </div>
 
         <div className="mt-2.5 flex items-center gap-3 text-[9.5px] text-mist-600">
           {node.status === 'impacted_only' ? (
-            <span className="text-mist-400">未修改 · 依赖变更影响</span>
+            <span className="text-mist-400">{t('未修改 · 依赖变更影响')}</span>
           ) : (
             <>
               <span className="font-mono text-mint">+{node.stats.additions}</span>
               <span className="font-mono text-rose">−{node.stats.deletions}</span>
-              {hunkCount > 0 ? <span className="font-mono">{hunkCount} 处改动</span> : null}
+              {hunkCount > 0 ? <span className="font-mono">{t('{count} 处改动', { count: hunkCount })}</span> : null}
               <span className="font-mono">{languageLabel(node.language)}</span>
             </>
           )}
           {commentCount > 0 ? (
             <span
               className={cn('flex items-center gap-1', unresolvedComments > 0 ? 'text-amber' : 'text-mist-500')}
-              title={`${commentCount} 条 Reviewer 评论${unresolvedComments > 0 ? `，${unresolvedComments} 条未解决` : ''}`}
+              title={`${t('{count} 条 Reviewer 评论', { count: commentCount })}${unresolvedComments > 0 ? t('，{count} 条未解决', { count: unresolvedComments }) : ''}`}
             >
               <MessageSquare size={10} />
-              {commentCount} 评论
+              {t('{count} 评论', { count: commentCount })}
             </span>
           ) : null}
           <span className="ml-auto flex items-center gap-1">
@@ -197,19 +199,19 @@ export function DetailDrawer({
           <TabButton
             active={tab === 'summary'}
             icon={<Sparkles size={12} />}
-            label="摘要与影响"
+            label={t('摘要与影响')}
             onClick={() => onTabChange('summary')}
           />
           <TabButton
             active={tab === 'diff'}
             icon={<GitCompareArrows size={12} />}
-            label="代码 Diff"
+            label={t('代码 Diff')}
             onClick={() => onTabChange('diff')}
           />
           <TabButton
             active={tab === 'todos'}
             icon={<ListChecks size={12} />}
-            label="待确认"
+            label={t('待确认')}
             count={todos.length}
             badge={todoOpen}
             onClick={() => onTabChange('todos')}
@@ -217,7 +219,7 @@ export function DetailDrawer({
           <TabButton
             active={tab === 'comments'}
             icon={<MessageSquare size={12} />}
-            label="Reviewer 评论"
+            label={t('Reviewer 评论')}
             count={commentCount}
             badge={unresolvedComments}
             onClick={() => onTabChange('comments')}

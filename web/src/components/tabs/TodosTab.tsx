@@ -3,6 +3,7 @@ import { Check, CheckCheck, ListChecks, Plus, Sparkles, TriangleAlert } from 'lu
 import type { ReviewNode, ReviewTodo } from '../../types';
 import { SOURCE_META, severityMeta } from '../../status';
 import { cn } from '../../cn';
+import { useI18n } from '../../i18n';
 
 interface TodosTabProps {
   node: ReviewNode;
@@ -14,6 +15,7 @@ interface TodosTabProps {
 }
 
 export function TodosTab({ node, todos, isDone, onToggle, onAdd, serverOnline }: TodosTabProps) {
+  const { t } = useI18n();
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const completed = todos.filter((todo) => isDone(todo)).length;
@@ -38,7 +40,7 @@ export function TodosTab({ node, todos, isDone, onToggle, onAdd, serverOnline }:
               <span className="font-mono text-[24px] font-medium leading-none text-mist-50">{completed}</span>
               <span className="font-mono text-[11px] text-mist-600">/ {todos.length}</span>
             </div>
-            <div className="mt-1.5 text-[10px] text-mist-500">待确认项已处理</div>
+            <div className="mt-1.5 text-[10px] text-mist-500">{t('待确认项已处理')}</div>
           </div>
           <span
             className={cn(
@@ -64,9 +66,9 @@ export function TodosTab({ node, todos, isDone, onToggle, onAdd, serverOnline }:
           <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-ink-800/60 text-mist-500">
             <ListChecks size={21} />
           </div>
-          <div className="mt-3 text-[12px] font-medium text-mist-200">没有待确认项</div>
+          <div className="mt-3 text-[12px] font-medium text-mist-200">{t('没有待确认项')}</div>
           <p className="mt-1.5 max-w-[280px] text-[10.5px] leading-5 text-mist-600">
-            代码 Diff 中没有新增 TODO/FIXME，Agent 也没有标记风险点。你仍然可以在下面添加自己的 Review 备注。
+            {t('代码 Diff 中没有新增 TODO/FIXME，Agent 也没有标记风险点。你仍然可以在下面添加自己的 Review 备注。')}
           </p>
         </div>
       ) : (
@@ -96,7 +98,7 @@ export function TodosTab({ node, todos, isDone, onToggle, onAdd, serverOnline }:
                         ? 'border-mint bg-mint text-ink-950'
                         : 'border-[#c9c2b3] bg-ink-900 text-transparent hover:border-mint/60',
                     )}
-                    aria-label={done ? '标记为未完成' : '标记为完成'}
+                    aria-label={done ? t('标记为未完成') : t('标记为完成')}
                   >
                     <Check size={11} strokeWidth={3} />
                   </button>
@@ -112,7 +114,7 @@ export function TodosTab({ node, todos, isDone, onToggle, onAdd, serverOnline }:
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span className="flex items-center gap-1 rounded border border-line bg-ink-850 px-1.5 py-0.5 text-[8.5px] text-mist-500">
                         <SourceIcon size={8.5} />
-                        {source.label}
+                        {t(source.label)}
                       </span>
                       {severity ? (
                         <span
@@ -120,7 +122,7 @@ export function TodosTab({ node, todos, isDone, onToggle, onAdd, serverOnline }:
                           style={{ background: severity.bg, color: severity.color }}
                         >
                           <TriangleAlert size={8.5} />
-                          {severity.label}
+                          {t(severity.label)}
                         </span>
                       ) : null}
                       {todo.line ? (
@@ -145,7 +147,7 @@ export function TodosTab({ node, todos, isDone, onToggle, onAdd, serverOnline }:
           <input
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="添加一条需要人工确认的点…"
+            placeholder={t('添加一条需要人工确认的点…')}
             maxLength={500}
             className="h-8 min-w-0 flex-1 rounded-md border border-line bg-ink-850 px-2.5 text-[11px] text-mist-200 outline-none transition placeholder:text-mist-600 focus:border-accent/40"
           />
@@ -155,18 +157,18 @@ export function TodosTab({ node, todos, isDone, onToggle, onAdd, serverOnline }:
             className="flex h-8 shrink-0 items-center gap-1 rounded-md bg-accent px-2.5 text-[10.5px] font-medium text-[#fbf9f4] transition hover:bg-accent-bright disabled:cursor-default disabled:opacity-40"
           >
             <Plus size={12} />
-            添加
+            {t('添加')}
           </button>
         </div>
         <div className="mt-1.5 flex items-center gap-1.5 px-0.5 text-[9px] text-mist-600">
           <CheckCheck size={9} />
-          {serverOnline ? '会写回 .diff-review-data.json，并同步浏览器本地状态' : '服务不可用，仅保存在浏览器本地'}
+          {serverOnline ? t('会写回 .diff-review-data.json，并同步浏览器本地状态') : t('服务不可用，仅保存在浏览器本地')}
         </div>
       </form>
 
       {node.status !== 'impacted_only' ? (
         <p className="px-1 text-[9.5px] leading-4 text-mist-600">
-          自动扫描范围：本次 Diff 新增行中的 TODO / FIXME / XXX / HACK / BUG 注释。
+          {t('自动扫描范围：本次 Diff 新增行中的 TODO / FIXME / XXX / HACK / BUG 注释。')}
         </p>
       ) : null}
     </div>

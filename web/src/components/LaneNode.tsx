@@ -1,4 +1,5 @@
 import { Layers } from 'lucide-react';
+import { useI18n } from '../i18n';
 import type { Node, NodeProps } from '@xyflow/react';
 import type { LaneBox } from '../layout';
 
@@ -10,6 +11,7 @@ export type LaneFlowNode = Node<LaneNodeData, 'lane'>;
 
 function LaneNodeComponent({ data }: NodeProps<LaneFlowNode>) {
   const { lane } = data;
+  const { t } = useI18n();
   return (
     <div
       className="pointer-events-none h-full w-full rounded-2xl border border-dashed"
@@ -23,13 +25,15 @@ function LaneNodeComponent({ data }: NodeProps<LaneFlowNode>) {
         <span className="flex h-5 w-5 items-center justify-center rounded-md bg-[rgba(86,111,208,0.12)] text-[#4a5f9e]">
           <Layers size={11} />
         </span>
-        <span className="text-[12px] font-semibold text-[#3d4a4f]">{lane.label}</span>
+        <span className="text-[12px] font-semibold text-[#3d4a4f]">{t(lane.label)}</span>
         {lane.path && lane.path !== lane.label ? (
           <span className="truncate font-mono text-[9.5px] text-[#8b9188]">{lane.path}</span>
         ) : null}
         <span className="ml-auto flex items-center gap-2 font-mono text-[9px] text-[#8b9188]">
-          {lane.changedFiles > 0 ? <span className="text-[#8f6210]">改 {lane.changedFiles}</span> : null}
-          {lane.impactedFiles > 0 ? <span>影响 {lane.impactedFiles}</span> : null}
+          {lane.changedFiles > 0 ? (
+            <span className="text-[#8f6210]">{t('改 {count}', { count: lane.changedFiles })}</span>
+          ) : null}
+          {lane.impactedFiles > 0 ? <span>{t('影响 {count}', { count: lane.impactedFiles })}</span> : null}
           <span className="rounded border border-[rgba(120,132,138,0.25)] px-1 py-0.5">
             L{lane.order + 1}
           </span>

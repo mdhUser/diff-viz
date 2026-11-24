@@ -1,3 +1,5 @@
+import { currentLocale, getLanguage, translate } from './i18n';
+
 export function basename(filePath: string): string {
   const normalized = filePath.replace(/\/+$/, '');
   const index = normalized.lastIndexOf('/');
@@ -17,7 +19,7 @@ export function formatTimestamp(iso: string | undefined): string {
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat('zh-CN', {
+  return new Intl.DateTimeFormat(currentLocale(), {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -69,9 +71,21 @@ export function lineCount(content: string | undefined): number {
   return content.split('\n').length - (content.endsWith('\n') ? 1 : 0);
 }
 
+function localizeRangeLabel(label: string): string {
+  if (getLanguage() !== 'en') return label;
+  return label
+    .replace(/^工作区 · /, 'Working tree · ')
+    .replace(/^暂存区 · /, 'Staged · ')
+    .replace(/^最近提交 · /, 'Latest commit · ')
+    .replace(/^提交 /, 'Commit ')
+    .replace(/^工作区$/, 'Working tree')
+    .replace(/^暂存区$/, 'Staged')
+    .replace(/^最近提交$/, 'Latest commit');
+}
+
 export function prettyRangeLabel(meta: { rangeLabel?: string; branch?: string; mode?: string }): string {
-  if (meta.rangeLabel) return meta.rangeLabel;
-  if (meta.mode === 'staged') return '暂存区';
-  if (meta.mode === 'worktree') return '工作区';
-  return '最近提交';
+  if (meta.rangeLabel) return localizeRangeLabel(meta.rangeLabel);
+  if (meta.mode === 'staged') return translate(getLanguage(), '暂存区');
+  if (meta.mode === 'worktree') return translate(getLanguage(), '工作区');
+  return translate(getLanguage(), '最近提交');
 }

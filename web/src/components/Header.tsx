@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import type { HubProject, ReviewData } from '../types';
 import { prettyRangeLabel } from '../format';
+import { useI18n } from '../i18n';
+import { LanguageSwitch } from './LanguageSwitch';
 
 interface HeaderProps {
   data: ReviewData;
@@ -67,6 +69,7 @@ export function Header({
 }: HeaderProps) {
   const { meta } = data;
   const stats = meta.stats;
+  const { t } = useI18n();
   const commentCount = data.comments?.length ?? 0;
   const current = hasSelection ? selectedIndex + 1 : 0;
 
@@ -77,18 +80,18 @@ export function Header({
           type="button"
           onClick={onBackToWorkspace}
           className="flex h-8 shrink-0 items-center gap-1 rounded-lg border border-accent/25 bg-accent-soft px-2 text-[10.5px] font-medium text-accent-bright transition hover:bg-accent/15"
-          title="返回工作区总览"
+          title={t('返回工作区总览')}
         >
           <ArrowLeft size={13} />
-          工作区
+          {t('工作区')}
         </button>
       ) : null}
       <button
         type="button"
         onClick={onToggleSidebar}
         className="flex h-8 w-8 items-center justify-center rounded-lg text-mist-500 transition hover:bg-ink-750 hover:text-mist-100"
-        title={sidebarOpen ? '收起侧栏' : '展开侧栏'}
-        aria-label={sidebarOpen ? '收起侧栏' : '展开侧栏'}
+        title={sidebarOpen ? t('收起侧栏') : t('展开侧栏')}
+        aria-label={sidebarOpen ? t('收起侧栏') : t('展开侧栏')}
       >
         {sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
       </button>
@@ -127,7 +130,7 @@ export function Header({
           onClick={onOpenRepoPanel}
           disabled={!hubAvailable}
           className="group flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] text-mist-300 transition hover:bg-ink-800/70 hover:text-mist-100 disabled:cursor-default disabled:hover:bg-transparent"
-          title={hubAvailable ? '切换仓库 / 查看提交历史' : meta.repo}
+          title={hubAvailable ? t('切换仓库 / 查看提交历史') : meta.repo}
         >
           <GitBranch size={12.5} className="shrink-0 text-mist-600" />
           <span className="truncate font-medium">{meta.repo || 'repository'}</span>
@@ -144,10 +147,10 @@ export function Header({
             type="button"
             onClick={onOpenComments}
             className="flex shrink-0 items-center gap-1 rounded-md border border-[rgba(74,95,158,0.35)] bg-[rgba(74,95,158,0.08)] px-1.5 py-[3px] text-[9.5px] text-[#4a5f9e] transition hover:bg-[rgba(74,95,158,0.14)]"
-            title={`${commentCount} 条 Reviewer 评论，点击查看全部`}
+            title={t('{count} 条 Reviewer 评论，点击查看全部', { count: commentCount })}
           >
             <MessageSquare size={9} />
-            评论 {commentCount}
+            {t('评论')} {commentCount}
           </button>
         ) : null}
         {meta.pull?.url ? (
@@ -155,7 +158,7 @@ export function Header({
             href={meta.pull.url}
             target="_blank"
             rel="noreferrer"
-            title={`在 ${meta.pull.host || (meta.pull.provider === 'gitlab' ? 'GitLab' : 'GitHub')} 打开`}
+            title={t('在 {host} 打开', { host: meta.pull.host || (meta.pull.provider === 'gitlab' ? 'GitLab' : 'GitHub') })}
             className="hidden shrink-0 items-center gap-1 rounded-md border border-[rgba(196,122,44,0.35)] bg-[rgba(196,122,44,0.08)] px-1.5 py-[3px] font-mono text-[9.5px] text-[#a35f14] transition hover:bg-[rgba(196,122,44,0.14)] md:flex"
           >
             {meta.pull.provider === 'gitlab' ? 'MR' : 'PR'} #{meta.pull.number}
@@ -166,12 +169,12 @@ export function Header({
 
       <div className="ml-auto flex items-center gap-2">
         <div className="hidden items-center gap-3.5 rounded-lg border border-line/70 bg-ink-900/60 px-3 py-1.5 lg:flex">
-          <Stat value={String(stats.changedFiles)} label="变更" />
+          <Stat value={String(stats.changedFiles)} label={t('变更')} />
           <Stat value={`+${stats.additions}`} label="" color="#2f8f63" />
           <Stat value={`−${stats.deletions}`} label="" color="#c05563" />
           <div className="h-4 w-px bg-line" />
-          <Stat value={String(stats.impactedFiles)} label="受影响" color="#435bc0" />
-          <Stat value={String(openTodos)} label="待办" color="#a97418" />
+          <Stat value={String(stats.impactedFiles)} label={t('受影响')} color="#435bc0" />
+          <Stat value={String(openTodos)} label={t('待办')} color="#a97418" />
 
         </div>
 
@@ -181,8 +184,8 @@ export function Header({
             onClick={onPrev}
             disabled={!hasSelection}
             className="flex h-7 w-7 items-center justify-center rounded-md text-mist-400 transition hover:bg-ink-750 hover:text-mist-100 disabled:cursor-default disabled:opacity-30"
-            title="上一个变更 (←)"
-            aria-label="上一个变更"
+            title={t('上一个变更 (←)')}
+            aria-label={t('上一个变更')}
           >
             <ChevronLeft size={15} />
           </button>
@@ -198,20 +201,22 @@ export function Header({
             onClick={onNext}
             disabled={total === 0}
             className="flex h-7 w-7 items-center justify-center rounded-md text-mist-400 transition hover:bg-ink-750 hover:text-mist-100 disabled:cursor-default disabled:opacity-30"
-            title="下一个变更 (→)"
-            aria-label="下一个变更"
+            title={t('下一个变更 (→)')}
+            aria-label={t('下一个变更')}
           >
             <ChevronRight size={15} />
           </button>
         </div>
+
+        <LanguageSwitch compact />
 
         {hubAvailable ? (
           <button
             type="button"
             onClick={onOpenRepoPanel}
             className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-ink-900/70 text-mist-500 transition hover:border-line hover:bg-ink-750 hover:text-mist-100"
-            title="仓库与提交历史"
-            aria-label="仓库与提交历史"
+            title={t('仓库与提交历史')}
+            aria-label={t('仓库与提交历史')}
           >
             <History size={14} />
           </button>
@@ -221,8 +226,8 @@ export function Header({
           type="button"
           onClick={onRefresh}
           className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-ink-900/70 text-mist-500 transition hover:border-line hover:bg-ink-750 hover:text-mist-100"
-          title="重新读取数据"
-          aria-label="刷新"
+          title={t('重新读取数据')}
+          aria-label={t('刷新')}
         >
           <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
         </button>
@@ -230,7 +235,7 @@ export function Header({
         {meta.summarySource === 'agent' ? (
           <span className="hidden items-center gap-1 rounded-md border border-accent/25 bg-accent-soft px-1.5 py-1 text-[9.5px] text-accent-bright xl:flex">
             <Sparkles size={10} />
-            Agent 总结
+            {t('Agent 总结')}
           </span>
         ) : null}
       </div>

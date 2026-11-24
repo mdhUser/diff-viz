@@ -19,6 +19,7 @@ import { FileNode, type FileFlowNode } from './FileNode';
 import { TableNode, type TableFlowNode } from './TableNode';
 import { SqlHoverCard } from './SqlHoverCard';
 import { STATUS_META } from '../status';
+import { useI18n } from '../i18n';
 
 const nodeTypes = { file: FileNode, lane: LaneNode, table: TableNode };
 
@@ -131,6 +132,7 @@ function GraphCanvas({
   onInit,
 }: GraphViewProps) {
   const { fitView } = useReactFlow();
+  const { t } = useI18n();
   const [hoveredTable, setHoveredTable] = useState<{ id: string; x: number; y: number } | null>(null);
 
   const handleHoverStart = useCallback(
@@ -296,20 +298,20 @@ function GraphCanvas({
         animated: connected,
         label:
           relation === 'impact'
-            ? '影响'
+            ? t('影响')
             : relation === 'dependency'
-              ? '上游'
+              ? t('上游')
               : relation === 'binds'
-                ? '绑定'
+                ? t('绑定')
                 : relation === 'config'
-                  ? '配置'
+                  ? t('配置')
                   : relation === 'class-ref'
-                    ? '引用'
+                    ? t('引用')
                     : relation === 'reads_table'
-                      ? '读取'
+                      ? t('读取')
                       : relation === 'writes_table'
-                        ? '写入'
-                        : 'import',
+                        ? t('写入')
+                        : t('import'),
         labelStyle: {
           fill: connected
             ? '#26353a'
@@ -349,7 +351,7 @@ function GraphCanvas({
       } as Edge);
     }
     return result;
-  }, [positioned, edges, edgeMode, selectedId]);
+  }, [positioned, edges, edgeMode, selectedId, t]);
 
   const signature = useMemo(
     () =>

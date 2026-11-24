@@ -14,6 +14,7 @@ import type { ReviewData, ReviewNode, ReviewTodo } from '../types';
 import { STATUS_META } from '../status';
 import { formatTimestamp } from '../format';
 import { cn } from '../cn';
+import { useI18n } from '../i18n';
 
 interface SidebarProps {
   data: ReviewData;
@@ -35,6 +36,7 @@ function matches(node: ReviewNode, query: string) {
 export function Sidebar({
   onOpenComments, data, selectedId, query, reviewedMap, isTodoDone, onQueryChange, onSelect }: SidebarProps) {
   const { meta, nodes } = data;
+  const { t } = useI18n();
   const changed = nodes.filter((node) => node.status !== 'impacted_only');
   const impacted = nodes.filter((node) => node.status === 'impacted_only');
   const order = new Map((meta.reviewOrder ?? []).map((id, index) => [id, index]));
@@ -67,7 +69,7 @@ export function Sidebar({
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-[11px] font-medium text-mist-300">
               <Sparkles size={12} className="text-accent" />
-              变更概览
+              {t('变更概览')}
             </span>
             <span className="font-mono text-[9px] text-mist-600">{formatTimestamp(meta.timestamp)}</span>
           </div>
@@ -87,7 +89,7 @@ export function Sidebar({
                   onClick={() => setSummaryOpen((open) => !open)}
                   className="mt-1 text-[9.5px] text-accent hover:text-accent-bright"
                 >
-                  {summaryOpen ? '收起摘要' : '展开完整摘要'}
+                  {summaryOpen ? t('收起摘要') : t('展开完整摘要')}
                 </button>
               ) : null}
             </>
@@ -102,50 +104,50 @@ export function Sidebar({
               )}
               title={
                 agentSummaries > 0
-                  ? `本 Review 有 ${agentSummaries} 个文件带 Agent 注解`
-                  : '还没有 Agent 注解：先让 Agent 写注解，再用 diff-viz annotate --review <id> 写入这条 Review'
+                  ? t('本 Review 有 {count} 个文件带 Agent 注解', { count: agentSummaries })
+                  : t('还没有 Agent 注解：先让 Agent 写注解，再用 diff-viz annotate --review <id> 写入这条 Review')
               }
             >
               <Sparkles size={9} />
-              Agent 摘要 {agentSummaries}/{changed.length}
+              {t('Agent 摘要')} {agentSummaries}/{changed.length}
             </div>
           ) : null}
           <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-line/70 pt-2.5">
             <div>
               <div className="font-mono text-[13px] font-medium text-mist-100">{meta.stats.changedFiles}</div>
-              <div className="text-[9.5px] text-mist-600">变更文件</div>
+              <div className="text-[9.5px] text-mist-600">{t('变更文件')}</div>
             </div>
             <div>
               <div className="font-mono text-[13px] font-medium text-accent-bright">{meta.stats.impactedFiles}</div>
-              <div className="text-[9.5px] text-mist-600">受影响文件</div>
+              <div className="text-[9.5px] text-mist-600">{t('受影响文件')}</div>
             </div>
             <div>
               <div className="font-mono text-[13px] font-medium text-mint">+{meta.stats.additions}</div>
-              <div className="text-[9.5px] text-mist-600">新增行</div>
+              <div className="text-[9.5px] text-mist-600">{t('新增行')}</div>
             </div>
             <div>
               <div className="font-mono text-[13px] font-medium text-rose">−{meta.stats.deletions}</div>
-              <div className="text-[9.5px] text-mist-600">删除行</div>
+              <div className="text-[9.5px] text-mist-600">{t('删除行')}</div>
             </div>
           </div>
           <div className="mt-2.5 flex items-center gap-2 border-t border-line/70 pt-2 text-[9.5px] text-mist-600">
             <span className="flex items-center gap-1">
               <CheckCircle2 size={10} className="text-mint" />
-              {reviewedCount}/{changed.length} 已 Review
+              {t('{done}/{total} 已 Review', { done: reviewedCount, total: changed.length })}
             </span>
             <span className="flex items-center gap-1">
               <ListTodo size={10} className="text-amber" />
-              {totalOpenTodos} 待确认
+              {t('{count} 待确认', { count: totalOpenTodos })}
             </span>
             {(data.comments?.length ?? 0) > 0 ? (
               <button
                 type="button"
                 onClick={onOpenComments}
                 className="flex items-center gap-1 transition hover:text-mist-300"
-                title={`${data.comments?.length} 条 PR/MR Reviewer 评论，点击查看全部`}
+                title={t('{count} 条 PR/MR Reviewer 评论，点击查看全部', { count: data.comments?.length ?? 0 })}
               >
                 <MessageSquare size={10} className="text-[#4a5f9e]" />
-                {data.comments?.length} 评论
+                {data.comments?.length} {t('评论')}
               </button>
             ) : null}
           </div>
@@ -156,7 +158,7 @@ export function Sidebar({
           <input
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="搜索文件或路径…"
+            placeholder={t('搜索文件或路径…')}
             className="h-8 w-full rounded-lg border border-line bg-ink-850/80 pl-8 pr-8 text-[11.5px] text-mist-200 outline-none transition placeholder:text-mist-600 focus:border-accent/40 focus:bg-ink-850"
           />
           {query ? (
@@ -164,7 +166,7 @@ export function Sidebar({
               type="button"
               onClick={() => onQueryChange('')}
               className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-mist-600 hover:text-mist-200"
-              aria-label="清除搜索"
+              aria-label={t('清除搜索')}
             >
               <X size={12} />
             </button>
@@ -173,7 +175,7 @@ export function Sidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        <SectionTitle label="变更文件" count={visibleChanged.length} accent />
+        <SectionTitle label={t('变更文件')} count={visibleChanged.length} accent />
         <div className="space-y-0.5">
           {visibleChanged.map((node) => (
             <FileRow
@@ -186,12 +188,12 @@ export function Sidebar({
             />
           ))}
           {visibleChanged.length === 0 ? (
-            <div className="px-2.5 py-3 text-[11px] text-mist-600">{query ? '没有匹配的变更文件' : '暂无代码变更'}</div>
+            <div className="px-2.5 py-3 text-[11px] text-mist-600">{query ? t('没有匹配的变更文件') : t('暂无代码变更')}</div>
           ) : null}
         </div>
 
         <div className="mt-4">
-          <SectionTitle label="受影响文件" count={visibleImpacted.length} />
+          <SectionTitle label={t('受影响文件')} count={visibleImpacted.length} />
           <div className="space-y-0.5">
             {visibleImpacted.map((node) => (
               <FileRow
@@ -205,7 +207,7 @@ export function Sidebar({
             ))}
             {visibleImpacted.length === 0 ? (
               <div className="px-2.5 py-3 text-[11px] text-mist-600">
-                {query ? '没有匹配的受影响文件' : '未发现下游依赖文件'}
+                {query ? t('没有匹配的受影响文件') : t('未发现下游依赖文件')}
               </div>
             ) : null}
           </div>
@@ -215,7 +217,7 @@ export function Sidebar({
           <div className="mx-1 mt-4 rounded-lg border border-amber/20 bg-amber/5 p-2.5">
             <div className="flex items-center gap-1.5 text-[10px] font-medium text-amber">
               <AlertTriangle size={11} />
-              分析提示
+              {t('分析提示')}
             </div>
             <ul className="mt-1.5 space-y-1">
               {sidebarWarnings.slice(0, 3).map((warning) => (
@@ -261,6 +263,7 @@ function FileRow({
   openTodos: number;
   onClick: () => void;
 }) {
+  const { t } = useI18n();
   const meta = STATUS_META[node.status];
   const impacted = node.status === 'impacted_only';
   const Icon = meta.icon;
@@ -295,7 +298,7 @@ function FileRow({
         </span>
         <span className="mt-0.5 flex items-center gap-1 truncate font-mono text-[9px] text-mist-600">
           {impacted ? <CornerDownRight size={9} className="shrink-0" /> : null}
-          <span className="truncate">{dir || '根目录'}</span>
+          <span className="truncate">{dir || t('根目录')}</span>
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5">
@@ -317,8 +320,10 @@ function FileRow({
                   'flex items-center gap-0.5 text-[8.5px]',
                   (node.reviewCommentUnresolved ?? 0) > 0 ? 'text-amber' : 'text-[#4a5f9e]',
                 )}
-                title={`${node.reviewComments} 条 Reviewer 评论${
-                  (node.reviewCommentUnresolved ?? 0) > 0 ? `，${node.reviewCommentUnresolved} 条未解决` : ''
+                title={`${t('{count} 条 Reviewer 评论', { count: node.reviewComments ?? 0 })}${
+                  (node.reviewCommentUnresolved ?? 0) > 0
+                    ? t('，{count} 条未解决', { count: node.reviewCommentUnresolved ?? 0 })
+                    : ''
                 }`}
               >
                 <MessageSquare size={8.5} />

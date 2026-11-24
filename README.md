@@ -5,7 +5,7 @@
 [![CI](https://github.com/mdhUser/diff-viz/actions/workflows/ci.yml/badge.svg)](https://github.com/mdhUser/diff-viz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/mdhUser/diff-viz/blob/main/LICENSE)
 [![npm](https://img.shields.io/npm/v/diff-viz-cli.svg)](https://www.npmjs.com/package/diff-viz-cli)
-[![Changelog](https://img.shields.io/badge/changelog-v1.7.1-blue.svg)](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md)
+[![Changelog](https://img.shields.io/badge/changelog-v1.8.0-blue.svg)](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md)
 
 **See who a change affects before you start reviewing it.**
 
@@ -13,7 +13,7 @@ diff-viz turns a Git change into an interactive dependency graph: which files ch
 
 ![diff-viz topology overview](https://raw.githubusercontent.com/mdhUser/diff-viz/main/docs/overview.png)
 
-> The web UI is currently Chinese; English/Chinese UI switching is the next milestone. This README is the English entry point. Docs are being translated (links below currently point to mostly Chinese docs).
+> The web UI supports **English / Chinese switching** (top-bar language switch; `?lang=en` or `?lang=zh` in the URL). The detailed docs are being translated; links below currently point to mostly Chinese docs.
 
 ## Quick start
 
@@ -58,7 +58,7 @@ The default port is `5173` and auto-increments when busy; use the URL printed by
 | Left sidebar | Overall summary, changed/impacted file lists, review progress; click to select a file |
 | Canvas | Dependency topology. Purple dashed = impact (A changed → B affected), blue solid = dependency (A imports B), gray nodes = untouched but impacted |
 | Detail drawer | Summary & impact, code diff, review todos; side-by-side diff, full-file view, syntax highlighting |
-| Top bar | Repo switcher, version chain (current branch by default), historical commit reviews, refresh; switch between **flow / swimlane** views (lanes by module/directory/package) and toggle **config** / **database** layers |
+| Top bar | Repo switcher, version chain (current branch by default), historical commit reviews, refresh, **language switch**; switch between **flow / swimlane** views (lanes by module/directory/package) and toggle **config** / **database** layers |
 
 Keyboard: `←` / `→` move between files, `Esc` closes the drawer. When you save code, the hub re-analyzes and the page refreshes over SSE — no need to re-run the CLI.
 
@@ -157,6 +157,7 @@ Data format and HTTP API: **[docs/data-contract.md](https://github.com/mdhUser/d
 
 ## Known limitations
 
+- UI chrome is bilingual; **server-generated heuristic summaries, agent annotations and reviewer comment bodies remain in their original language** until the data layer is localized.
 - Dependency resolution is a static approximation (regex/parsers, no runtime execution): same-package Java references can include same-named classes mentioned in comments (ignore them in the UI); only the repo-root tsconfig is read (`extends` and monorepo sub-packages are not resolved).
 - Above 15,000 code files only the first 15,000 are scanned. The page shows a warning (`N files total, first 15,000 analyzed`); raise the cap with `--max-scan-files`.
 - Auto-refresh only applies to repositories analyzed by this hub process; Linux does not support recursive `fs.watch` and falls back to no watching.
@@ -165,7 +166,7 @@ Data format and HTTP API: **[docs/data-contract.md](https://github.com/mdhUser/d
 
 ## Version and compatibility
 
-Current version **1.7.1**. Since 1.0.0 the public contract (CLI flags, data format v2, hub HTTP API, agent annotation JSON) is frozen: no breaking changes within 1.x; breaking changes go to 2.0.0. Old single-file review data is still readable and upgrades automatically.
+Current version **1.8.0**. Since 1.0.0 the public contract (CLI flags, data format v2, hub HTTP API, agent annotation JSON) is frozen: no breaking changes within 1.x; breaking changes go to 2.0.0. Old single-file review data is still readable and upgrades automatically.
 
 See [CHANGELOG.md](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md).
 

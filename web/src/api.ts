@@ -1,3 +1,5 @@
+import { getLanguage, translate } from './i18n';
+
 // The hub serves source code, so every `/api/*` call (except the health probe)
 // needs the access token. The CLI opens the page with `?token=...`; we keep it
 // in sessionStorage for later calls and strip it from the address bar so it does
@@ -51,14 +53,21 @@ export function apiEventUrl(pathname: string): string {
   return `${url.pathname}${url.search}`;
 }
 
+
 // Turn a failed response into a message a human can act on. 401/403 only happen
 // when the page was opened without the URL the CLI printed.
 export function describeResponseFailure(response: Response, detail?: string): string {
   if (response.status === 401) {
-    return 'hub 需要访问令牌：请从终端运行 diff-viz 后打开它打印的「带令牌链接」，或运行 diff-viz hub 查看该链接。';
+    return translate(
+      getLanguage(),
+      'hub 需要访问令牌：请从终端运行 diff-viz 后打开它打印的「带令牌链接」，或运行 diff-viz hub 查看该链接。',
+    );
   }
   if (response.status === 403) {
-    return 'hub 拒绝了这次请求：Host 不在允许列表内（防 DNS rebinding）。请用 localhost 或 127.0.0.1 的地址打开。';
+    return translate(
+      getLanguage(),
+      'hub 拒绝了这次请求：Host 不在允许列表内（防 DNS rebinding）。请用 localhost 或 127.0.0.1 的地址打开。',
+    );
   }
   return detail || `HTTP ${response.status}`;
 }

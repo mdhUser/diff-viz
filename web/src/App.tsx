@@ -19,8 +19,10 @@ import { Legend } from './components/Legend';
 import { DetailDrawer } from './components/DetailDrawer';
 import { TableDetail } from './components/TableDetail';
 import { CommentsPanel } from './components/CommentsPanel';
+import { LanguageSwitch } from './components/LanguageSwitch';
 import { ResizeHandle } from './components/ResizeHandle';
 import { RepoPanel } from './components/RepoPanel';
+import { useI18n } from './i18n';
 import { ScanLimitBanner } from './components/ScanLimitBanner';
 import { WorkspaceView } from './components/WorkspaceView';
 import { computeLaneLayout, computeLayout, itemForNode, itemForTable, type GraphItem, type LaneSpec } from './layout';
@@ -151,6 +153,7 @@ export function App() {
   const [commentsOnly, setCommentsOnly] = useState(false);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const { t, lang } = useI18n();
   const sidebarDragStart = useRef(panelWidths.sidebarWidth);
   const drawerDragStart = useRef(panelWidths.drawerWidth);
   const sidebarWidth = panelWidths.sidebarWidth;
@@ -184,7 +187,7 @@ export function App() {
   }, []);
 
   const hydrateData = useCallback((payload: ReviewData) => {
-    if (!payload?.meta || !Array.isArray(payload.nodes)) throw new Error('数据文件格式不正确');
+    if (!payload?.meta || !Array.isArray(payload.nodes)) throw new Error(t('数据文件格式不正确'));
     setData(payload);
     setError(null);
     setServerOnline(true);
@@ -209,7 +212,7 @@ export function App() {
       });
       if (!response.ok) {
         const detail = await responseErrorDetail(response);
-        throw new Error(`无法读取 Review：${describeResponseFailure(response, detail)}`);
+        throw new Error(t('无法读取 Review：{detail}', { detail: describeResponseFailure(response, detail) }));
       }
       const payload = (await response.json()) as ReviewData;
       hydrateData(payload);
@@ -220,7 +223,7 @@ export function App() {
       if (historyMode !== 'none') {
         const url = `/?review=${encodeURIComponent(reviewId)}${
           fromWorkspace ? `&from=${encodeURIComponent(fromWorkspace)}` : ''
-        }`;
+        }&lang=${lang}`;
         if (historyMode === 'push') window.history.pushState(null, '', url);
         else window.history.replaceState(null, '', url);
       }
@@ -229,7 +232,7 @@ export function App() {
         setTab('summary');
       }
     },
-    [hydrateData],
+    [hydrateData, lang],
   );
 
   // Browser Back from a repository opened via the workspace overview should
@@ -314,20 +317,20 @@ export function App() {
             });
             if (!response.ok) {
               throw new Error(
-                `无法打开仓库：${describeResponseFailure(response, await responseErrorDetail(response))}`,
+                t('无法打开仓库：{detail}', { detail: describeResponseFailure(response, await responseErrorDetail(response)) }),
               );
             }
             const payload = (await response.json()) as { reviewId: string };
             await fetchReview(payload.reviewId);
             return;
           }
-          throw new Error('hub 已启动，但还没有注册仓库；请先在目标仓库运行 diff-viz。');
+          throw new Error(t('hub 已启动，但还没有注册仓库；请先在目标仓库运行 diff-viz。'));
         }
 
         // Legacy single-review server.
         const response = await apiFetch(`/api/data?t=${Date.now()}`, { cache: 'no-store' });
         if (!response.ok) {
-          throw new Error(`无法读取数据：${describeResponseFailure(response, await responseErrorDetail(response))}`);
+          throw new Error(t('无法读取数据：{detail}', { detail: describeResponseFailure(response, await responseErrorDetail(response)) }));
         }
         hydrateData((await response.json()) as ReviewData);
       } catch (bootstrapError) {
@@ -497,7 +500,7 @@ export function App() {
     if (visibleTables.length > 0) {
       specs.push({
         id: 'db',
-        label: `${data.meta.db?.label ?? 'Database'} · ${visibleTables.length} 张表`,
+        label: `${data.meta.db?.label ?? 'Database'} · ${t('{count} 张表', { count: visibleTables.length })}`,
         path: '',
         kind: 'database',
         order: specs.length,
@@ -788,7 +791,7 @@ export function App() {
           </div>
           <div className="mt-4 flex items-center gap-2 text-[11px] text-mist-500">
             <Loader2 size={13} className="animate-spin text-accent" />
-            正在加载变更数据…
+            {t('正在加载变更数据…')}
           </div>
         </div>
       </div>
@@ -797,13 +800,16 @@ export function App() {
 
   if (error || !data) {
     return (
-      <div className="app-bg flex h-screen items-center justify-center px-6">
+      <div className="app-bg relative flex h-screen items-center justify-center px-6">
+        <div className="absolute right-4 top-4 z-10">
+          <LanguageSwitch compact />
+        </div>
         <div className="w-full max-w-[460px] rounded-2xl border border-line bg-ink-850/80 p-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-rose/25 bg-rose/10 text-rose">
             <AlertTriangle size={18} />
           </div>
-          <h1 className="mt-3 text-[15px] font-semibold text-mist-100">无法加载 Review 数据</h1>
-          <p className="mt-1.5 text-[11.5px] leading-5 text-mist-500">{error ?? '数据为空'}</p>
+          <h1 className="mt-3 text-[15px] font-semibold text-mist-100">{t('无法加载 Review 数据')}</h1>
+          <p className="mt-1.5 text-[11.5px] leading-5 text-mist-500">{error ?? t('数据为空')}</p>
           <div className="mt-4 rounded-lg border border-line bg-ink-950/70 px-3 py-2 font-mono text-[10px] text-mist-400">
             node bin/diff-viz.mjs
           </div>
@@ -816,7 +822,7 @@ export function App() {
             className="mt-4 flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-[11px] font-medium text-[#fbf9f4] transition hover:bg-accent-bright"
           >
             <RefreshCw size={12} />
-            重新加载
+            {t('重新加载')}
           </button>
         </div>
       </div>
@@ -892,7 +898,7 @@ export function App() {
             />
             <ResizeHandle
               position="right"
-              label="调整左侧栏宽度"
+              label={t('调整左侧栏宽度')}
               onStart={() => {
                 sidebarDragStart.current = panelWidths.sidebarWidth;
               }}
@@ -929,10 +935,9 @@ export function App() {
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-ink-800/70 text-mist-500">
                     <GitCommitHorizontal size={22} />
                   </div>
-                  <h2 className="mt-3 text-[14px] font-semibold text-mist-100">当前范围没有检测到变更</h2>
+                  <h2 className="mt-3 text-[14px] font-semibold text-mist-100">{t('当前范围没有检测到变更')}</h2>
                   <p className="mt-1.5 text-[11px] leading-5 text-mist-500">
-                    修改代码后重新运行 <span className="font-mono text-mist-300">diff-viz</span>，或切换到最近一次提交/
-                    指定 commit 范围再试。
+                    {t('修改代码后重新运行')} <span className="font-mono text-mist-300">diff-viz</span>{t('，或切换到最近一次提交/指定 commit 范围再试。')}
                   </p>
                 </div>
               </div>
@@ -940,9 +945,9 @@ export function App() {
             {data.nodes.length > 0 && visibleNodes.length === 0 ? (
               <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-8">
                 <div className="pointer-events-auto max-w-[360px] rounded-xl border border-line bg-[#fffdf8] px-4 py-4 text-center shadow-sm">
-                  <div className="text-[12px] font-medium text-mist-100">当前筛选下没有可显示的文件</div>
+                  <div className="text-[12px] font-medium text-mist-100">{t('当前筛选下没有可显示的文件')}</div>
                   <p className="mt-1 text-[10px] leading-5 text-mist-600">
-                    Reviewer 评论只出现在 MR 整体讨论中，没有挂在具体文件上，所以「有评论」筛选为空。
+                    {t('Reviewer 评论只出现在 MR 整体讨论中，没有挂在具体文件上，所以「有评论」筛选为空。')}
                   </p>
                   <button
                     type="button"
@@ -952,7 +957,7 @@ export function App() {
                     }}
                     className="mt-2 rounded-md border border-accent/30 bg-accent-soft px-2.5 py-1 text-[10px] text-accent-bright transition hover:bg-accent/15"
                   >
-                    显示全部文件
+                    {t('显示全部文件')}
                   </button>
                 </div>
               </div>
@@ -999,7 +1004,7 @@ export function App() {
               />
               {!selectedNode && !selectedTable ? (
                 <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-line/80 bg-ink-900/80 px-3 py-1.5 text-[9.5px] text-mist-500 backdrop-blur">
-                  点击节点查看摘要、Diff 与待确认项 · ← → 切换 Review
+                  {t('点击节点查看摘要、Diff 与待确认项 · ← → 切换 Review')}
                 </div>
               ) : null}
             </>
@@ -1010,7 +1015,7 @@ export function App() {
           <div className="absolute inset-y-0 right-0 z-30 flex" style={{ width: drawerWidth }}>
             <ResizeHandle
               position="left"
-              label="调整详情面板宽度"
+              label={t('调整详情面板宽度')}
               onStart={() => {
                 drawerDragStart.current = panelWidths.drawerWidth;
               }}
@@ -1096,7 +1101,7 @@ export function App() {
             'bg-[#fdf7e8] px-3 py-1.5 text-[9.5px] text-amber shadow-lg',
           )}
         >
-          后端写入不可用，勾选状态已保存在浏览器本地
+          {t('后端写入不可用，勾选状态已保存在浏览器本地')}
         </div>
       ) : null}
     </div>

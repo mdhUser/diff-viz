@@ -1,5 +1,6 @@
 import { ArrowUpRight, Database, Loader2, X } from 'lucide-react';
 import type { ReviewComponent, ReviewTable } from '../types';
+import { useI18n } from '../i18n';
 
 const OPERATION_LABEL: Record<string, string> = {
   select: 'SELECT',
@@ -23,6 +24,7 @@ export function TableDetail({
   onClose: () => void;
   onSelectSource: (path: string) => void;
 }) {
+  const { t } = useI18n();
   const component = (components ?? []).find((item) => item.id === table.componentId);
   const operations = table.operations ?? [];
   const statements = table.statements ?? [];
@@ -38,18 +40,18 @@ export function TableDetail({
             </span>
             {table.changed ? (
               <span className="rounded border border-[rgba(196,122,44,0.3)] px-1.5 py-0.5 text-[8.5px] text-[#a35f14]">
-                本次涉及
+                {t('本次涉及')}
               </span>
             ) : null}
             {table.impacted && !table.changed ? (
-              <span className="rounded border border-line px-1.5 py-0.5 text-[8.5px] text-mist-600">受影响</span>
+              <span className="rounded border border-line px-1.5 py-0.5 text-[8.5px] text-mist-600">{t('受影响')}</span>
             ) : null}
           </div>
           <button
             type="button"
             onClick={onClose}
             className="flex h-7 w-7 items-center justify-center rounded-md text-mist-500 transition hover:bg-ink-800 hover:text-mist-100"
-            aria-label="关闭数据表详情"
+            aria-label={t('关闭数据表详情')}
           >
             <X size={15} />
           </button>
@@ -67,13 +69,13 @@ export function TableDetail({
               {OPERATION_LABEL[operation] ?? operation.toUpperCase()}
             </span>
           ))}
-          <span>{table.statementCount ?? statements.length} 条 SQL</span>
-          <span className="ml-auto">来源 {table.sources?.length ?? 0} 个文件</span>
+          <span>{t('{count} 条 SQL', { count: table.statementCount ?? statements.length })}</span>
+          <span className="ml-auto">{t('来源 {count} 个文件', { count: table.sources?.length ?? 0 })}</span>
         </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-        <div className="mb-2 text-[9px] font-medium uppercase tracking-[0.12em] text-mist-600">来源文件</div>
+        <div className="mb-2 text-[9px] font-medium uppercase tracking-[0.12em] text-mist-600">{t('来源文件')}</div>
         <div className="mb-4 flex flex-wrap gap-1">
           {(table.sources ?? []).map((source) => (
             <button
@@ -90,12 +92,12 @@ export function TableDetail({
         </div>
 
         <div className="mb-2 flex items-center justify-between text-[9px] font-medium uppercase tracking-[0.12em] text-mist-600">
-          <span>SQL 语句</span>
+          <span>{t('SQL 语句')}</span>
           {loading ? <Loader2 size={11} className="animate-spin text-accent" /> : null}
         </div>
         {statements.length === 0 && !loading ? (
           <div className="rounded-lg border border-line/70 bg-ink-850/40 px-3 py-6 text-center text-[10px] text-mist-600">
-            没有读取到 SQL 语句。
+            {t('没有读取到 SQL 语句。')}
           </div>
         ) : null}
         <div className="space-y-2.5">
@@ -115,7 +117,7 @@ export function TableDetail({
                 </button>
                 {statement.line ? <span>:{statement.line}</span> : null}
                 {statement.mapper ? <span className="truncate text-mist-600">{statement.mapper}</span> : null}
-                {statement.dynamic ? <span className="ml-auto shrink-0 text-amber">动态 SQL</span> : null}
+                {statement.dynamic ? <span className="ml-auto shrink-0 text-amber">{t('动态 SQL')}</span> : null}
               </div>
               <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-all px-2.5 py-2 font-mono text-[9.5px] leading-[1.6] text-[#3d4a4f]">
                 {statement.sql}

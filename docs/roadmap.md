@@ -4,7 +4,7 @@
 > **模块/包（泳道）→ 代码 → 配置文件 → 数据库表（含 SQL）**。
 > 原则：数据契约只做增量、不破坏 1.x；所有解析保持零运行时依赖、只读、可回退。
 
-## 当前状态（2026-11-23，v1.7.0）
+## 当前状态（2026-11-24，v1.8.0）
 
 | 迭代 | 版本 | 状态 |
 | --- | --- | --- |
@@ -16,7 +16,8 @@
 | 5. Reviewer 评论入图 | `v1.5.0` | ✅ 完成 |
 | 6. 工作区历史版本 | `v1.6.0` | ✅ 完成 |
 | 7. MCP / Agent 通信 | `v1.7.0` | ✅ 完成 |
-| 8. 扩展与硬化 | 未排期 | ⏳ 待做 |
+| 8. Web UI 中英文切换 | `v1.8.0` | ✅ 完成 |
+| 9. CLI / 文档国际化 | 未排期 | ⏳ 待做 |
 
 ## 已完成
 
@@ -68,6 +69,13 @@
 - 新增 `diff-viz mcp` stdio server：`diff_viz_review/get_review/get_node/annotate/list_projects/list_reviews`，Agent 可生成 Review、读取拓扑与 Diff、写回摘要。
 - 新增 `docs/mcp.md` 与 Cursor/Claude/Codex 配置示例；CLI 补 `--commit`。
 - 关键文件：`src/mcp.mjs`、`src/cli.mjs`、`test/mcp.test.mjs`。
+
+### v1.8.0 — Web UI 中英文切换
+
+- 前端 i18n：中文源文案作为 key + 英文词典，`I18nProvider`/`useI18n`；按 `?lang` → localStorage → 浏览器语言检测，切换即时生效并写入 URL/本地存储。
+- 覆盖全部界面组件与工作区/错误/加载页；日期使用当前 locale；顶栏与工作区均有语言切换器。
+- 新增 i18n 覆盖测试；服务端摘要/Agent 注解/评论正文保持原文，CLI 输出和详细文档翻译顺延到 v1.9。
+- 关键文件：`web/src/i18n/`、`LanguageSwitch.tsx`、全部 `web/src/components/*`、`test/i18n.test.mjs`。
 
 ## 数据契约增量（1.x 兼容）
 

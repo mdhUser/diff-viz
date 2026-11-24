@@ -1,5 +1,6 @@
 import { useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { cn } from '../cn';
+import { useI18n } from '../i18n';
 
 interface ResizeHandleProps {
   position: 'left' | 'right';
@@ -24,6 +25,7 @@ export function ResizeHandle({
   onStep,
   onReset,
 }: ResizeHandleProps) {
+  const { t } = useI18n();
   const dragging = useRef(false);
   const startX = useRef(0);
   const direction = position === 'left' ? -1 : 1;
@@ -73,7 +75,7 @@ export function ResizeHandle({
       aria-label={label}
       aria-orientation="vertical"
       tabIndex={0}
-      title="拖动调整宽度，双击重置"
+      title={t('拖动调整宽度，双击重置')}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={finish}

@@ -3,6 +3,7 @@ import { GitBranch, GitCommitHorizontal, Tag } from 'lucide-react';
 import type { CommitInfo } from '../types';
 import { formatTimestamp } from '../format';
 import { cn } from '../cn';
+import { useI18n } from '../i18n';
 
 const ROW_HEIGHT = 54;
 const LANE_WIDTH = 15;
@@ -22,6 +23,7 @@ interface NodePosition {
 }
 
 export function CommitGraph({ commits, currentSha, disabled, onSelect }: CommitGraphProps) {
+  const { t } = useI18n();
   const layout = useMemo(() => {
     const lanes: Array<string | null> = [];
     const positions = new Map<string, NodePosition>();
@@ -71,7 +73,7 @@ export function CommitGraph({ commits, currentSha, disabled, onSelect }: CommitG
   }, [commits]);
 
   if (commits.length === 0) {
-    return <div className="px-2 py-6 text-[10.5px] text-mist-500">这个仓库还没有提交。</div>;
+    return <div className="px-2 py-6 text-[10.5px] text-mist-500">{t('这个仓库还没有提交。')}</div>;
   }
 
   const xFor = (lane: number) => GRAPH_PADDING + lane * LANE_WIDTH;

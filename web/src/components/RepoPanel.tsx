@@ -16,6 +16,7 @@ import type { CommitInfo, HubProject, HubPullRequest } from '../types';
 import { CommitGraph } from './CommitGraph';
 import { apiFetch, describeResponseFailure, responseErrorDetail } from '../api';
 import { cn } from '../cn';
+import { currentLocale, useI18n } from '../i18n';
 
 interface RepoPanelProps {
   open: boolean;
@@ -44,6 +45,7 @@ export function RepoPanel({
   onOpenPull,
   onRefreshProjects,
 }: RepoPanelProps) {
+  const { t } = useI18n();
   const [selectedId, setSelectedId] = useState(currentProjectId ?? projects[0]?.id ?? '');
   const [commits, setCommits] = useState<CommitInfo[]>([]);
   const [loadingCommits, setLoadingCommits] = useState(false);
@@ -178,7 +180,7 @@ export function RepoPanel({
     if (!value) return '';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleString('zh-CN', {
+    return date.toLocaleString(currentLocale(), {
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -186,9 +188,9 @@ export function RepoPanel({
     });
   };
   const pullHint = pullsError?.includes('鉴权') || pullsError?.includes('权限') || pullsError?.includes('限流')
-    ? '私有仓库需要 token：GitHub 设置 GITHUB_TOKEN，GitLab 设置 GITLAB_TOKEN，然后重启 hub。'
+    ? t('私有仓库需要 token：GitHub 设置 GITHUB_TOKEN，GitLab 设置 GITLAB_TOKEN，然后重启 hub。')
     : pullsError?.includes('无法识别远端平台')
-      ? '自建 GitLab / GitHub 企业版：设置 DIFF_VIZ_PROVIDER=gitlab|github 后重启 hub。'
+      ? t('自建 GitLab / GitHub 企业版：设置 DIFF_VIZ_PROVIDER=gitlab|github 后重启 hub。')
       : null;
 
   return (
@@ -203,14 +205,16 @@ export function RepoPanel({
           <div className="flex items-center justify-between px-4 pb-3 pt-4">
             <div className="flex items-center gap-2 text-[11px] font-semibold text-mist-200">
               <FolderGit2 size={13} className="text-accent" />
-              已注册仓库
+              {t('已注册仓库')}
             </div>
             <span className="font-mono text-[9px] text-mist-600">{projects.length}</span>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
             {projects.length === 0 ? (
               <div className="px-2 py-6 text-[10.5px] leading-5 text-mist-500">
-                还没有仓库。在下面填仓库绝对路径添加，或在目标仓库运行一次 <code className="font-mono">diff-viz</code>。
+                {t('还没有仓库。在下面填仓库绝对路径添加，或在目标仓库运行一次')}{' '}
+                <code className="font-mono">diff-viz</code>
+                {t('。')}
               </div>
             ) : (
               projects.map((project) => (
@@ -242,8 +246,8 @@ export function RepoPanel({
                 <button
                   type="button"
                   onClick={() => void removeProject(project.id)}
-                  aria-label={`移除 ${project.name}`}
-                  title="从列表移除"
+                  aria-label={t('移除 {name}', { name: project.name })}
+                  title={t('从列表移除')}
                   className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded bg-[#fffdf8] text-mist-600 transition hover:text-rose group-hover:flex"
                 >
                   <X size={9} />
@@ -266,14 +270,14 @@ export function RepoPanel({
                   setNewRoot(event.target.value);
                   setAddError(null);
                 }}
-                placeholder="/绝对路径/到/git/仓库"
+                placeholder={t('/绝对路径/到/git/仓库')}
                 spellCheck={false}
                 className="min-w-0 flex-1 rounded-md border border-line bg-ink-900 px-2 py-1 font-mono text-[9.5px] text-mist-200 outline-none transition placeholder:text-mist-600 focus:border-accent/40"
               />
               <button
                 type="submit"
                 disabled={!newRoot.trim() || adding}
-                aria-label="添加仓库"
+                aria-label={t('添加仓库')}
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-accent/25 bg-accent-soft text-accent-bright transition hover:bg-accent/15 disabled:opacity-40"
               >
                 {adding ? <Loader2 size={11} className="animate-spin" /> : <Plus size={12} />}
@@ -290,17 +294,17 @@ export function RepoPanel({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-[12px] font-semibold text-mist-100">
                 <History size={13} className="text-accent" />
-                {selectedProject?.name ?? '提交历史'}
+                {selectedProject?.name ?? t('提交历史')}
               </div>
               <div className="mt-1 truncate font-mono text-[9px] text-mist-600">
-                {selectedProject?.root ?? '选择左侧仓库'}
+                {selectedProject?.root ?? t('选择左侧仓库')}
               </div>
             </div>
             <button
               type="button"
               onClick={onClose}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-mist-500 transition hover:bg-ink-800 hover:text-mist-100"
-              aria-label="关闭"
+              aria-label={t('关闭')}
             >
               <X size={15} />
             </button>
@@ -317,10 +321,10 @@ export function RepoPanel({
                 <GitBranch size={15} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[11px] font-medium text-mist-200">当前工作区</span>
-                <span className="mt-0.5 block text-[9.5px] text-mist-500">未提交 / 已暂存的改动</span>
+                <span className="block text-[11px] font-medium text-mist-200">{t('当前工作区')}</span>
+                <span className="mt-0.5 block text-[9.5px] text-mist-500">{t('未提交 / 已暂存的改动')}</span>
               </span>
-              <span className="text-[9px] text-mist-600">打开</span>
+              <span className="text-[9px] text-mist-600">{t('打开')}</span>
             </button>
 
             <div className="mb-2 flex items-center justify-between gap-2 px-1">
@@ -334,10 +338,10 @@ export function RepoPanel({
                       ? 'border-accent/25 bg-accent-soft text-accent-bright'
                       : 'border-transparent text-mist-600 hover:text-mist-400',
                   )}
-                  title="按提交查看历史"
+                  title={t('按提交查看历史')}
                 >
                   <History size={10} />
-                  版本链条
+                  {t('版本链条')}
                 </button>
                 <button
                   type="button"
@@ -348,7 +352,7 @@ export function RepoPanel({
                       ? 'border-accent/25 bg-accent-soft text-accent-bright'
                       : 'border-transparent text-mist-600 hover:text-mist-400',
                   )}
-                  title="直接打开远端 PR / MR 的 diff 图"
+                  title={t('直接打开远端 PR / MR 的 diff 图')}
                 >
                   <GitPullRequest size={10} />
                   PR / MR
@@ -360,7 +364,7 @@ export function RepoPanel({
                   {branch ? (
                     <span
                       className="max-w-[150px] truncate rounded border border-line px-1 py-0.5 font-mono text-[8.5px] text-mist-600"
-                      title={`当前分支：${branch}`}
+                      title={t('当前分支：{branch}', { branch })}
                     >
                       {branch}
                     </span>
@@ -374,9 +378,9 @@ export function RepoPanel({
                         ? 'border-transparent text-mist-600 hover:text-mist-400'
                         : 'border-accent/25 bg-accent-soft text-accent-bright',
                     )}
-                    title="只显示当前分支的历史"
+                    title={t('只显示当前分支的历史')}
                   >
-                    当前分支
+                    {t('当前分支')}
                   </button>
                   <button
                     type="button"
@@ -387,9 +391,9 @@ export function RepoPanel({
                         ? 'border-accent/25 bg-accent-soft text-accent-bright'
                         : 'border-transparent text-mist-600 hover:text-mist-400',
                     )}
-                    title="包含所有分支（含他人的远程分支）"
+                    title={t('包含所有分支（含他人的远程分支）')}
                   >
-                    全部分支
+                    {t('全部分支')}
                   </button>
                   {loadingCommits ? <Loader2 size={11} className="animate-spin text-accent" /> : null}
                 </span>
@@ -407,7 +411,7 @@ export function RepoPanel({
                     type="button"
                     onClick={() => setPullsRefresh((value) => value + 1)}
                     className="flex h-5 w-5 items-center justify-center rounded border border-line text-mist-600 transition hover:text-mist-300"
-                    title="刷新 PR / MR 列表"
+                    title={t('刷新 PR / MR 列表')}
                   >
                     <RefreshCw size={10} className={loadingPulls ? 'animate-spin' : ''} />
                   </button>
@@ -419,7 +423,7 @@ export function RepoPanel({
               <>
                 {commitsError ? (
                   <div className="rounded-lg border border-rose/20 bg-rose/5 px-3 py-2 text-[10px] text-rose">
-                    读取提交历史失败：{commitsError}
+                    {t('读取提交历史失败：{error}', { error: commitsError })}
                   </div>
                 ) : null}
                 <CommitGraph
@@ -435,21 +439,21 @@ export function RepoPanel({
               <div className="space-y-1.5">
                 {pullsError ? (
                   <div className="rounded-lg border border-rose/20 bg-rose/5 px-3 py-2 text-[10px] leading-5 text-rose">
-                    <div>读取 PR / MR 失败：{pullsError}</div>
+                    <div>{t('读取 PR / MR 失败：{error}', { error: pullsError })}</div>
                     {pullHint ? <div className="mt-1 text-mist-500">{pullHint}</div> : null}
                   </div>
                 ) : null}
                 {loadingPulls && pulls.length === 0 ? (
                   <div className="flex items-center gap-2 rounded-lg border border-line bg-ink-850/40 px-3 py-4 text-[10px] text-mist-500">
                     <Loader2 size={12} className="animate-spin text-accent" />
-                    正在读取远端 PR / MR…
+                    {t('正在读取远端 PR / MR…')}
                   </div>
                 ) : null}
                 {!loadingPulls && !pullsError && pulls.length === 0 ? (
                   <div className="rounded-lg border border-line bg-ink-850/40 px-3 py-5 text-center text-[10px] leading-5 text-mist-500">
-                    没有开放的 PR / MR。
+                    {t('没有开放的 PR / MR。')}
                     <br />
-                    合并请求创建后会出现在这里，点击即可生成 diff 图。
+                    {t('合并请求创建后会出现在这里，点击即可生成 diff 图。')}
                   </div>
                 ) : null}
                 {pulls.map((pull) => (
@@ -471,7 +475,7 @@ export function RepoPanel({
                         </span>
                         {pull.draft ? (
                           <span className="shrink-0 rounded border border-line px-1 py-0.5 text-[8px] text-mist-600">
-                            草稿
+                            {t('草稿')}
                           </span>
                         ) : null}
                       </span>
@@ -495,7 +499,7 @@ export function RepoPanel({
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-[#fffdf8]/80 backdrop-blur-[2px]">
             <div className="flex items-center gap-2 rounded-full border border-line bg-[#fffdf8] px-3 py-2 text-[10.5px] text-mist-400 shadow-sm">
               <RefreshCw size={12} className="animate-spin text-accent" />
-              正在生成 Review…
+              {t('正在生成 Review…')}
             </div>
           </div>
         ) : null}

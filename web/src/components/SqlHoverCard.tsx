@@ -1,5 +1,6 @@
 import { Database, ArrowUpRight } from 'lucide-react';
 import type { ReviewTable } from '../types';
+import { useI18n } from '../i18n';
 
 const OPERATION_LABEL: Record<string, string> = {
   select: 'SELECT',
@@ -21,6 +22,7 @@ export function SqlHoverCard({
   y: number;
   onOpen: (tableId: string) => void;
 }) {
+  const { t } = useI18n();
   const statements = (table.statements ?? []).slice(0, 3);
   const total = table.statementCount ?? table.statements?.length ?? 0;
   const left = Math.min(Math.max(12, x + 18), window.innerWidth - 500);
@@ -35,19 +37,19 @@ export function SqlHoverCard({
           <Database size={12} />
         </span>
         <span className="font-mono text-[11.5px] font-semibold text-mist-100">{table.name}</span>
-        <span className="text-[9px] text-mist-600">{total} 条 SQL</span>
+        <span className="text-[9px] text-mist-600">{t('{count} 条 SQL', { count: total })}</span>
         <button
           type="button"
           onClick={() => onOpen(table.id)}
           className="ml-auto flex items-center gap-0.5 rounded border border-[rgba(196,122,44,0.3)] px-1.5 py-0.5 text-[9px] text-[#a35f14] transition hover:bg-[rgba(196,122,44,0.08)]"
         >
-          查看全部
+          {t('查看全部')}
           <ArrowUpRight size={9} />
         </button>
       </div>
       <div className="mt-2 space-y-2">
         {statements.length === 0 ? (
-          <div className="text-[10px] text-mist-600">正在读取 SQL…</div>
+          <div className="text-[10px] text-mist-600">{t('正在读取 SQL…')}</div>
         ) : (
           statements.map((statement) => (
             <div key={statement.id} className="rounded-lg border border-line/60 bg-[#fbf8f0] p-2">
@@ -57,7 +59,7 @@ export function SqlHoverCard({
                 </span>
                 <span className="truncate font-mono">{statement.file.split('/').slice(-2).join('/')}</span>
                 {statement.line ? <span>:{statement.line}</span> : null}
-                {statement.dynamic ? <span className="text-amber">动态 SQL</span> : null}
+                {statement.dynamic ? <span className="text-amber">{t('动态 SQL')}</span> : null}
               </div>
               <pre className="mt-1 max-h-[52px] overflow-hidden whitespace-pre-wrap break-all font-mono text-[9px] leading-[1.5] text-[#3d4a4f]">
                 {statement.sql}
@@ -67,7 +69,9 @@ export function SqlHoverCard({
         )}
       </div>
       {total > statements.length && statements.length > 0 ? (
-        <div className="mt-1.5 text-right text-[8.5px] text-mist-600">点击「查看全部」查看其余 {total - statements.length} 条</div>
+        <div className="mt-1.5 text-right text-[8.5px] text-mist-600">
+          {t('点击「查看全部」查看其余 {count} 条', { count: total - statements.length })}
+        </div>
       ) : null}
     </div>
   );

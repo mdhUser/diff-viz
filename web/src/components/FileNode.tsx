@@ -5,6 +5,7 @@ import type { LayoutDirection, ReviewNode } from '../types';
 import { STATUS_META } from '../status';
 import { dirname } from '../format';
 import { cn } from '../cn';
+import { useI18n } from '../i18n';
 
 export interface FileNodeData extends Record<string, unknown> {
   node: ReviewNode;
@@ -20,6 +21,7 @@ export type FileFlowNode = Node<FileNodeData, 'file'>;
 
 function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
   const { node, direction, selected, openTodos, reviewed, ignored, laneMode } = data;
+  const { t } = useI18n();
   const meta = STATUS_META[node.status];
   const isConfig = node.kind === 'config';
   const Icon = isConfig ? FileCog : meta.icon;
@@ -29,21 +31,22 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
       : node.resourceKind === 'xml-spring'
         ? 'Spring XML'
         : node.resourceKind === 'xml-generic'
-          ? 'XML 配置'
+          ? t('XML 配置')
           : node.resourceKind === 'properties'
             ? 'Properties'
             : node.resourceKind === 'yaml'
               ? 'YAML'
               : node.resourceKind === 'sql'
                 ? 'SQL'
-                : '配置';
+                : t('配置');
   const impacted = node.status === 'impacted_only';
   const vertical = direction === 'TB';
-  const contextPath = node.packagePath || dirname(node.path) || '仓库根目录';
+  const moduleLabel = node.moduleLabel ? t(node.moduleLabel) : '';
+  const contextPath = node.packagePath || dirname(node.path) || t('仓库根目录');
   const contextLine = laneMode
     ? contextPath
-    : [node.moduleLabel, contextPath].filter(Boolean).join(' · ') || '仓库根目录';
-  const titleParts = [node.path, node.moduleLabel, node.packagePath].filter(Boolean);
+    : [moduleLabel, contextPath].filter(Boolean).join(' · ') || t('仓库根目录');
+  const titleParts = [node.path, moduleLabel, node.packagePath].filter(Boolean);
   const width = impacted ? 228 : 256;
 
   return (
@@ -93,7 +96,7 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="truncate text-[13px] font-semibold leading-5 text-mist-100">{node.label}</span>
-            {node.renamed ? <CornerUpRight size={11} className="shrink-0 text-mist-600" aria-label="重命名" /> : null}
+            {node.renamed ? <CornerUpRight size={11} className="shrink-0 text-mist-600" aria-label={t('重命名')} /> : null}
           </div>
           <div className="truncate font-mono text-[10px] leading-4 text-mist-600" title={titleParts.join(' · ')}>
             {contextLine}
@@ -106,7 +109,7 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
               style={{ background: 'rgba(47,143,143,0.10)', color: '#2f7373', border: '1px solid rgba(47,143,143,0.30)' }}
               title={configLabel}
             >
-              配置
+              {t('配置')}
             </span>
           ) : null}
           {(node.reviewComments ?? 0) > 0 ? (
@@ -117,8 +120,10 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
                   ? 'bg-[rgba(169,116,24,0.12)] text-[#a97418]'
                   : 'bg-[rgba(86,111,208,0.10)] text-[#4a5f9e]',
               )}
-              title={`${node.reviewComments} 条 Reviewer 评论${
-                (node.reviewCommentUnresolved ?? 0) > 0 ? `，${node.reviewCommentUnresolved} 条未解决` : ''
+              title={`${t('{count} 条 Reviewer 评论', { count: node.reviewComments ?? 0 })}${
+                (node.reviewCommentUnresolved ?? 0) > 0
+                  ? t('，{count} 条未解决', { count: node.reviewCommentUnresolved ?? 0 })
+                  : ''
               }`}
             >
               <MessageSquare size={8.5} />
@@ -129,7 +134,7 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
             className="rounded px-1.5 py-0.5 text-[9px] font-medium tracking-wide"
             style={{ background: meta.soft, color: meta.color, border: `1px solid ${meta.border}` }}
           >
-            {meta.label}
+            {t(meta.label)}
           </span>
         </span>
       </div>
@@ -137,12 +142,14 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
       <div className="mt-1.5 flex items-center justify-between gap-2">
         {impacted ? (
           <span className="truncate text-[10px] text-mist-600">
-            未改动
-            {node.impactOrigins?.length ? ` · 依赖 ${node.impactOrigins.length} 处变更` : ' · 依赖链影响'}
+            {t('未改动')}
+            {node.impactOrigins?.length
+              ? ` · ${t('依赖 {count} 处变更', { count: node.impactOrigins.length })}`
+              : ` · ${t('依赖链影响')}`}
           </span>
         ) : isConfig ? (
           <span className="truncate font-mono text-[10px] text-mist-500" title={configLabel}>
-            {configLabel}
+            {t(configLabel)}
           </span>
         ) : (
           <span className="flex items-center gap-2 font-mono text-[10.5px]">
@@ -158,7 +165,7 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
               {openTodos}
             </span>
           ) : null}
-          {reviewed ? <CheckCircle2 size={13} className="text-mint" aria-label="已 Review" /> : null}
+          {reviewed ? <CheckCircle2 size={13} className="text-mint" aria-label={t('已 Review')} /> : null}
         </span>
       </div>
     </div>

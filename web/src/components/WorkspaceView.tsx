@@ -13,6 +13,8 @@ import {
 import type { ReviewData, ServiceEdge, WorkspaceMeta, WorkspaceRepo } from '../types';
 import { apiFetch, describeResponseFailure, responseErrorDetail } from '../api';
 import { cn } from '../cn';
+import { useI18n } from '../i18n';
+import { LanguageSwitch } from './LanguageSwitch';
 
 const CARD_W = 264;
 const CARD_H = 118;
@@ -69,6 +71,7 @@ export function WorkspaceView({
   onOpenWorkspaceReview,
   onRefresh,
 }: WorkspaceViewProps) {
+  const { t } = useI18n();
   const meta = data.meta as unknown as WorkspaceMeta;
   const repos = meta.repos ?? [];
   const edges = meta.serviceEdges ?? [];
@@ -134,14 +137,14 @@ export function WorkspaceView({
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-[13px] font-semibold text-mist-100">
             <FolderGit2 size={14} className="text-accent" />
-            工作区 · {meta.name}
+            {t('工作区 · {name}', { name: meta.name })}
           </div>
           <div className="mt-1 truncate font-mono text-[9.5px] text-mist-600">{meta.file}</div>
         </div>
         <div className="flex items-center gap-3 text-[10px] text-mist-500">
-          <span>{meta.stats.repos} 个仓库</span>
-          <span className="text-amber">{meta.stats.changed} 个有改动</span>
-          <span className="text-accent">{meta.stats.impacted} 个受影响</span>
+          <span>{t('{count} 个仓库', { count: meta.stats.repos })}</span>
+          <span className="text-amber">{t('{count} 个有改动', { count: meta.stats.changed })}</span>
+          <span className="text-accent">{t('{count} 个受影响', { count: meta.stats.impacted })}</span>
           <div className="relative">
             <button
               type="button"
@@ -155,37 +158,39 @@ export function WorkspaceView({
                   ? 'border-accent/35 bg-accent-soft text-accent-bright'
                   : 'border-line bg-ink-850 text-mist-400 hover:border-accent/30 hover:text-mist-200',
               )}
-              title="查看这个工作区的历史分析版本"
+              title={t('查看这个工作区的历史分析版本')}
             >
               <History size={11} />
-              历史 {versions.length > 0 ? versions.length : ''}
+              {t('历史')} {versions.length > 0 ? versions.length : ''}
               <ChevronDown size={9} />
             </button>
             {historyOpen ? (
               <div className="absolute right-0 top-[calc(100%+6px)] z-40 w-[340px] overflow-hidden rounded-xl border border-line bg-[#fffdf8] shadow-[0_18px_40px_-24px_rgba(60,50,30,0.45)]">
                 <div className="flex items-center justify-between border-b border-line/70 px-3 py-2">
-                  <span className="text-[10px] font-medium text-mist-200">工作区历史版本</span>
+                  <span className="text-[10px] font-medium text-mist-200">{t('工作区历史版本')}</span>
                   <button
                     type="button"
                     onClick={() => meta.file && void loadHistory(meta.file)}
                     className="text-[9px] text-mist-600 transition hover:text-mist-200"
                   >
-                    刷新
+                    {t('刷新')}
                   </button>
                 </div>
                 <div className="max-h-[320px] overflow-y-auto p-1.5">
                   {historyLoading ? (
                     <div className="flex items-center gap-2 px-2 py-3 text-[10px] text-mist-600">
                       <Loader2 size={11} className="animate-spin text-accent" />
-                      正在读取历史…
+                      {t('正在读取历史…')}
                     </div>
                   ) : null}
                   {historyError ? (
-                    <div className="px-2 py-3 text-[10px] leading-5 text-rose">读取历史失败：{historyError}</div>
+                    <div className="px-2 py-3 text-[10px] leading-5 text-rose">
+                      {t('读取历史失败：{error}', { error: historyError })}
+                    </div>
                   ) : null}
                   {!historyLoading && !historyError && versions.length === 0 ? (
                     <div className="px-2 py-3 text-[10px] leading-5 text-mist-600">
-                      还没有历史版本。每次重新执行 `diff-viz workspace` 都会把上一版归档。
+                      {t('还没有历史版本。每次重新执行 `diff-viz workspace` 都会把上一版归档。')}
                     </div>
                   ) : null}
                   {versions.map((version) => {
@@ -209,21 +214,21 @@ export function WorkspaceView({
                       >
                         <span className="flex items-center gap-2">
                           <span className="font-mono text-[10px] text-mist-300">
-                            {version.timestamp || '未知时间'}
+                            {version.timestamp || t('未知时间')}
                           </span>
                           {version.archived ? (
-                            <span className="rounded border border-line px-1 py-0.5 text-[8px] text-mist-600">归档</span>
+                            <span className="rounded border border-line px-1 py-0.5 text-[8px] text-mist-600">{t('归档')}</span>
                           ) : (
                             <span className="rounded border border-mint/30 bg-mint/10 px-1 py-0.5 text-[8px] text-mint">
-                              最新
+                              {t('最新')}
                             </span>
                           )}
-                          {current ? <span className="ml-auto text-[8.5px] text-accent">当前</span> : null}
+                          {current ? <span className="ml-auto text-[8.5px] text-accent">{t('当前')}</span> : null}
                         </span>
                         <span className="flex flex-wrap items-center gap-x-2 text-[9px] text-mist-600">
-                          <span>{version.stats?.repos ?? 0} 仓库</span>
-                          <span className="text-amber">{changed} 有改动</span>
-                          <span className="text-accent">{impacted} 受影响</span>
+                          <span>{t('{count} 仓库', { count: version.stats?.repos ?? 0 })}</span>
+                          <span className="text-amber">{t('{count} 有改动', { count: changed })}</span>
+                          <span className="text-accent">{t('{count} 受影响', { count: impacted })}</span>
                         </span>
                         {version.scopes?.length ? (
                           <span className="truncate font-mono text-[8px] text-mist-600">
@@ -237,13 +242,14 @@ export function WorkspaceView({
               </div>
             ) : null}
           </div>
+          <LanguageSwitch />
           <button
             type="button"
             onClick={onRefresh}
             className="flex items-center gap-1 rounded-md border border-line bg-ink-850 px-2 py-1 text-[10px] text-mist-400 transition hover:border-accent/30 hover:text-mist-200"
           >
             <RefreshCw size={11} className={refreshing ? 'animate-spin' : undefined} />
-            刷新
+            {t('刷新')}
           </button>
         </div>
       </header>
@@ -257,9 +263,9 @@ export function WorkspaceView({
           >
             <span className="flex items-center gap-1.5 text-[11px] font-medium text-mist-200">
               <NotebookText size={12} className="text-accent" />
-              跨服务摘要
+              {t('跨服务摘要')}
             </span>
-            <span className="shrink-0 text-[9.5px] text-mist-600">{summaryOpen ? '收起' : '展开'}</span>
+            <span className="shrink-0 text-[9.5px] text-mist-600">{summaryOpen ? t('收起') : t('展开')}</span>
           </button>
           <p
             className={cn(
@@ -297,7 +303,7 @@ export function WorkspaceView({
       <div className="min-h-0 flex-1 overflow-auto">
         {repos.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[11px] text-mist-500">
-            工作区里没有可用仓库
+            {t('工作区里没有可用仓库')}
           </div>
         ) : (
           <div className="relative" style={{ width: layout.width, height: layout.height }}>
@@ -381,7 +387,11 @@ export function WorkspaceView({
                             : 'bg-ink-800 text-mist-600',
                       )}
                     >
-                      {repo.changed ? '有改动' : impacted ? `受影响 · ${repo.depth}` : '未改动'}
+                      {repo.changed
+                        ? t('有改动')
+                        : impacted
+                          ? t('受影响 · {depth}', { depth: repo.depth ?? 0 })
+                          : t('未改动')}
                     </span>
                   </div>
 
@@ -390,9 +400,9 @@ export function WorkspaceView({
                       <span className="text-mint">+{stats.additions ?? 0}</span>
                       <span className="mx-1 text-mist-600">/</span>
                       <span className="text-rose">−{stats.deletions ?? 0}</span>
-                      <span className="ml-2 text-mist-600">{stats.changedFiles ?? 0} 文件</span>
+                      <span className="ml-2 text-mist-600">{t('{count} 文件', { count: stats.changedFiles ?? 0 })}</span>
                     </div>
-                    <span className="text-[9px] text-mist-600">打开 →</span>
+                    <span className="text-[9px] text-mist-600">{t('打开 →')}</span>
                   </div>
                 </button>
               );
@@ -403,15 +413,18 @@ export function WorkspaceView({
 
       <footer className="flex shrink-0 items-center gap-4 border-t border-line/80 px-6 py-2 text-[9.5px] text-mist-600">
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-amber" />有改动
+          <span className="h-2 w-2 rounded-full bg-amber" />
+          {t('有改动')}
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-accent" />受其他服务影响
+          <span className="h-2 w-2 rounded-full bg-accent" />
+          {t('受其他服务影响')}
         </span>
         <span className="flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-mist-600" />未改动
+          <span className="h-2 w-2 rounded-full bg-mist-600" />
+          {t('未改动')}
         </span>
-        <span className="ml-auto">箭头 = 依赖方向（左边被依赖），改动沿反方向传播</span>
+        <span className="ml-auto">{t('箭头 = 依赖方向（左边被依赖），改动沿反方向传播')}</span>
       </footer>
     </div>
   );
