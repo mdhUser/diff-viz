@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 文档：新增英文主 README（`README.md`）并将中文版迁移为 `README.zh-CN.md`，两版顶部都有语言切换；英文 README 覆盖快速开始、界面、远端 PR/MR、配置/数据库、工作区历史、Agent/MCP、数据隐私、限制与文档索引，为国际化发布做准备。
+
+
 ## [1.7.1] - 2026-11-24
 
 ### Fixed

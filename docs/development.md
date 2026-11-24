@@ -25,7 +25,8 @@ diff-viz/
 ├── docs/                   # CLI 参考、数据契约、语言解析等文档
 ├── SKILL.md                # Agent Skill 说明
 ├── CHANGELOG.md
-└── README.md
+├── README.md          # English README (GitHub/npm entry)
+├── README.zh-CN.md    # 中文 README
 ```
 
 ## 本地开发

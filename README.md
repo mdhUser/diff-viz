@@ -1,183 +1,210 @@
 # diff-viz
 
+**English** | [简体中文](README.zh-CN.md)
+
 [![CI](https://github.com/mdhUser/diff-viz/actions/workflows/ci.yml/badge.svg)](https://github.com/mdhUser/diff-viz/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/mdhUser/diff-viz/blob/main/LICENSE)
 [![npm](https://img.shields.io/npm/v/diff-viz-cli.svg)](https://www.npmjs.com/package/diff-viz-cli)
-[更新日志](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md)
+[![Changelog](https://img.shields.io/badge/changelog-v1.7.1-blue.svg)](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md)
 
-**改完代码，先看清「这次改动会影响谁」，再开始 Review。**
+**See who a change affects before you start reviewing it.**
 
-diff-viz 把一次 Git 改动展开成一张可交互的依赖拓扑图：改了哪些文件、沿 import 链还会波及哪些**没动过**的文件、按什么顺序看、哪些点必须人工确认。点开任意文件就是摘要、影响分析、代码 Diff 和待办清单。
+diff-viz turns a Git change into an interactive dependency graph: which files changed, which **untouched** files are affected along the import chain, what order to review them in, and which decisions need a human. Click any file to get its summary, impact analysis, code diff and review todos.
 
-![diff-viz 拓扑总览](https://raw.githubusercontent.com/mdhUser/diff-viz/main/docs/overview.png)
+![diff-viz topology overview](https://raw.githubusercontent.com/mdhUser/diff-viz/main/docs/overview.png)
 
-## 快速开始
+> The web UI is currently Chinese; English/Chinese UI switching is the next milestone. This README is the English entry point. Docs are being translated (links below currently point to mostly Chinese docs).
 
-要求：Node.js >= 20，在**任意 Git 仓库根目录**执行：
+## Quick start
+
+Requirements: Node.js >= 20. Run this in **any Git repository root**:
 
 ```bash
 npx diff-viz-cli
 ```
 
-也可以全局安装一次，之后在任意仓库直接用 `diff-viz`：
+Or install it once and use `diff-viz` anywhere:
 
 ```bash
 npm install -g diff-viz-cli
 diff-viz
 ```
 
-它做三件事：
+It does three things:
 
-1. 分析当前改动 —— 工作区有改动就看工作区（暂存 + 未暂存 + 未跟踪），干净则看最近一次提交；
-2. 写数据文件 —— `.diff-review-data.json` + `.diff-review-data.json.nodes/`，自动加入 `.git/info/exclude`，`git status` 保持干净；
-3. 启动/复用本地 hub 并打开浏览器 —— CLI 随即退出，hub 留在后台供后续复用。
+1. **Analyzes your change** — if the worktree is dirty it reviews staged + unstaged + untracked changes; if clean it reviews the latest commit.
+2. **Writes local review data** — `.diff-review-data.json` plus `.diff-review-data.json.nodes/`, automatically added to `.git/info/exclude` so `git status` stays clean.
+3. **Starts/reuses a local hub and opens the browser** — the CLI exits immediately; the hub keeps running for later reviews.
 
-常用变体：
+Common variants:
 
 ```bash
-diff-viz --staged                  # 只看暂存区
-diff-viz --last                    # 最近一次提交
-diff-viz --range main..HEAD        # 提交范围
-diff-viz --base main               # 与目标分支 merge-base 比较
-diff-viz --no-open                 # 不自动开浏览器，只打印 URL
-diff-viz stop                      # 停止后台 hub
+diff-viz --staged                  # staged changes only
+diff-viz --last                    # latest commit
+diff-viz --range main..HEAD        # commit range
+diff-viz --base main               # compare against merge-base with a target branch
+diff-viz --pr 123                  # GitHub pull request
+diff-viz --mr 7                    # GitLab merge request
+diff-viz --no-open                 # print the URL instead of opening a browser
+diff-viz stop                      # stop the background hub
 ```
 
-端口默认 `5173`，被占用会自动递增，实际 URL 以终端输出为准。hub 重启后会复用上一次的端口，旧链接不会因为重启失效（显式 `--port` 可覆盖）。
+The default port is `5173` and auto-increments when busy; use the URL printed by the CLI. The hub remembers its last port across restarts, so old links keep working (override with `--port`).
 
-### 30 秒看懂界面
+### The interface in 30 seconds
 
-| 区域 | 内容 |
+| Area | What you get |
 | --- | --- |
-| 左栏 | 整体摘要、变更文件 / 受影响文件列表、Review 进度；点文件切换 |
-| 中间 | 拓扑图。紫色虚线 = 影响（改了 A 牵动 B），蓝色实线 = 依赖（A imports B），灰色节点 = 没改但受影响 |
-| 右侧 | 「摘要与影响」「代码 Diff」「待确认」三段；Diff 支持单栏/双栏、完整文件、语法高亮 |
-| 顶部 | 仓库切换、版本链（默认当前分支）、历史 commit 的 Review、刷新；工具栏可切换「流向 / 泳道」视图（泳道按模块/目录/包分层），以及「配置」「数据表」层 |
+| Left sidebar | Overall summary, changed/impacted file lists, review progress; click to select a file |
+| Canvas | Dependency topology. Purple dashed = impact (A changed → B affected), blue solid = dependency (A imports B), gray nodes = untouched but impacted |
+| Detail drawer | Summary & impact, code diff, review todos; side-by-side diff, full-file view, syntax highlighting |
+| Top bar | Repo switcher, version chain (current branch by default), historical commit reviews, refresh; switch between **flow / swimlane** views (lanes by module/directory/package) and toggle **config** / **database** layers |
 
-快捷键：`←` / `→` 切换文件，`Esc` 关闭详情。改完代码保存后 hub 自动重算，页面通过 SSE 刷新，不用重跑命令。
+Keyboard: `←` / `→` move between files, `Esc` closes the drawer. When you save code, the hub re-analyzes and the page refreshes over SSE — no need to re-run the CLI.
 
-## 它解决什么问题
+## Why diff-viz
 
-- **这次改动会影响谁？** 普通 `git diff` 只列改过的文件，diff-viz 沿 import 链算出所有下游受影响文件，并给出「A → B → C」传播链路。
-- **该按什么顺序 Review？** 按依赖关系生成 `reviewOrder`，逐个文件标记「已 Review / 待确认 / 忽略」，进度可持久化。
-- **Agent 改完，哪些必须人确认？** Agent 可以把自己的总结、影响分析、风险点写成注解，直接展示在页面上；新增行里的 TODO/FIXME 也会自动扫出来。
+- **Who does this change affect?** `git diff` only lists touched files; diff-viz walks the import graph and shows every downstream file, including untouched ones, with a propagation chain (`A → B → C`).
+- **What order should I review in?** A dependency-aware `reviewOrder`, per-file status (reviewed / needs confirmation / ignored), persisted locally.
+- **What must a human confirm?** Agents write summaries, impact analysis and risk notes into annotations, shown directly in the page. TODO/FIXME comments in added lines are detected automatically.
 
-## 常用操作
+## Common tasks
 
-| 我想…… | 命令 / 操作 |
+| I want to… | Command / action |
 | --- | --- |
-| Review 工作区改动 | `diff-viz` |
-| Review 某次提交 / 某个范围 | `diff-viz --last` / `--range A..B` / `--base main` |
-| 在界面里切换仓库、看历史提交 | 点顶部仓库名 → 左侧选仓库 → 右侧「版本链条」点提交 |
-| 直接看远端 PR / MR | 点顶部仓库名 → 「PR / MR」→ 点击目标 PR；或 CLI `diff-viz --pr 123` / `--mr 7` |
-| 叠加 Agent / 人工总结 | `diff-viz annotate --data .diff-review-data.json --annotations ann.json` |
-| 给已打开的任意 Review 补注解 | `diff-viz annotate --review <id> --annotations ann.json`（id 在页面 URL 的 `?review=` 后） |
-| 只拿机器可读结果 | `diff-viz --json-only --quiet` |
-| 重新打开已有数据 | `diff-viz serve --data .diff-review-data.json` |
-| 多仓库一起分析 | `diff-viz workspace --init` → 编辑 `diff-viz.workspace.json` → `diff-viz workspace` |
+| Review my worktree | `diff-viz` |
+| Review a commit / range | `diff-viz --last` / `--range A..B` / `--base main` |
+| Switch repo or browse history in the UI | Click the repo name → pick a repo → click a commit in the version chain |
+| Open a remote PR / MR | Click the repo name → **PR / MR** → pick one; or `diff-viz --pr 123` / `--mr 7` |
+| Attach agent/human summaries | `diff-viz annotate --data .diff-review-data.json --annotations ann.json` |
+| Annotate an already-open review | `diff-viz annotate --review <id> --annotations ann.json` (`<id>` is the `?review=` value) |
+| Get machine-readable output | `diff-viz --json-only --quiet` |
+| Reopen existing data | `diff-viz serve --data .diff-review-data.json` |
+| Analyze several repos together | `diff-viz workspace --init` → edit `diff-viz.workspace.json` → `diff-viz workspace` |
 
-完整命令与参数见 **[docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md)**。
+Full CLI reference: **[docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md)**.
 
-## 远程 PR / MR
+## Remote GitHub PRs / GitLab MRs
 
-仓库远端的 GitHub PR / GitLab MR 可以直接在 hub 里打开：点顶部仓库名 → **PR / MR** 标签 → 点击任意一条，就自动拉取 `refs/pull/<n>/head`（GitLab 为 `refs/merge-requests/<iid>/head`）、fetch 目标分支并生成 `base...head` 的 diff 拓扑。
+Open a remote PR/MR directly from the hub: click the repo name → **PR / MR** tab → pick a request. diff-viz fetches `refs/pull/<n>/head` (GitLab: `refs/merge-requests/<iid>/head`) and the target branch, then builds the `base...head` topology.
 
 ```bash
-diff-viz --pr 123                 # GitHub PR 编号或 URL
+diff-viz --pr 123                 # GitHub PR number or URL
 diff-viz --mr 7                   # GitLab MR
-diff-viz --pr 123 --base release/1.8   # 目标分支不是默认分支时
+diff-viz --pr 123 --base release/1.8   # when the target is not the default branch
 ```
 
-- 私有仓库配置 `GITHUB_TOKEN` / `GITLAB_TOKEN` 后重启 hub；自建 GitLab 可设 `DIFF_VIZ_PROVIDER=gitlab` 与 `DIFF_VIZ_GITLAB_HOSTS`。
-- PR/MR 元数据写入 `meta.pull`，顶部范围标签显示 `PR #N · 标题`，并带远端链接。
-- Reviewer 评论会同步进来：有评论的文件在拓扑节点和侧栏显示数量徽章，未解决评论用琥珀色；详情抽屉新增「Reviewer 评论」Tab，工具栏可用「有评论」一键只看有评论的文件。
-- 同一 PR 复用同一个 Review（`<projectId>-pull-<number>`），已有注解会尽量保留。
+- For private repos set `GITHUB_TOKEN` / `GITLAB_TOKEN` (or reuse an existing `gh` / `glab` login). Self-hosted GitLab: `DIFF_VIZ_PROVIDER=gitlab`, `DIFF_VIZ_GITLAB_HOSTS`, etc.
+- PR/MR metadata lands in `meta.pull`; the top bar shows `PR #N · title` with a link back to the remote page.
+- Reviewer comments are synced too: files with comments show count badges on nodes and in the sidebar (amber when unresolved); the detail drawer has a **Reviewer comments** tab; the **Has comments** toolbar toggle shows only files with comments.
+- The same PR reuses the same review (`<projectId>-pull-<number>`), so existing agent annotations are preserved.
+- Comments are a snapshot taken when the review opens; reopen the PR to fetch new comments.
 
-细节与限制见 [docs/pull-requests.md](https://github.com/mdhUser/diff-viz/blob/main/docs/pull-requests.md)。
+Details and limitations: [docs/pull-requests.md](https://github.com/mdhUser/diff-viz/blob/main/docs/pull-requests.md).
 
-## 配置与数据库
+## Config files and databases
 
-配置文件和 SQL 也在拓扑图里：
+Configuration and SQL are part of the graph:
 
-- `.xml`：MyBatis Mapper（`namespace` 绑定到 Java Mapper 接口）、Spring XML（`<bean class>` / `<import resource>`），未知 XML 只保留节点不猜边。
-- `.properties` / `.yml` / `.yaml` / `.sql`：作为配置节点参与分层。
-- **数据库表**：MyBatis XML / Java 注解 / `.sql` 里的 SQL 会聚合成表节点（`t_order` 等），橙色「读取/写入」边连到数据库泳道；悬停看 SQL，点击打开完整语句抽屉。工具栏可开关「配置」「数据表」层。
-- 改 Mapper XML 会让接口和调用方进入「受影响」。
+- `.xml`: MyBatis mappers (`namespace` bound to the Java mapper interface) and Spring XML (`<bean class>`, `<import resource>`); unknown XML stays a node without guessed edges.
+- `.properties` / `.yml` / `.yaml` / `.sql`: config nodes take part in layering.
+- **Database tables**: SQL from MyBatis XML, Java annotations and `.sql` files is grouped into table nodes (`t_order`, …) with orange **read/write** edges into a database lane. Hover a table for SQL; click for the full statement drawer. Toggle the **Config** / **Database** layers in the toolbar.
+- Editing a mapper XML marks the mapper interface and its callers as impacted.
 
-模型、边方向和上限见 [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md)。
+Model, edge directions and limits: [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md), [docs/database.md](https://github.com/mdhUser/diff-viz/blob/main/docs/database.md).
 
-## 多仓库 / 微服务
+## Workspaces / microservices
 
-一次改动横跨几个服务时，单仓视图看不到服务之间的牵连：
+For a change spanning multiple services:
 
 ```bash
-diff-viz workspace --init    # 在仓库父目录生成模板，自动收录同级 git 仓库
-diff-viz workspace           # 分析并打开服务级拓扑
+diff-viz workspace --init    # generate a template next to sibling Git repos
+diff-viz workspace           # analyze and open the service-level topology
 ```
 
-diff-viz 会从 `package.json` / `pom.xml` / `go.mod` / `build.gradle(.kts)` / `*.csproj` / `composer.json` 自动识别包依赖，静态解析不可靠的 RPC / HTTP 调用可在 `diff-viz.workspace.json` 的 `links` 里声明；某个服务有改动时，依赖它的服务会标记为「受影响」并给出层级。点服务卡片可进入该仓库原来的文件级拓扑。
+diff-viz detects package dependencies from `package.json` / `pom.xml` / `go.mod` / `build.gradle(.kts)` / `*.csproj` / `composer.json`. For RPC/HTTP calls that cannot be parsed statically, declare them in `links` inside `diff-viz.workspace.json`. A changed service marks its dependents as impacted with a depth; click a service card to open the file-level topology of that repo.
 
-提交后想看旧的工作区拓扑：重新运行 `diff-viz workspace` 会归档上一版，页面右上角「历史 N」可切回任意历史版本；服务卡片进入仓库后，「← 工作区」或浏览器后退可回到总览。
+After committing, re-running `diff-viz workspace` archives the previous workspace snapshot: use the **History N** dropdown in the page header to switch between historical versions. From a repository review, **← Workspace** or browser Back returns to the overview.
 
-配置格式和比较范围（`worktree` / `staged` / `last` / `range` / `base` / `commit`，支持 per-repo 覆盖）见 **[docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md)**。
+Scope format (`worktree` / `staged` / `last` / `range` / `base` / `commit`, with per-repo overrides): [docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md).
 
-## 让 AI Agent 接进来
+## Agents and MCP
 
-diff-viz 自带 Agent Skill，已适配 DSH / Claude Code / Cursor 等：
+Install the skill for your agent:
 
 ```bash
-diff-viz skill install --agent dsh      # 或 claude / cursor
+diff-viz skill install --agent dsh      # or claude / cursor
 ```
 
-标准流程：Agent 改完代码 → 读 `git diff` 写注解文件（`meta.overallSummary` + 每个文件的 `summary` / `impactAnalysis` / `todos`）→ `diff-viz --annotations .diff-review-annotations.json` → 把 URL 和摘要给用户。不想重启服务时用 `annotate` 追加；注解会按「项目 + 文件 + 改动内容」跨 Review 复用，提交后从版本链进入也不会丢。
+An agent's standard loop: make the change → write an annotation file (`meta.overallSummary` + per-file `summary` / `impactAnalysis` / `todos`) → run `diff-viz --annotations ...` → hand the URL and summary to the user. Use `annotate` to update an existing review without restarting anything; annotations are reused per project + file + diff content, including across commits.
 
-- 详细用法：[SKILL.md](https://github.com/mdhUser/diff-viz/blob/main/SKILL.md)
-- 其他 Agent（Codex / 自定义）接入：[docs/agent-integrations.md](https://github.com/mdhUser/diff-viz/blob/main/docs/agent-integrations.md)
-- **MCP 通信**：`diff-viz mcp` 提供 `diff_viz_review` / `diff_viz_get_review` / `diff_viz_get_node` / `diff_viz_annotate` 等工具，Cursor/Claude/Codex 可直接调用，见 [docs/mcp.md](https://github.com/mdhUser/diff-viz/blob/main/docs/mcp.md)
+**MCP server** (recommended for Cursor / Claude Code / Codex): `diff-viz mcp` exposes tools that agents can call directly:
 
-## 数据与隐私
+- `diff_viz_review` — generate a review (including PR/MR, ranges, commits) with optional annotations
+- `diff_viz_get_review` / `diff_viz_get_node` — read the topology/summaries or a file's full diff
+- `diff_viz_annotate` — write agent summaries back to a review
+- `diff_viz_list_projects` / `diff_viz_list_reviews` — discover projects and historical snapshots
 
-- 数据文件包含完整源码，**不要提交到 Git 或分享**；生成后会自动写入 `.git/info/exclude`。
-- hub 状态目录默认 `~/.diff-viz/`（不可写时自动落到系统临时目录，可用 `DIFF_VIZ_HOME` 指定）：Review 快照目录 `0700`、文件 `0600`，按数量自动清理。
-- 服务只监听 `127.0.0.1`，不上传任何代码，也不需要账号。只绑 loopback 挡不住 DNS rebinding，所以 hub 还会校验 `Host`，并且 `/api/*` 要带访问令牌（`diff-viz` 打印的链接里已包含，页面会换成 Cookie 记住）；详见 [docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md) 的「hub 访问控制」。
+Setup and tool schemas: [docs/mcp.md](https://github.com/mdhUser/diff-viz/blob/main/docs/mcp.md). Skill details: [SKILL.md](https://github.com/mdhUser/diff-viz/blob/main/SKILL.md).
 
-数据结构、HTTP API 与完整字段说明见 **[docs/data-contract.md](https://github.com/mdhUser/diff-viz/blob/main/docs/data-contract.md)**。
+## Data and privacy
 
-## 已知限制
+- Review data contains full source code. **Never commit or share it**; it is added to `.git/info/exclude` automatically.
+- Hub state lives in `~/.diff-viz/` by default (falls back to a temp dir, or set `DIFF_VIZ_HOME`): review snapshots are `0700`/`0600` and pruned by count.
+- The server binds to `127.0.0.1` only; it does not upload code and needs no account. It also validates the `Host` header (DNS-rebinding protection), and `/api/*` requires an access token carried in the URL printed by the CLI and stored as an HttpOnly cookie. See **hub access control** in [docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md).
 
-- 依赖解析是静态近似（正则/解析器，不跑 AST，也不处理运行时动态路径）：Java 同包引用可能把注释里的同名类算成依赖，可在界面「忽略」；tsconfig 只读仓库根目录，不处理 `extends` 和 monorepo 子包。
-- 超过 15,000 个代码文件只扫描前 15,000 个：页面顶部会显式警告「共 N 个文件，只分析了前 15,000 个」，需要完整结果时用 `--max-scan-files` 调高上限（扫描耗时随文件数增长）。
-- 自动刷新只对 hub 本进程分析过的仓库生效；hub 重启后需再跑一次 `diff-viz`。Linux 上 Node 的递归 `fs.watch` 不可用，会退化为不监听。
-- 它是**只读的 Review 工具**：不做暂存、提交、分支、合并、推送等 Git 操作；这些仍交给 SourceTree / 命令行 / 你的 IDE。
-- 如果 Cursor / DSH 等 Agent、IDE 内置浏览器打开 Review 一直转圈：页面默认保持一条 `/api/events` SSE 长连接，而这类预览工具常以「网络空闲」判断加载完成。自动化浏览器和 iframe 会自动跳过 SSE，也可以在 URL 加 `&sse=0`；浏览器运行在远程/容器里时，`127.0.0.1` 不是你的电脑，需要端口转发或在该环境里直接运行 `diff-viz`。
+Data format and HTTP API: **[docs/data-contract.md](https://github.com/mdhUser/diff-viz/blob/main/docs/data-contract.md)**.
 
-## 版本与兼容
+## Known limitations
 
-当前版本 **1.3.0**：从 1.0.0 起冻结对外契约（CLI 参数、数据格式 v2、hub HTTP API、Agent 注解 JSON），1.x 内不做破坏性改动，破坏性变更进入 2.0.0。旧版单文件数据仍可读取并自动升级。
+- Dependency resolution is a static approximation (regex/parsers, no runtime execution): same-package Java references can include same-named classes mentioned in comments (ignore them in the UI); only the repo-root tsconfig is read (`extends` and monorepo sub-packages are not resolved).
+- Above 15,000 code files only the first 15,000 are scanned. The page shows a warning (`N files total, first 15,000 analyzed`); raise the cap with `--max-scan-files`.
+- Auto-refresh only applies to repositories analyzed by this hub process; Linux does not support recursive `fs.watch` and falls back to no watching.
+- It is a **read-only review tool**: no staging, committing, branching, merging or pushing. Keep using SourceTree / your CLI / IDE for Git operations.
+- If an agent/IDE embedded browser spins forever: the page keeps an SSE connection to `/api/events`, while preview browsers often wait for `networkidle`. Automation browsers and iframes skip SSE automatically, or append `&sse=0`. For remote/container browsers `127.0.0.1` is not your machine — use port forwarding or run diff-viz inside that environment.
 
-版本历史见 [CHANGELOG.md](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md)。
+## Version and compatibility
 
-## 更多文档
+Current version **1.7.1**. Since 1.0.0 the public contract (CLI flags, data format v2, hub HTTP API, agent annotation JSON) is frozen: no breaking changes within 1.x; breaking changes go to 2.0.0. Old single-file review data is still readable and upgrades automatically.
 
-| 文档 | 内容 |
+See [CHANGELOG.md](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md).
+
+## Documentation
+
+> Most detailed docs are still in Chinese; they are being translated as part of the upcoming i18n milestone.
+
+| Document | Contents |
 | --- | --- |
-| [docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md) | 全部命令、参数、环境变量、workspace 配置 |
-| [docs/data-contract.md](https://github.com/mdhUser/diff-viz/blob/main/docs/data-contract.md) | 数据文件格式、字段语义、HTTP API、注解格式 |
-| [docs/languages.md](https://github.com/mdhUser/diff-viz/blob/main/docs/languages.md) | 支持的语言、自定义语言、影响分析模型 |
-| [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md) | 配置/资源文件入图、MyBatis/Spring 绑定与影响方向 |
-| [docs/database.md](https://github.com/mdhUser/diff-viz/blob/main/docs/database.md) | 数据库表/SQL 解析、读取写入边、悬停与抽屉、懒加载 API |
-| [docs/agent-integrations.md](https://github.com/mdhUser/diff-viz/blob/main/docs/agent-integrations.md) | Claude Code / Cursor / Codex 等 Agent 接入方式 |
-| [docs/mcp.md](https://github.com/mdhUser/diff-viz/blob/main/docs/mcp.md) | MCP stdio server 配置、工具表与 Agent 双向通信流程 |
-| [docs/development.md](https://github.com/mdhUser/diff-viz/blob/main/docs/development.md) | 本地开发、测试、目录结构、发布流程 |
-| [docs/roadmap.md](https://github.com/mdhUser/diff-viz/blob/main/docs/roadmap.md) | 泳道 / 配置 / 数据库视图 / PR-MR 接入的迭代计划与后续提议 |
-| [docs/pull-requests.md](https://github.com/mdhUser/diff-viz/blob/main/docs/pull-requests.md) | 远端 PR/MR 列表、鉴权、自建实例、CLI 用法与限制 |
+| [docs/cli-reference.md](https://github.com/mdhUser/diff-viz/blob/main/docs/cli-reference.md) | All commands, flags, environment variables, workspace config |
+| [docs/data-contract.md](https://github.com/mdhUser/diff-viz/blob/main/docs/data-contract.md) | Data format, field semantics, HTTP API, annotation format |
+| [docs/languages.md](https://github.com/mdhUser/diff-viz/blob/main/docs/languages.md) | Supported languages, custom languages, impact model |
+| [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md) | Config/resource nodes, MyBatis/Spring bindings |
+| [docs/database.md](https://github.com/mdhUser/diff-viz/blob/main/docs/database.md) | Database tables, SQL parsing, lazy API |
+| [docs/pull-requests.md](https://github.com/mdhUser/diff-viz/blob/main/docs/pull-requests.md) | Remote PR/MR list, auth, self-hosted instances, comments |
+| [docs/agent-integrations.md](https://github.com/mdhUser/diff-viz/blob/main/docs/agent-integrations.md) | Claude Code / Cursor / Codex integration |
+| [docs/mcp.md](https://github.com/mdhUser/diff-viz/blob/main/docs/mcp.md) | MCP server setup, tools, agent round-trip |
+| [docs/roadmap.md](https://github.com/mdhUser/diff-viz/blob/main/docs/roadmap.md) | Iteration plan and upcoming work |
+| [docs/development.md](https://github.com/mdhUser/diff-viz/blob/main/docs/development.md) | Local development, tests, structure, release process |
 
-## 打赏作者
+## Development
 
-如果这个工具帮你节省了时间，欢迎微信扫码打赏，感谢支持。
+```bash
+git clone https://github.com/mdhUser/diff-viz.git
+cd diff-viz
+npm install
+npm test
+npm run typecheck
+npm run build
+```
 
-<img src="https://raw.githubusercontent.com/mdhUser/diff-viz/main/docs/reward-wechat.jpg" alt="微信赞赏码" width="280" />
+Zero runtime dependencies; Node.js >= 20. See [docs/development.md](https://github.com/mdhUser/diff-viz/blob/main/docs/development.md).
+
+## Support the project
+
+If diff-viz saves you time, you can buy the author a coffee via WeChat:
+
+<img src="https://raw.githubusercontent.com/mdhUser/diff-viz/main/docs/reward-wechat.jpg" alt="WeChat reward QR code" width="280" />
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
