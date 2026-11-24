@@ -1560,6 +1560,17 @@ export async function stopHub(home = hubHome()) {
   } catch {
     /* already gone */
   }
+  // Wait for the process to release its file watchers: on Windows an immediate
+  // temp-directory cleanup fails with EBUSY while the hub still holds the repo.
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    try {
+      process.kill(info.pid, 0);
+    } catch {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
   try {
     fs.rmSync(hubRegistryPath(home), { force: true });
   } catch {

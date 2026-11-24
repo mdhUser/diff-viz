@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-11-24
+
+### Fixed
+
+- `diff-viz stop` 现在会等待 hub 进程真正退出、释放文件监听句柄，再返回。修复 Windows 上 MCP/临时目录清理偶发 `EBUSY: resource busy or locked` 导致的 CI 失败；对用户来说停止命令也更可靠。
+
+## [1.7.0] - 2026-11-23
+
 ## [1.7.0] - 2026-11-23
 
 ### Added
