@@ -9,6 +9,7 @@ diff-viz annotate               # 合并 Agent / 人工注解
 diff-viz hub                    # 前台启动常驻 hub
 diff-viz stop                   # 停止后台 hub
 diff-viz workspace              # 多仓库工作区分析
+diff-viz mcp                    # MCP stdio server，供 Cursor/Claude/Codex 等 Agent 调用
 diff-viz workspace --init       # 生成 workspace 模板
 diff-viz skill install          # 把薄 SKILL.md 注册到 Agent 技能目录
 ```
@@ -23,6 +24,7 @@ diff-viz skill install          # 把薄 SKILL.md 注册到 Agent 技能目录
 | `--last` | 查看最近一次提交 |
 | `--range <A..B\|A...B>` | 查看提交范围 |
 | `--base <ref>` | 查看与目标分支的差异（`merge-base(ref, HEAD)..HEAD`）；配合 `--pr/--mr` 可覆盖目标分支 |
+| `--commit <ref>` | 查看指定提交（父提交..该提交） |
 | `--pr <编号\|URL>` | 拉取 GitHub PR（`refs/pull/<n>/head`）并生成 Review |
 | `--mr <编号\|URL>` | 拉取 GitLab MR（`refs/merge-requests/<iid>/head`）并生成 Review |
 | `--no-untracked` | 不把未跟踪的新文件纳入 Review |
@@ -89,6 +91,8 @@ diff-viz skill install          # 把薄 SKILL.md 注册到 Agent 技能目录
 | 参数 | 说明 |
 | --- | --- |
 | `--agent <name>` | `dsh` \| `claude` \| `cursor` \| `agents`（默认 `dsh`） |
+
+MCP 接入（`diff-viz mcp`）见 [mcp.md](mcp.md)。
 | `--scope <user\|project>` | 用户级或项目级（默认 `user`） |
 | `--dir <dir>` | 自定义 skills 根目录（覆盖 agent/scope） |
 | `--copy` | 复制 `SKILL.md`，不建 symlink |

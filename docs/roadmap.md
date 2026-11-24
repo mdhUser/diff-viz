@@ -4,7 +4,7 @@
 > **模块/包（泳道）→ 代码 → 配置文件 → 数据库表（含 SQL）**。
 > 原则：数据契约只做增量、不破坏 1.x；所有解析保持零运行时依赖、只读、可回退。
 
-## 当前状态（2026-11-23，v1.6.0）
+## 当前状态（2026-11-23，v1.7.0）
 
 | 迭代 | 版本 | 状态 |
 | --- | --- | --- |
@@ -15,7 +15,8 @@
 | 4. 远端 PR / MR 接入 | `v1.4.0` / `v1.4.1` | ✅ 完成 |
 | 5. Reviewer 评论入图 | `v1.5.0` | ✅ 完成 |
 | 6. 工作区历史版本 | `v1.6.0` | ✅ 完成 |
-| 7. 扩展与硬化 | 未排期 | ⏳ 待做 |
+| 7. MCP / Agent 通信 | `v1.7.0` | ✅ 完成 |
+| 8. 扩展与硬化 | 未排期 | ⏳ 待做 |
 
 ## 已完成
 
@@ -61,6 +62,12 @@
 - 每次重新分析同一个 workspace 文件时归档上一版快照，最新版保留稳定 id；页面「历史 N」切换历史版本（时间、仓库统计、比较范围、归档标记）。
 - `GET /api/workspace/history?file=` 返回最新与归档版本；归档 `meta` 带 `archived/archivedAt/archivedFrom`。
 - 关键文件：`src/hub.mjs`（归档与历史 API）、`web/src/components/WorkspaceView.tsx`（历史下拉）、`test/workspace-history.test.mjs`。
+
+### v1.7.0 — MCP / Agent 通信
+
+- 新增 `diff-viz mcp` stdio server：`diff_viz_review/get_review/get_node/annotate/list_projects/list_reviews`，Agent 可生成 Review、读取拓扑与 Diff、写回摘要。
+- 新增 `docs/mcp.md` 与 Cursor/Claude/Codex 配置示例；CLI 补 `--commit`。
+- 关键文件：`src/mcp.mjs`、`src/cli.mjs`、`test/mcp.test.mjs`。
 
 ## 数据契约增量（1.x 兼容）
 

@@ -135,6 +135,17 @@ diff-viz --pr 123 --base origin/release/1.8   # 目标分支不是默认分支�
 
 细节见 `docs/pull-requests.md`、`docs/resources.md`、`docs/database.md`。
 
+## MCP（可选，推荐 Agent 使用）
+
+如果 Agent 支持 MCP，直接加 `diff-viz mcp` 这个 stdio server，不需要 shell 拼命令：
+
+- `diff_viz_review`：生成 Review（支持 worktree/staged/last/range/base/commit/pr/mr，可直接带 annotations）
+- `diff_viz_get_review` / `diff_viz_get_node`：读取拓扑/节点 Diff
+- `diff_viz_annotate`：把摘要/影响分析/待办写回已有 Review
+- `diff_viz_list_projects` / `diff_viz_list_reviews`：列出项目与历史 Review
+
+配置示例见仓库 `docs/mcp.md`（Cursor 的 `~/.cursor/mcp.json`、Claude Code 的 `claude mcp add`、Codex 的 config.toml）。MCP 是请求/响应模式；用户在页面上的点击不会主动推送给 Agent。
+
 ## 多仓库工作区（跨服务）
 
 一次需求同时改了几个仓库、或者用户想看「服务之间」的牵连时，用工作区模式。普通单仓 Review 不需要它。

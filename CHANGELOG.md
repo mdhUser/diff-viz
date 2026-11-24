@@ -8,6 +8,17 @@
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-11-23
+
+### Added
+
+- **MCP stdio server（`diff-viz mcp`）**：Agent 可直接通过 MCP 工具与 diff-viz 通信，不再依赖 shell 拼命令。工具：`diff_viz_review`（生成 Review，支持 worktree/staged/last/range/base/commit/pr/mr，可带 annotations）、`diff_viz_get_review`（清单/节点摘要/评论）、`diff_viz_get_node`（完整 Diff/源码）、`diff_viz_annotate`（写回 Agent 摘要/待办）、`diff_viz_list_projects`、`diff_viz_list_reviews`。
+- 新增 `docs/mcp.md`：Cursor / Claude Code / Codex 配置示例、工具参数、典型双向流程和安全说明；`docs/agent-integrations.md` 同步更新。
+- CLI 新增 `--commit <ref>`（配合普通 Review 和 MCP `scope=commit`）。
+- 新增 `test/mcp.test.mjs`：initialize/tools/list 协议、review→get→annotate→list 的端到端闭环、未知工具错误。
+
+## [1.6.0] - 2026-11-23
+
 ## [1.6.0] - 2026-11-23
 
 ### Added

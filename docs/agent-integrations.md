@@ -182,9 +182,19 @@ Agent / IDE 自带的浏览器（Cursor Browser、DSH 右侧栏 Browser 等）�
 
 快速自检：在 Agent 的终端里执行 `curl -m 3 http://127.0.0.1:<port>/api/health`，能返回 `{"ok":true,...}` 说明网络可达；打不开则是浏览器/加载判定问题。
 
+## MCP（推荐的标准通信方式）
+
+diff-viz 自带 MCP stdio server，Agent 可以直接调用工具生成 Review、读取拓扑/节点、写回注解，无需拼 shell 命令：
+
+```bash
+diff-viz mcp
+```
+
+Cursor / Claude Code / Codex 的配置和完整工具表见 [mcp.md](mcp.md)。
+
 ## 限制
 
 - 目标目录必须是 Git 仓库。
 - 需要 Node.js >= 20；npm 包内已包含构建好的 `dist/`，不需要安装前端依赖。
 - 其他 Agent 不提供 DSH 右侧栏 Browser 这种内置容器时，就只能在系统浏览器查看；若编辑器支持 localhost 预览，也可以贴到其预览面板。
-- 目前没有提供 MCP Server 封装；如果你的 Agent 只接受 MCP 工具调用，需要额外加一层很薄的 MCP wrapper（CLI 输出已经是结构化 JSON，接入成本很低）。
+- MCP 是请求/响应模式；如果要做“页面点击 → Agent 主动收到任务”的实时双向队列，需要额外的 hub 事件 watcher（尚未实现）。

@@ -31,6 +31,7 @@ diff-viz · 本地代码变更可视化 Review 工具
   diff-viz [review] [选项]           分析 Git 变更并注册到本地 hub
   diff-viz serve [选项]              把已有数据注册到 hub 并打开
   diff-viz annotate [选项]           将 Agent/人工总结合并进数据文件
+  diff-viz mcp                      以 MCP stdio server 形式提供给 AI Agent 调用
   diff-viz hub [选项]                前台启动常驻 hub（只启动一次）
   diff-viz stop                      停止本地 hub
   diff-viz workspace [--init]        分析多仓库工作区（读取 ./diff-viz.workspace.json）
@@ -41,6 +42,7 @@ diff-viz · 本地代码变更可视化 Review 工具
   --last                  查看最近一次提交
   --range <A..B|A...B>    查看提交范围
   --base <ref>            查看与目标分支的差异 (merge-base..HEAD)
+  --commit <ref>          查看指定提交（父提交..该提交）
   --pr <编号|URL>         分析 GitHub PR（自动 fetch refs/pull/<n>/head）
   --mr <编号|URL>         分析 GitLab MR（自动 fetch refs/merge-requests/<iid>/head）
 
@@ -119,6 +121,7 @@ const BOOLEAN_FLAGS = new Set([
 const VALUE_FLAGS = new Set([
   'range',
   'base',
+  'commit',
   'pr',
   'mr',
   'data',
@@ -144,7 +147,7 @@ export function parseArgs(argv) {
   const options = { command: 'review' };
   let index = 0;
   if (argv[0] && !argv[0].startsWith('-')) {
-    if (!['review', 'serve', 'annotate', 'hub', 'stop', 'workspace'].includes(argv[0])) {
+    if (!['review', 'serve', 'annotate', 'hub', 'stop', 'workspace', 'mcp'].includes(argv[0])) {
       throw new Error(`未知命令：${argv[0]}`);
     }
     options.command = argv[0];
@@ -433,6 +436,12 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
+  if (options.command === 'mcp') {
+    const { startMcpServer } = await import('./mcp.mjs');
+    await startMcpServer();
+    return;
+  }
+
   if (options.command === 'hub') {
     const existing = readHubInfo();
     if (existing && (await hubIsAlive(existing))) {
@@ -650,6 +659,7 @@ export async function main(argv = process.argv.slice(2)) {
     last: options.last,
     range: options.range,
     base: options.base,
+    commit: options.commit,
     impactDepth: options.impactDepth,
     maxImpact: options.maxImpact,
     maxScanFiles: options.maxScanFiles,

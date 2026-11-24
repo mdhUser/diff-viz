@@ -133,6 +133,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor
 
 - 详细用法：[SKILL.md](https://github.com/mdhUser/diff-viz/blob/main/SKILL.md)
 - 其他 Agent（Codex / 自定义）接入：[docs/agent-integrations.md](https://github.com/mdhUser/diff-viz/blob/main/docs/agent-integrations.md)
+- **MCP 通信**：`diff-viz mcp` 提供 `diff_viz_review` / `diff_viz_get_review` / `diff_viz_get_node` / `diff_viz_annotate` 等工具，Cursor/Claude/Codex 可直接调用，见 [docs/mcp.md](https://github.com/mdhUser/diff-viz/blob/main/docs/mcp.md)
 
 ## 数据与隐私
 
@@ -166,6 +167,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor
 | [docs/resources.md](https://github.com/mdhUser/diff-viz/blob/main/docs/resources.md) | 配置/资源文件入图、MyBatis/Spring 绑定与影响方向 |
 | [docs/database.md](https://github.com/mdhUser/diff-viz/blob/main/docs/database.md) | 数据库表/SQL 解析、读取写入边、悬停与抽屉、懒加载 API |
 | [docs/agent-integrations.md](https://github.com/mdhUser/diff-viz/blob/main/docs/agent-integrations.md) | Claude Code / Cursor / Codex 等 Agent 接入方式 |
+| [docs/mcp.md](https://github.com/mdhUser/diff-viz/blob/main/docs/mcp.md) | MCP stdio server 配置、工具表与 Agent 双向通信流程 |
 | [docs/development.md](https://github.com/mdhUser/diff-viz/blob/main/docs/development.md) | 本地开发、测试、目录结构、发布流程 |
 | [docs/roadmap.md](https://github.com/mdhUser/diff-viz/blob/main/docs/roadmap.md) | 泳道 / 配置 / 数据库视图 / PR-MR 接入的迭代计划与后续提议 |
 | [docs/pull-requests.md](https://github.com/mdhUser/diff-viz/blob/main/docs/pull-requests.md) | 远端 PR/MR 列表、鉴权、自建实例、CLI 用法与限制 |
