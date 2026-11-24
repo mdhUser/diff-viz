@@ -8,6 +8,12 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 Before releasing a new version, you must add `Added` / `Changed` / `Fixed` entries for that version and make
 `npm run release:check` pass.
 
+## [1.9.1] - 2026-11-24
+
+### Fixed
+
+- **Inline review bubbles**: summary and inline reviewer comments no longer float over the code diff. They are inserted as full-width rows between diff lines (the file summary above the first hunk, each comment thread directly below its line) and are shown/hidden by the **Bubbles** toggle. Code stays readable and the bubble rows scroll with the diff.
+
 ## [1.9.0] - 2026-11-24
 
 ### Added

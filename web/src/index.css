@@ -347,3 +347,136 @@
 .diff-bubble-button:hover {
   background: rgba(86, 111, 208, 0.22);
 }
+
+/* Inline review bubbles are real rows in the diff table, so they never cover
+   code. The comment thread sits directly below its line; the file summary is
+   the first row of the diff body. */
+.diff-inline-bubble-row > td {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.diff-inline-bubble {
+  margin: 3px 10px 7px 82px;
+  padding: 7px 10px;
+  border: 1px solid rgba(86, 111, 208, 0.22);
+  border-left: 3px solid #566fd0;
+  border-radius: 7px;
+  background: #f7f5ed;
+  box-shadow: 0 1px 2px rgba(60, 50, 30, 0.04);
+  font-family: var(--font-sans);
+}
+
+.diff-inline-bubble-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 3px;
+  color: #3d4a4f;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.diff-inline-bubble-icon {
+  color: #566fd0;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.diff-inline-bubble-body,
+.diff-inline-body {
+  color: #3d4a4f;
+  font-size: 10.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-inline-bubble-body {
+  max-height: 130px;
+  overflow-y: auto;
+}
+
+.diff-inline-bubble-sub {
+  max-height: 90px;
+  margin-top: 5px;
+  padding-top: 5px;
+  overflow-y: auto;
+  border-top: 1px dashed rgba(120, 132, 138, 0.28);
+  color: #65787b;
+  font-size: 9.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.diff-inline-thread {
+  margin: 3px 10px 7px 58px;
+  overflow: hidden;
+  border: 1px solid rgba(169, 116, 24, 0.25);
+  border-left: 3px solid #c47a2c;
+  border-radius: 7px;
+  background: #fffaf0;
+}
+
+.diff-inline-comment {
+  padding: 7px 10px;
+}
+
+.diff-inline-comment + .diff-inline-comment {
+  border-top: 1px solid rgba(169, 116, 24, 0.16);
+}
+
+.diff-inline-comment-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 3px;
+  color: #8b7a63;
+  font-family: var(--font-sans);
+  font-size: 9px;
+}
+
+.diff-inline-author {
+  color: #3d4a4f;
+  font-weight: 600;
+}
+
+.diff-inline-time {
+  color: #8b9188;
+}
+
+.diff-inline-line {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(169, 116, 24, 0.10);
+  color: #a97418;
+  font-family: var(--font-mono);
+}
+
+.diff-inline-resolved,
+.diff-inline-unresolved {
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 8.5px;
+}
+
+.diff-inline-unresolved {
+  background: rgba(169, 116, 24, 0.12);
+  color: #a97418;
+}
+
+.diff-inline-resolved {
+  background: rgba(47, 143, 99, 0.10);
+  color: #2f8f63;
+}
+
+.diff-inline-link {
+  margin-left: auto;
+  color: #566fd0;
+  text-decoration: none;
+}
+
+.diff-inline-link:hover {
+  text-decoration: underline;
+}

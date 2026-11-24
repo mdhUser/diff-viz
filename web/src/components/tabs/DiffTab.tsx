@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import DiffViewer, { type ReactDiffViewerStylesOverride } from 'react-diff-viewer-continued';
-import { Columns2, FileWarning, Loader2, MessageSquare, Rows3, ScanLine, Sparkles, X } from 'lucide-react';
+import { Columns2, FileWarning, Loader2, MessageSquare, Rows3, ScanLine, Sparkles } from 'lucide-react';
 import type { ReviewComment, ReviewData, ReviewNode } from '../../types';
-import { highlightLanguage } from '../../format';
+import { formatTimestamp, highlightLanguage } from '../../format';
 import { cn } from '../../cn';
 import { useI18n } from '../../i18n';
-import { CommentCard } from '../CommentCard';
 
 const diffStyles: ReactDiffViewerStylesOverride = {
   variables: {
@@ -62,12 +60,7 @@ export function DiffTab({ node, data }: DiffTabProps) {
   const [splitView, setSplitView] = useState(false);
   const [fullFile, setFullFile] = useState(false);
   const [showBubbles, setShowBubbles] = useState(true);
-  const [activeBubble, setActiveBubble] = useState<{
-    line: number;
-    comments: ReviewComment[];
-    x: number;
-    y: number;
-  } | null>(null);
+  const diffShellRef = useRef<HTMLDivElement>(null);
 
   const summaryText = [node.summary, node.impactAnalysis].map((value) => (value || '').trim()).filter(Boolean);
   const fileComments = useMemo(
@@ -90,9 +83,129 @@ export function DiffTab({ node, data }: DiffTabProps) {
     }
     return byLine;
   }, [fileComments]);
+
+  // Review bubbles are real rows inserted into the diff table, not floating
+  // overlays: the code stays readable and the rows push the diff down. The
+  // library only exposes per-line cells, so after it renders we insert one
+  // full-width row after each commented line (and the summary row at the top).
+  // A MutationObserver keeps them in sync when the viewer recomputes or folds.
   useEffect(() => {
-    setActiveBubble(null);
-  }, [node.id]);
+    const root = diffShellRef.current;
+    if (!root) return;
+    let frame = 0;
+    let observer: MutationObserver | null = null;
+    let applying = false;
+
+    const clearRows = () => {
+      root.querySelectorAll('tr.diff-inline-bubble-row').forEach((row) => row.remove());
+    };
+
+    const makeText = (tag: 'div' | 'span', className: string, text: string) => {
+      const node = document.createElement(tag);
+      node.className = className;
+      node.textContent = text;
+      return node;
+    };
+
+    const makeRow = (tbody: Element, columns: number, kind: 'summary' | 'comment') => {
+      const row = document.createElement('tr');
+      row.className = `diff-inline-bubble-row diff-inline-${kind}`;
+      const cell = document.createElement('td');
+      cell.colSpan = columns;
+      row.appendChild(cell);
+      return { row, cell };
+    };
+
+    const insertBubbles = () => {
+      applying = true;
+      observer?.disconnect();
+      clearRows();
+      const table = root.querySelector('table');
+      const tbody = table?.querySelector('tbody');
+      if (showBubbles && table && tbody) {
+        const columns = table.querySelector('colgroup')?.children.length ?? 5;
+
+        if (summaryText.length > 0) {
+          const { row, cell } = makeRow(tbody, columns, 'summary');
+          const bubble = document.createElement('div');
+          bubble.className = 'diff-inline-bubble diff-inline-summary';
+          const title = document.createElement('div');
+          title.className = 'diff-inline-bubble-title';
+          const icon = document.createElement('span');
+          icon.className = 'diff-inline-bubble-icon';
+          icon.textContent = '✦';
+          title.appendChild(icon);
+          title.appendChild(document.createTextNode(t('文件摘要')));
+          bubble.appendChild(title);
+          bubble.appendChild(makeText('div', 'diff-inline-bubble-body', node.summary?.trim() || summaryText[0]));
+          if (node.impactAnalysis?.trim()) {
+            bubble.appendChild(makeText('div', 'diff-inline-bubble-sub', node.impactAnalysis.trim()));
+          }
+          cell.appendChild(bubble);
+          tbody.insertBefore(row, tbody.firstElementChild);
+        }
+
+        for (const [line, comments] of commentsByLine) {
+          const gutter = table.querySelector(`td[data-line-new="${line}"]`);
+          const anchorRow = gutter?.closest('tr');
+          if (!anchorRow) continue;
+          const { row, cell } = makeRow(tbody, columns, 'comment');
+          const thread = document.createElement('div');
+          thread.className = 'diff-inline-thread';
+          for (const comment of comments) {
+            const bubble = document.createElement('div');
+            bubble.className = 'diff-inline-comment';
+            const head = document.createElement('div');
+            head.className = 'diff-inline-comment-head';
+            head.appendChild(makeText('span', 'diff-inline-author', comment.author || t('未知作者')));
+            if (comment.createdAt) {
+              head.appendChild(makeText('span', 'diff-inline-time', formatTimestamp(comment.createdAt)));
+            }
+            head.appendChild(makeText('span', 'diff-inline-line', `L${line}`));
+            head.appendChild(
+              makeText(
+                'span',
+                comment.resolved ? 'diff-inline-resolved' : 'diff-inline-unresolved',
+                comment.resolved ? t('已解决') : t('未解决'),
+              ),
+            );
+            if (comment.url) {
+              const link = document.createElement('a');
+              link.href = comment.url;
+              link.target = '_blank';
+              link.rel = 'noreferrer';
+              link.className = 'diff-inline-link';
+              link.textContent = t('远端查看');
+              head.appendChild(link);
+            }
+            bubble.appendChild(head);
+            bubble.appendChild(makeText('div', 'diff-inline-body', comment.body || ''));
+            thread.appendChild(bubble);
+          }
+          cell.appendChild(thread);
+          anchorRow.after(row);
+        }
+      }
+      applying = false;
+      if (observer) observer.observe(root, { childList: true, subtree: true });
+    };
+
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => requestAnimationFrame(insertBubbles));
+    };
+
+    schedule();
+    observer = new MutationObserver(() => {
+      if (!applying) schedule();
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      clearRows();
+    };
+  }, [node.id, showBubbles, summaryText, commentsByLine, t]);
 
   const hunkCount = useMemo(
     () => node.hunkCount ?? (node.diff ? (node.diff.match(/^@@/gm) || []).length : 0),
@@ -217,10 +330,7 @@ export function DiffTab({ node, data }: DiffTabProps) {
         {summaryText.length > 0 || fileComments.length > 0 ? (
           <button
             type="button"
-            onClick={() => {
-              setShowBubbles((value) => !value);
-              setActiveBubble(null);
-            }}
+            onClick={() => setShowBubbles((value) => !value)}
             className={cn(
               'flex h-7 items-center gap-1.5 rounded-md border px-2 text-[10px] transition',
               showBubbles
@@ -251,31 +361,7 @@ export function DiffTab({ node, data }: DiffTabProps) {
         </div>
       ) : null}
 
-      <div className="diff-shell relative px-1 py-2">
-        {showBubbles && summaryText.length > 0 ? (
-          <div className="pointer-events-auto absolute right-3 top-3 z-20 w-[310px] rounded-xl border border-[rgba(86,111,208,0.28)] bg-[#fffdf8]/97 p-3 shadow-[0_16px_34px_-22px_rgba(60,50,30,0.45)] backdrop-blur-sm">
-            <div className="flex items-center gap-1.5 text-[10px] font-medium text-mist-200">
-              <Sparkles size={11} className="text-accent-bright" />
-              {t('文件摘要气泡')}
-              <button
-                type="button"
-                onClick={() => setShowBubbles(false)}
-                className="ml-auto flex h-5 w-5 items-center justify-center rounded text-mist-600 transition hover:bg-ink-800 hover:text-mist-200"
-                aria-label={t('隐藏气泡')}
-              >
-                <X size={11} />
-              </button>
-            </div>
-            <p className="mt-1.5 max-h-[130px] overflow-y-auto whitespace-pre-wrap text-[10px] leading-[1.65] text-mist-400">
-              {node.summary?.trim() || summaryText[0]}
-            </p>
-            {node.impactAnalysis?.trim() ? (
-              <p className="mt-1.5 max-h-[80px] overflow-y-auto border-t border-line/60 pt-1.5 whitespace-pre-wrap text-[9.5px] leading-[1.6] text-mist-500">
-                {node.impactAnalysis.trim()}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+      <div ref={diffShellRef} className="diff-shell relative px-1 py-2">
         <DiffViewer
           key={`${node.id}-${splitView ? 'split' : 'unified'}-${fullFile ? 'full' : 'folded'}`}
           oldValue={oldValue}
@@ -290,35 +376,16 @@ export function DiffTab({ node, data }: DiffTabProps) {
           codeFoldMessageRenderer={(totalFoldedLines) => (
             <span className="diff-fold-label">{t('展开 {count} 行未改动', { count: totalFoldedLines })}</span>
           )}
-          renderGutter={({ lineNumber, additionalLineNumber }) => {
-            const line = commentsByLine.has(lineNumber)
-              ? lineNumber
-              : commentsByLine.has(additionalLineNumber ?? -1)
-                ? additionalLineNumber
-                : null;
-            if (!showBubbles || !line) return <td className="diff-bubble-gutter" />;
-            const comments = commentsByLine.get(line) ?? [];
-            return (
-              <td className="diff-bubble-gutter">
-                <button
-                  type="button"
-                  className="diff-bubble-button"
-                  title={t('{count} 条行内评论', { count: comments.length })}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setActiveBubble({
-                      line,
-                      comments,
-                      x: event.clientX,
-                      y: event.clientY,
-                    });
-                  }}
-                >
-                  <MessageSquare size={8.5} />
-                  {comments.length > 1 ? comments.length : ''}
-                </button>
-              </td>
-            );
+          alwaysShowLines={showBubbles ? fileComments.map((comment) => `R${comment.line}`) : []}
+          renderGutter={({ lineNumber, additionalLineNumber, prefix, additionalPrefix }) => {
+            const oldLine = String(prefix) === 'L' ? lineNumber || undefined : undefined;
+            const newLine =
+              String(prefix) === 'R'
+                ? lineNumber || additionalLineNumber || undefined
+                : String(additionalPrefix) === 'R'
+                  ? additionalLineNumber || undefined
+                  : undefined;
+            return <td className="diff-bubble-gutter" data-line-old={oldLine} data-line-new={newLine} />;
           }}
           loadingElement={() => (
             <div className="flex items-center gap-2 px-4 py-8 text-[10.5px] text-mist-500">
@@ -328,37 +395,6 @@ export function DiffTab({ node, data }: DiffTabProps) {
           )}
         />
       </div>
-      {activeBubble
-        ? createPortal(
-            <div
-              className="fixed z-[120] max-h-[360px] w-[420px] overflow-y-auto rounded-xl border border-line bg-[#fffdf8] p-2.5 shadow-[0_20px_45px_-24px_rgba(60,50,30,0.5)]"
-              style={{
-                left: Math.min(Math.max(12, activeBubble.x + 14), window.innerWidth - 440),
-                top: Math.min(Math.max(12, activeBubble.y + 12), window.innerHeight - 380),
-              }}
-            >
-              <div className="mb-2 flex items-center gap-2 border-b border-line/60 pb-1.5 text-[9.5px] text-mist-500">
-                <MessageSquare size={10} className="text-accent-bright" />
-                {t('{count} 条行内评论', { count: activeBubble.comments.length })}
-                <span className="font-mono text-mist-600">L{activeBubble.line}</span>
-                <button
-                  type="button"
-                  onClick={() => setActiveBubble(null)}
-                  className="ml-auto flex h-5 w-5 items-center justify-center rounded text-mist-600 transition hover:bg-ink-800 hover:text-mist-200"
-                  aria-label={t('关闭评论气泡')}
-                >
-                  <X size={11} />
-                </button>
-              </div>
-              <div className="space-y-2">
-                {activeBubble.comments.map((comment) => (
-                  <CommentCard key={comment.id} comment={comment} compact />
-                ))}
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
     </div>
   );
 }
