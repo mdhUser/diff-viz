@@ -314,5 +314,18 @@
   "高风险": "High risk",
   "需关注": "Needs attention",
   "切换到英文": "Switch to English",
-  "import": "import"
+  "import": "import",
+  "高风险改动，请优先人工确认": "High-risk change — review this first",
+  "{count} 个待确认项": "{count} items to confirm",
+  "{changed}/{total} 条 SQL 变更": "{changed}/{total} SQL statements changed",
+  "仅看变更 SQL": "Only changed SQL",
+  "全部 SQL": "All SQL",
+  "本次变更": "Changed here",
+  "{count} 条变更": "{count} changed",
+  "气泡": "Bubbles",
+  "隐藏气泡": "Hide bubbles",
+  "显示气泡": "Show bubbles",
+  "文件摘要气泡": "File summary",
+  "{count} 条行内评论": "{count} inline comments",
+  "关闭评论气泡": "Close comment bubble"
 }

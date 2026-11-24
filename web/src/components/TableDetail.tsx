@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ArrowUpRight, Database, Loader2, X } from 'lucide-react';
 import type { ReviewComponent, ReviewTable } from '../types';
 import { useI18n } from '../i18n';
@@ -28,6 +29,9 @@ export function TableDetail({
   const component = (components ?? []).find((item) => item.id === table.componentId);
   const operations = table.operations ?? [];
   const statements = table.statements ?? [];
+  const changedStatements = statements.filter((statement) => statement.changed);
+  const [showAll, setShowAll] = useState(false);
+  const displayedStatements = showAll || changedStatements.length === 0 ? statements : changedStatements;
 
   return (
     <aside className="animate-drawer relative z-20 flex h-full w-full min-w-0 flex-col border-l border-line/90 bg-[#fbf9f3] shadow-[-24px_0_60px_-38px_rgba(60,50,30,0.35)]">
@@ -45,6 +49,14 @@ export function TableDetail({
             ) : null}
             {table.impacted && !table.changed ? (
               <span className="rounded border border-line px-1.5 py-0.5 text-[8.5px] text-mist-600">{t('受影响')}</span>
+            ) : null}
+            {changedStatements.length > 0 ? (
+              <span className="rounded border border-[rgba(212,58,58,0.35)] bg-[rgba(212,58,58,0.06)] px-1.5 py-0.5 text-[8.5px] text-[#b83232]">
+                {t('{changed}/{total} 条 SQL 变更', {
+                  changed: changedStatements.length,
+                  total: table.statementCount ?? statements.length,
+                })}
+              </span>
             ) : null}
           </div>
           <button
@@ -93,7 +105,18 @@ export function TableDetail({
 
         <div className="mb-2 flex items-center justify-between text-[9px] font-medium uppercase tracking-[0.12em] text-mist-600">
           <span>{t('SQL 语句')}</span>
-          {loading ? <Loader2 size={11} className="animate-spin text-accent" /> : null}
+          <span className="flex items-center gap-2">
+            {changedStatements.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setShowAll((value) => !value)}
+                className="rounded border border-line px-1.5 py-0.5 normal-case tracking-normal text-[8.5px] text-mist-500 transition hover:border-accent/30 hover:text-mist-200"
+              >
+                {showAll ? t('仅看变更 SQL') : t('全部 SQL')}
+              </button>
+            ) : null}
+            {loading ? <Loader2 size={11} className="animate-spin text-accent" /> : null}
+          </span>
         </div>
         {statements.length === 0 && !loading ? (
           <div className="rounded-lg border border-line/70 bg-ink-850/40 px-3 py-6 text-center text-[10px] text-mist-600">
@@ -101,8 +124,15 @@ export function TableDetail({
           </div>
         ) : null}
         <div className="space-y-2.5">
-          {statements.map((statement) => (
-            <div key={statement.id} className="overflow-hidden rounded-xl border border-line/80 bg-[#fffdf8]">
+          {displayedStatements.map((statement) => (
+            <div
+              key={statement.id}
+              className={
+                statement.changed
+                  ? 'overflow-hidden rounded-xl border border-[rgba(212,58,58,0.45)] bg-[#fffdf8] ring-1 ring-[rgba(212,58,58,0.12)]'
+                  : 'overflow-hidden rounded-xl border border-line/80 bg-[#fffdf8]'
+              }
+            >
               <div className="flex items-center gap-2 border-b border-line/60 bg-[#f6f1e5] px-2.5 py-1.5 text-[8.5px] text-mist-600">
                 <span className="rounded bg-[rgba(196,122,44,0.12)] px-1 py-0.5 font-mono text-[8px] text-[#a35f14]">
                   {OPERATION_LABEL[statement.operation] ?? statement.operation.toUpperCase()}
@@ -115,7 +145,17 @@ export function TableDetail({
                 >
                   {statement.file.split('/').slice(-2).join('/')}
                 </button>
-                {statement.line ? <span>:{statement.line}</span> : null}
+                {statement.line ? (
+                  <span>
+                    :{statement.line}
+                    {statement.lineEnd && statement.lineEnd !== statement.line ? `-${statement.lineEnd}` : ''}
+                  </span>
+                ) : null}
+                {statement.changed ? (
+                  <span className="rounded bg-[rgba(212,58,58,0.10)] px-1 py-0.5 text-[8px] text-[#b83232]">
+                    {t('本次变更')}
+                  </span>
+                ) : null}
                 {statement.mapper ? <span className="truncate text-mist-600">{statement.mapper}</span> : null}
                 {statement.dynamic ? <span className="ml-auto shrink-0 text-amber">{t('动态 SQL')}</span> : null}
               </div>

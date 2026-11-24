@@ -91,6 +91,7 @@ export function buildTables(
       if (entry.file) sources.add(entry.file);
     }
     const limited = entries.slice(0, maxStatementsPerTable);
+    const changedStatementCount = entries.filter((entry) => entry.changed).length;
     if (limited.length < entries.length) tablesWithTruncatedStatements += 1;
     const orderedOperations = ['select', 'insert', 'update', 'delete'].filter((op) => operations.has(op))
       .concat([...operations].filter((op) => !['select', 'insert', 'update', 'delete'].includes(op)).sort());
@@ -101,6 +102,7 @@ export function buildTables(
       schema,
       operations: orderedOperations,
       statementCount: entries.length,
+      changedStatementCount,
       changed: [...sources].some((source) => changedFiles.has(source)),
       impacted: [...sources].some((source) => impactedFiles.has(source)),
       sources: [...sources].sort(),
@@ -114,8 +116,10 @@ export function buildTables(
           sql,
           file: entry.file,
           line: entry.line ?? null,
+          lineEnd: entry.lineEnd ?? entry.line ?? null,
           mapper: entry.namespace || '',
           dynamic: Boolean(entry.dynamic),
+          changed: Boolean(entry.changed),
         };
       }),
     };

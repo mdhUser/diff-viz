@@ -8,6 +8,18 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 Before releasing a new version, you must add `Added` / `Changed` / `Fixed` entries for that version and make
 `npm run release:check` pass.
 
+## [1.9.0] - 2026-11-24
+
+### Added
+
+- **Risk and confirmation visibility in the topology**: nodes can carry `riskLevel: "high" | "medium" | "low"` from Agent annotations. High-risk nodes pulse red in the graph, their sidebar rows show a warning icon, and the legend explains the red pulse; files with open review todos are highlighted amber as **To confirm N**. The Agent Skill now requires high-risk changes (auth, payments, data migrations, concurrency, wide blast radius, missing tests, etc.) to be marked with `riskLevel: "high"`.
+- **Review bubbles inside the code diff**: the file summary/impact can be shown as a dismissible summary bubble over the diff, and inline reviewer comments get gutter markers that open a comment popover at the matching line. A **Bubbles** toggle shows/hides all of them without leaving the Diff tab.
+- **Changed SQL is precise**: SQL statements now carry `line`/`lineEnd`, are marked `changed` only when an added line falls inside their range, and tables expose `changedStatementCount`. The table drawer defaults to changed SQL only (toggle to all), changed statements are highlighted and ordered first in the hover card; table nodes show how many SQL statements changed.
+
+### Changed
+
+- Chinese changelog remains at `CHANGELOG.zh-CN.md`; English is the release-notes source from v1.8.0 onward.
+
 ## [1.8.0] - 2026-11-24
 
 ### Added

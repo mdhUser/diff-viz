@@ -69,6 +69,7 @@ git diff --stat
     "src/auth/jwt.ts": {
       "summary": "这个文件改了什么，核心逻辑是什么。",
       "impactAnalysis": "谁会受影响、需要重点验证什么；没有下游就明确说明。",
+      "riskLevel": "high",
       "todos": [
         {
           "text": "需要人工确认的具体点",
@@ -85,7 +86,8 @@ git diff --stat
 
 - `nodes` 的 key 是相对仓库根的路径；也可以写成数组：`[{ "path": "...", ... }]`。
 - `summary` / `impactAnalysis` 必须具体，避免「优化了代码」这类空话。
-- `todos` 可以是字符串，或 `{ text, severity, category }`；`severity` 可选 `high` / `medium`。
+- `riskLevel` 可选 `high` / `medium` / `low`。**高风险改动必须标 `high`**（认证/权限、支付/金额、数据迁移/删除、并发/事务、核心链路、影响面大、缺少测试等）；标为 `high` 的文件在拓扑图里会红色闪烁，提醒 coder 优先人工 Review。风险原因写进 `impactAnalysis` 或 `todos`。
+- `todos` 可以是字符串，或 `{ text, severity, category }`；`severity` 可选 `high` / `medium`。有未完成 todo 的文件会以醒目颜色标注「待确认」；`severity: high` 的 todo 也会触发红色提醒。
 - 不要重复代码注释里已经存在的 TODO；工具会自动扫描新增行里的 TODO/FIXME。
 - 注解文件不要提交到 Git。
 
@@ -111,7 +113,7 @@ diff-viz \
 
 - Review URL（实际端口）。
 - 本次变更的文件数、受影响文件数、待办数（可从 `--json-only --quiet` 的 JSON 输出读取）。
-- 最需要人工确认的 1–3 个风险点。
+- 最需要人工确认的 1–3 个风险点；高风险文件已通过 `riskLevel: high` 在拓扑图中红色闪烁。
 
 ## 远端 GitHub PR / GitLab MR
 
@@ -131,7 +133,8 @@ diff-viz --pr 123 --base origin/release/1.8   # 目标分支不是默认分支�
 
 - **泳道视图**：存在多个模块时自动按模块分层（构建标记识别 Maven/Gradle/npm/go.mod/pyproject），按依赖深度排序；工具栏可切「模块 / 目录 / 包」粒度和「流向 / 泳道」。
 - **配置视图**：`.xml`（MyBatis namespace → Mapper 接口、Spring bean/import）、`.properties` / `.yml` / `.yaml` / `.sql` 作为配置节点入图；改 Mapper XML 会让接口与调用方进入「受影响」。工具栏「配置」可开关。
-- **数据库视图**：MyBatis XML / Java 注解 / `.sql` 里的 SQL 聚合成表节点，生成「读取/写入」边和数据库泳道；悬停表节点看 SQL，点击打开表详情抽屉。工具栏「数据表」可开关。
+- **数据库视图**：MyBatis XML / Java 注解 / `.sql` 里的 SQL 聚合成表节点，生成「读取/写入」边和数据库泳道；本次真正改到的语句会标红并优先显示（表详情支持「仅看变更 SQL」）；悬停表节点看 SQL，点击打开表详情抽屉。工具栏「数据表」可开关。
+- **Diff 气泡**：文件摘要和行内 Reviewer 评论可在 Diff 中通过「气泡」开关显示/隐藏；有行内评论的行会出现评论气泡按钮。
 
 细节见 `docs/pull-requests.md`、`docs/resources.md`、`docs/database.md`。
 

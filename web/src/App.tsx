@@ -590,6 +590,19 @@ export function App() {
     [openTodoCounts],
   );
 
+  const highRiskNodes = useMemo(() => {
+    const ids = new Set<string>();
+    for (const node of data?.nodes ?? []) {
+      if (node.riskLevel === 'high') {
+        ids.add(node.id);
+        continue;
+      }
+      const todos = mergeTodos(node, extraTodos[node.id]);
+      if (todos.some((todo) => todo.severity === 'high' && !isTodoDone(node.id, todo))) ids.add(node.id);
+    }
+    return ids;
+  }, [data, extraTodos, isTodoDone]);
+
   const selectedTodos = useMemo(
     () => (selectedNode ? mergeTodos(selectedNode, extraTodos[selectedNode.id]) : []),
     [selectedNode, extraTodos],
@@ -891,6 +904,7 @@ export function App() {
               selectedId={selectedId}
               query={query}
               reviewedMap={reviewedOverrides}
+        riskNodeIds={highRiskNodes}
               isTodoDone={isTodoDone}
               onQueryChange={setQuery}
               onSelect={(id) => selectNode(id)}
@@ -923,6 +937,7 @@ export function App() {
                 direction={direction}
                 edgeMode={edgeMode}
                 openTodoCounts={openTodoCounts}
+                riskNodeIds={highRiskNodes}
                 reviewedMap={reviewedOverrides}
                 ignoredMap={ignoredOverrides}
                 drawerWidth={selectedNode ? drawerWidth : 0}

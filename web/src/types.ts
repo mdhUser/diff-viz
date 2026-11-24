@@ -48,6 +48,7 @@ export interface ReviewNode {
   reviewCommentUnresolved?: number;
   // 1.3 additive: tables used by this file's SQL (ids like table:t_order).
   sqlTables?: string[];
+  riskLevel?: 'high' | 'medium' | 'low' | string;
   summarySource?: 'auto' | 'agent' | string;
   impactSource?: string;
   reviewNotes?: string[];
@@ -85,8 +86,10 @@ export interface SqlStatement {
   sql: string;
   file: string;
   line?: number | null;
+  lineEnd?: number | null;
   mapper?: string;
   dynamic?: boolean;
+  changed?: boolean;
 }
 
 export interface ReviewTable {
@@ -96,6 +99,7 @@ export interface ReviewTable {
   componentId?: string;
   operations?: string[];
   statementCount?: number;
+  changedStatementCount?: number;
   changed?: boolean;
   impacted?: boolean;
   sources?: string[];

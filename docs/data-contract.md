@@ -33,6 +33,7 @@
       "stats": { "additions": 12, "deletions": 0 },
       "summary": "新增 refreshToken()。",
       "impactAnalysis": "影响 authGuard 与 routes。",
+      "riskLevel": "high",
       "todos": [
         { "id": "c-todo-17", "text": "TODO: ...", "source": "code_comment", "completed": false, "line": 17 }
       ],
@@ -115,14 +116,15 @@
 "tables": [{
   "id": "table:t_order", "name": "t_order", "schema": null,
   "componentId": "db:default", "operations": ["select", "update"],
-  "statementCount": 3, "changed": true, "impacted": false,
+  "statementCount": 3, "changedStatementCount": 1, "changed": true, "impacted": false,
   "sources": ["mapper/OrderMapper.xml"], "payload": "a1b2c3d4e5f6a7b8c9d0"
 }]
 ```
 
 - 边关系新增 `reads_table` / `writes_table`，方向固定为「SQL 来源文件 → 表」，不会随影响/依赖视图翻转。
 - 表节点只做展示，不计入 `changedFiles` / `impactedFiles`；`meta.stats.tables` 与 `meta.db`（engine/label/tables）记录汇总。
-- `tables/<payload>.json` 内容：`{ "statements": [{ id, operation, sql, file, line, mapper, dynamic }] }`。
+- 节点可选 `riskLevel: "high" | "medium" | "low"`（Agent 注解写入；`high` 在 UI 红色闪烁，未完成 `severity: "high"` 的 todo 也会触发提醒）。Diff 中的摘要/行内评论气泡只影响展示，不改变数据。
+- `tables/<payload>.json` 内容：`{ "statements": [{ id, operation, sql, file, line, lineEnd, mapper, dynamic, changed }] }`。只有本次 Diff 的新增行落在 `line..lineEnd` 范围内才 `changed: true`；表上的 `changedStatementCount` 是变更语句数。
 - `/api/data?full=1` 会合并 SQL 文本；默认 `/api/data` 只有元数据。详见 [database.md](database.md)。
 
 ## 远端 PR / MR（1.4 起）

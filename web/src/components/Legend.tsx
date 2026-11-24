@@ -20,6 +20,16 @@ export function Legend({ edgeMode, hasConfigEdges = false, hasTableEdges = false
           </span>
         ))}
       </div>
+      <div className="mt-1.5 flex items-center gap-3 border-t border-line/60 pt-1.5 text-[9.5px] text-mist-500">
+        <span className="flex items-center gap-1">
+          <span className="node-risk-pulse h-2 w-2 rounded-full border border-rose/80" />
+          {t('高风险')}
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full border-2 border-[#d69000]/80" />
+          {t('待确认')}
+        </span>
+      </div>
       <div className="mt-1.5 border-t border-line/60 pt-1.5 text-[9px] leading-4 text-mist-500">
         {edgeMode === 'impact' ? (
           <>

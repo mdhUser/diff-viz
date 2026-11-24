@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
-import { CheckCircle2, CornerUpRight, FileCog, ListTodo, MessageSquare } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CornerUpRight, FileCog, ListTodo, MessageSquare } from 'lucide-react';
 import type { LayoutDirection, ReviewNode } from '../types';
 import { STATUS_META } from '../status';
 import { dirname } from '../format';
@@ -12,6 +12,7 @@ export interface FileNodeData extends Record<string, unknown> {
   direction: LayoutDirection;
   selected: boolean;
   openTodos: number;
+  highRisk: boolean;
   reviewed: boolean;
   ignored: boolean;
   laneMode: boolean;
@@ -20,10 +21,11 @@ export interface FileNodeData extends Record<string, unknown> {
 export type FileFlowNode = Node<FileNodeData, 'file'>;
 
 function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
-  const { node, direction, selected, openTodos, reviewed, ignored, laneMode } = data;
+  const { node, direction, selected, openTodos, reviewed, ignored, laneMode, highRisk } = data;
   const { t } = useI18n();
   const meta = STATUS_META[node.status];
   const isConfig = node.kind === 'config';
+  const needsConfirmation = openTodos > 0;
   const Icon = isConfig ? FileCog : meta.icon;
   const configLabel =
     node.resourceKind === 'xml-mybatis'
@@ -53,20 +55,24 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
     <div
       className={`graph-node relative flex flex-col justify-between rounded-xl border bg-[#fffdf8]/95 px-3 py-2.5 ${
         selected ? 'node-selected' : ''
-      }`}
+      } ${highRisk ? 'node-risk-pulse' : needsConfirmation ? 'node-confirm-glow' : ''}`}
       style={{
         width,
         height: impacted ? 74 : 94,
         borderColor: selected
           ? 'rgba(86,111,208,0.65)'
-          : isConfig
-            ? 'rgba(47,143,143,0.38)'
-            : impacted
-              ? 'rgba(107,124,140,0.28)'
-              : 'rgba(221,213,196,0.95)',
+          : highRisk
+            ? 'rgba(212,58,58,0.85)'
+            : needsConfirmation
+              ? 'rgba(214,144,0,0.75)'
+              : isConfig
+                ? 'rgba(47,143,143,0.38)'
+                : impacted
+                  ? 'rgba(107,124,140,0.28)'
+                  : 'rgba(221,213,196,0.95)',
         borderStyle: impacted ? 'dashed' : 'solid',
         opacity: ignored ? 0.42 : impacted ? 0.88 : 1,
-        boxShadow: selected ? undefined : '0 8px 20px -18px rgba(60,50,30,0.35)',
+        boxShadow: selected || highRisk || needsConfirmation ? undefined : '0 8px 20px -18px rgba(60,50,30,0.35)',
       }}
       title={titleParts.join('\n')}
     >
@@ -110,6 +116,23 @@ function FileNodeComponent({ data }: NodeProps<FileFlowNode>) {
               title={configLabel}
             >
               {t('配置')}
+            </span>
+          ) : null}
+          {highRisk ? (
+            <span
+              className="flex items-center gap-0.5 rounded border border-[rgba(212,58,58,0.45)] bg-[rgba(212,58,58,0.10)] px-1 py-0.5 text-[8.5px] font-medium text-[#b83232]"
+              title={t('高风险改动，请优先人工确认')}
+            >
+              <AlertTriangle size={8.5} />
+              {t('高风险')}
+            </span>
+          ) : needsConfirmation ? (
+            <span
+              className="flex items-center gap-0.5 rounded border border-[rgba(214,144,0,0.4)] bg-[rgba(214,144,0,0.10)] px-1 py-0.5 text-[8.5px] font-medium text-[#9a6a00]"
+              title={t('{count} 个待确认项', { count: openTodos })}
+            >
+              <ListTodo size={8.5} />
+              {t('待确认')} {openTodos}
             </span>
           ) : null}
           {(node.reviewComments ?? 0) > 0 ? (

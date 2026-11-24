@@ -759,7 +759,6 @@ export function buildReviewData(repo, options = {}) {
       );
     }
     node.summarySource = 'auto';
-    delete node._hunks;
   }
 
   for (const node of finalNodes) {
@@ -786,15 +785,56 @@ export function buildReviewData(repo, options = {}) {
   // Database view: group the SQL extracted from included files into tables and
   // attach read/write edges. Tables are display-only nodes (not files), so they
   // do not affect changed/impacted statistics.
+  // Mark which SQL statements actually changed in this review. A statement is
+  // changed when an added line falls inside its source range; otherwise a mapper
+  // with three statements would look like all three changed.
+  const changedLinesByFile = new Map();
+  for (const node of changedFiles) {
+    if (node.status === 'deleted') continue;
+    if (node.status === 'added') {
+      changedLinesByFile.set(node.path, null); // whole file is new
+      continue;
+    }
+    const lines = new Set();
+    for (const hunk of node._hunks || []) {
+      let newLine = Number(hunk.newStart) || 0;
+      for (const raw of hunk.lines || []) {
+        const marker = raw[0];
+        if (marker === '+') {
+          lines.add(newLine);
+          newLine += 1;
+        } else if (marker === ' ') {
+          newLine += 1;
+        }
+      }
+    }
+    changedLinesByFile.set(node.path, lines);
+  }
+  const statementChanged = (file, statement) => {
+    const lines = changedLinesByFile.get(file);
+    if (lines === undefined) return false;
+    if (lines === null) return true;
+    const start = Number(statement.line) || 0;
+    const end = Number(statement.lineEnd) || start;
+    for (const line of lines) if (line >= start && line <= end) return true;
+    return false;
+  };
   const statementsForTables = [];
   for (const node of finalNodes) {
+    const addStatement = (statement) => {
+      statementsForTables.push({
+        ...statement,
+        file: node.path,
+        changed: statementChanged(node.path, statement),
+      });
+    };
     const resource = scan.resources.get(node.path);
     if (resource?.statements?.length) {
-      for (const statement of resource.statements) statementsForTables.push({ ...statement, file: node.path });
+      for (const statement of resource.statements) addStatement(statement);
     }
     const javaStatements = scan.files.get(node.path)?.javaSqlStatements;
     if (javaStatements?.length) {
-      for (const statement of javaStatements) statementsForTables.push({ ...statement, file: node.path });
+      for (const statement of javaStatements) addStatement(statement);
     }
   }
   const databaseEngine = detectDatabaseEngine(scan.resources);
@@ -829,6 +869,8 @@ export function buildReviewData(repo, options = {}) {
         String(a.relation).localeCompare(String(b.relation)),
     );
   }
+
+  for (const node of changedFiles) delete node._hunks;
 
   const moduleCounts = new Map(
     laneModules.map((module) => [module.id, { changedFiles: 0, impactedFiles: 0 }]),
@@ -1009,6 +1051,9 @@ export function applyAnnotations(data, annotations, { onlyPaths = null } = {}) {
         node.todos.push(todo);
         existingTexts.add(todo.text);
       });
+    }
+    if (annotation.riskLevel && ['high', 'medium', 'low'].includes(String(annotation.riskLevel))) {
+      node.riskLevel = String(annotation.riskLevel);
     }
     if (annotation.reviewed === true) node.reviewed = true;
     if (Array.isArray(annotation.notes)) {

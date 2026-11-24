@@ -237,7 +237,7 @@ export function DetailDrawer({
             onSelectNode={onSelectNode}
           />
         ) : null}
-        {tab === 'diff' ? <DiffTab node={node} /> : null}
+        {tab === 'diff' ? <DiffTab key={node.id} node={node} data={data} /> : null}
         {tab === 'comments' ? (
           <CommentsTab node={node} data={data} onOpenAllComments={onOpenAllComments} />
         ) : null}

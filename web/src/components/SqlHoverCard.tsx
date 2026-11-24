@@ -23,7 +23,12 @@ export function SqlHoverCard({
   onOpen: (tableId: string) => void;
 }) {
   const { t } = useI18n();
-  const statements = (table.statements ?? []).slice(0, 3);
+  const allStatements = table.statements ?? [];
+  const changedStatements = allStatements.filter((statement) => statement.changed);
+  const statements = (changedStatements.length > 0
+    ? [...changedStatements, ...allStatements.filter((statement) => !statement.changed)]
+    : allStatements
+  ).slice(0, 3);
   const total = table.statementCount ?? table.statements?.length ?? 0;
   const left = Math.min(Math.max(12, x + 18), window.innerWidth - 500);
   const top = Math.min(Math.max(12, y + 16), window.innerHeight - 260);
@@ -38,6 +43,11 @@ export function SqlHoverCard({
         </span>
         <span className="font-mono text-[11.5px] font-semibold text-mist-100">{table.name}</span>
         <span className="text-[9px] text-mist-600">{t('{count} 条 SQL', { count: total })}</span>
+        {changedStatements.length > 0 ? (
+          <span className="rounded border border-[rgba(212,58,58,0.35)] bg-[rgba(212,58,58,0.06)] px-1 py-0.5 text-[8px] text-[#b83232]">
+            {t('{count} 条变更', { count: changedStatements.length })}
+          </span>
+        ) : null}
         <button
           type="button"
           onClick={() => onOpen(table.id)}
@@ -57,6 +67,11 @@ export function SqlHoverCard({
                 <span className="rounded bg-[rgba(196,122,44,0.12)] px-1 py-0.5 font-mono text-[8px] text-[#a35f14]">
                   {OPERATION_LABEL[statement.operation] ?? statement.operation.toUpperCase()}
                 </span>
+                {statement.changed ? (
+                  <span className="rounded bg-[rgba(212,58,58,0.10)] px-1 py-0.5 text-[8px] text-[#b83232]">
+                    {t('本次变更')}
+                  </span>
+                ) : null}
                 <span className="truncate font-mono">{statement.file.split('/').slice(-2).join('/')}</span>
                 {statement.line ? <span>:{statement.line}</span> : null}
                 {statement.dynamic ? <span className="text-amber">{t('动态 SQL')}</span> : null}

@@ -173,6 +173,7 @@ test('annotation merge and prior review state preservation', () => {
         'src/util.ts': {
           summary: '精简了 help 实现',
           impactAnalysis: '调用方无需调整',
+          riskLevel: 'high',
           todos: ['补一个单测'],
         },
       },
@@ -183,6 +184,7 @@ test('annotation merge and prior review state preservation', () => {
     assert.equal(util.summarySource, 'agent');
     assert.equal(util.todos.length, 1);
     assert.equal(util.todos[0].source, 'agent');
+    assert.equal(util.riskLevel, 'high');
 
     util.todos[0].completed = true;
     util.reviewed = true;

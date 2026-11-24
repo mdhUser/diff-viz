@@ -1,10 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import DiffViewer, { type ReactDiffViewerStylesOverride } from 'react-diff-viewer-continued';
-import { Columns2, FileWarning, Loader2, Rows3, ScanLine } from 'lucide-react';
-import type { ReviewNode } from '../../types';
+import { Columns2, FileWarning, Loader2, MessageSquare, Rows3, ScanLine, Sparkles, X } from 'lucide-react';
+import type { ReviewComment, ReviewData, ReviewNode } from '../../types';
 import { highlightLanguage } from '../../format';
 import { cn } from '../../cn';
 import { useI18n } from '../../i18n';
+import { CommentCard } from '../CommentCard';
 
 const diffStyles: ReactDiffViewerStylesOverride = {
   variables: {
@@ -52,12 +54,45 @@ const diffStyles: ReactDiffViewerStylesOverride = {
 
 interface DiffTabProps {
   node: ReviewNode;
+  data: ReviewData;
 }
 
-export function DiffTab({ node }: DiffTabProps) {
+export function DiffTab({ node, data }: DiffTabProps) {
   const { t } = useI18n();
   const [splitView, setSplitView] = useState(false);
   const [fullFile, setFullFile] = useState(false);
+  const [showBubbles, setShowBubbles] = useState(true);
+  const [activeBubble, setActiveBubble] = useState<{
+    line: number;
+    comments: ReviewComment[];
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const summaryText = [node.summary, node.impactAnalysis].map((value) => (value || '').trim()).filter(Boolean);
+  const fileComments = useMemo(
+    () =>
+      (data.comments ?? []).filter(
+        (comment) =>
+          comment.path &&
+          (comment.path === node.path || comment.path === node.oldPath) &&
+          Number.isFinite(comment.line),
+      ),
+    [data.comments, node.path, node.oldPath],
+  );
+  const commentsByLine = useMemo(() => {
+    const byLine = new Map<number, ReviewComment[]>();
+    for (const comment of fileComments) {
+      const line = Number(comment.line);
+      if (!Number.isFinite(line)) continue;
+      if (!byLine.has(line)) byLine.set(line, []);
+      byLine.get(line)!.push(comment);
+    }
+    return byLine;
+  }, [fileComments]);
+  useEffect(() => {
+    setActiveBubble(null);
+  }, [node.id]);
 
   const hunkCount = useMemo(
     () => node.hunkCount ?? (node.diff ? (node.diff.match(/^@@/gm) || []).length : 0),
@@ -179,6 +214,29 @@ export function DiffTab({ node }: DiffTabProps) {
           {t('完整文件')}
         </button>
 
+        {summaryText.length > 0 || fileComments.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              setShowBubbles((value) => !value);
+              setActiveBubble(null);
+            }}
+            className={cn(
+              'flex h-7 items-center gap-1.5 rounded-md border px-2 text-[10px] transition',
+              showBubbles
+                ? 'border-accent/30 bg-accent-soft text-accent-bright'
+                : 'border-line bg-ink-900/50 text-mist-500 hover:text-mist-300',
+            )}
+            title={showBubbles ? t('隐藏气泡') : t('显示气泡')}
+          >
+            <MessageSquare size={11} />
+            {t('气泡')}
+            {fileComments.length > 0 ? (
+              <span className="font-mono text-[8.5px] text-mist-500">{fileComments.length}</span>
+            ) : null}
+          </button>
+        ) : null}
+
         <div className="ml-auto flex items-center gap-2 font-mono text-[9.5px]">
           <span className="text-mint">+{node.stats.additions}</span>
           <span className="text-rose">−{node.stats.deletions}</span>
@@ -193,7 +251,31 @@ export function DiffTab({ node }: DiffTabProps) {
         </div>
       ) : null}
 
-      <div className="diff-shell px-1 py-2">
+      <div className="diff-shell relative px-1 py-2">
+        {showBubbles && summaryText.length > 0 ? (
+          <div className="pointer-events-auto absolute right-3 top-3 z-20 w-[310px] rounded-xl border border-[rgba(86,111,208,0.28)] bg-[#fffdf8]/97 p-3 shadow-[0_16px_34px_-22px_rgba(60,50,30,0.45)] backdrop-blur-sm">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium text-mist-200">
+              <Sparkles size={11} className="text-accent-bright" />
+              {t('文件摘要气泡')}
+              <button
+                type="button"
+                onClick={() => setShowBubbles(false)}
+                className="ml-auto flex h-5 w-5 items-center justify-center rounded text-mist-600 transition hover:bg-ink-800 hover:text-mist-200"
+                aria-label={t('隐藏气泡')}
+              >
+                <X size={11} />
+              </button>
+            </div>
+            <p className="mt-1.5 max-h-[130px] overflow-y-auto whitespace-pre-wrap text-[10px] leading-[1.65] text-mist-400">
+              {node.summary?.trim() || summaryText[0]}
+            </p>
+            {node.impactAnalysis?.trim() ? (
+              <p className="mt-1.5 max-h-[80px] overflow-y-auto border-t border-line/60 pt-1.5 whitespace-pre-wrap text-[9.5px] leading-[1.6] text-mist-500">
+                {node.impactAnalysis.trim()}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <DiffViewer
           key={`${node.id}-${splitView ? 'split' : 'unified'}-${fullFile ? 'full' : 'folded'}`}
           oldValue={oldValue}
@@ -208,6 +290,36 @@ export function DiffTab({ node }: DiffTabProps) {
           codeFoldMessageRenderer={(totalFoldedLines) => (
             <span className="diff-fold-label">{t('展开 {count} 行未改动', { count: totalFoldedLines })}</span>
           )}
+          renderGutter={({ lineNumber, additionalLineNumber }) => {
+            const line = commentsByLine.has(lineNumber)
+              ? lineNumber
+              : commentsByLine.has(additionalLineNumber ?? -1)
+                ? additionalLineNumber
+                : null;
+            if (!showBubbles || !line) return <td className="diff-bubble-gutter" />;
+            const comments = commentsByLine.get(line) ?? [];
+            return (
+              <td className="diff-bubble-gutter">
+                <button
+                  type="button"
+                  className="diff-bubble-button"
+                  title={t('{count} 条行内评论', { count: comments.length })}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setActiveBubble({
+                      line,
+                      comments,
+                      x: event.clientX,
+                      y: event.clientY,
+                    });
+                  }}
+                >
+                  <MessageSquare size={8.5} />
+                  {comments.length > 1 ? comments.length : ''}
+                </button>
+              </td>
+            );
+          }}
           loadingElement={() => (
             <div className="flex items-center gap-2 px-4 py-8 text-[10.5px] text-mist-500">
               <Loader2 size={13} className="animate-spin text-accent" />
@@ -216,6 +328,37 @@ export function DiffTab({ node }: DiffTabProps) {
           )}
         />
       </div>
+      {activeBubble
+        ? createPortal(
+            <div
+              className="fixed z-[120] max-h-[360px] w-[420px] overflow-y-auto rounded-xl border border-line bg-[#fffdf8] p-2.5 shadow-[0_20px_45px_-24px_rgba(60,50,30,0.5)]"
+              style={{
+                left: Math.min(Math.max(12, activeBubble.x + 14), window.innerWidth - 440),
+                top: Math.min(Math.max(12, activeBubble.y + 12), window.innerHeight - 380),
+              }}
+            >
+              <div className="mb-2 flex items-center gap-2 border-b border-line/60 pb-1.5 text-[9.5px] text-mist-500">
+                <MessageSquare size={10} className="text-accent-bright" />
+                {t('{count} 条行内评论', { count: activeBubble.comments.length })}
+                <span className="font-mono text-mist-600">L{activeBubble.line}</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveBubble(null)}
+                  className="ml-auto flex h-5 w-5 items-center justify-center rounded text-mist-600 transition hover:bg-ink-800 hover:text-mist-200"
+                  aria-label={t('关闭评论气泡')}
+                >
+                  <X size={11} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {activeBubble.comments.map((comment) => (
+                  <CommentCard key={comment.id} comment={comment} compact />
+                ))}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

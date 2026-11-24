@@ -61,7 +61,11 @@ function TableNodeComponent({ data }: NodeProps<TableFlowNode>) {
           </div>
           <div className="mt-0.5 flex items-center gap-1.5 text-[9px] text-[#8b7a63]">
             {table.statementCount ? <span>{t('{count} 条 SQL', { count: table.statementCount })}</span> : <span>{t('数据表')}</span>}
-            {changed ? <span className="text-[#a35f14]">{t('本次涉及')}</span> : null}
+            {table.changedStatementCount ? (
+              <span className="text-[#b83232]">{t('{count} 条变更', { count: table.changedStatementCount })}</span>
+            ) : changed ? (
+              <span className="text-[#a35f14]">{t('本次涉及')}</span>
+            ) : null}
             {impacted ? <span>{t('受影响')}</span> : null}
           </div>
         </div>

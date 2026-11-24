@@ -21,6 +21,7 @@ interface SidebarProps {
   selectedId: string | null;
   query: string;
   reviewedMap: Record<string, boolean>;
+  riskNodeIds: Set<string>;
   isTodoDone: (nodeId: string, todo: ReviewTodo) => boolean;
   onQueryChange: (value: string) => void;
   onSelect: (id: string) => void;
@@ -34,7 +35,16 @@ function matches(node: ReviewNode, query: string) {
 }
 
 export function Sidebar({
-  onOpenComments, data, selectedId, query, reviewedMap, isTodoDone, onQueryChange, onSelect }: SidebarProps) {
+  onOpenComments,
+  data,
+  selectedId,
+  query,
+  reviewedMap,
+  riskNodeIds,
+  isTodoDone,
+  onQueryChange,
+  onSelect,
+}: SidebarProps) {
   const { meta, nodes } = data;
   const { t } = useI18n();
   const changed = nodes.filter((node) => node.status !== 'impacted_only');
@@ -183,6 +193,7 @@ export function Sidebar({
               node={node}
               selected={node.id === selectedId}
               reviewed={Boolean(reviewedMap[node.id] ?? node.reviewed)}
+              risk={riskNodeIds.has(node.id)}
               openTodos={node.todos.filter((todo) => !isTodoDone(node.id, todo)).length}
               onClick={() => onSelect(node.id)}
             />
@@ -201,6 +212,7 @@ export function Sidebar({
                 node={node}
                 selected={node.id === selectedId}
                 reviewed={false}
+                risk={riskNodeIds.has(node.id)}
                 openTodos={0}
                 onClick={() => onSelect(node.id)}
               />
@@ -254,12 +266,14 @@ function FileRow({
   node,
   selected,
   reviewed,
+  risk,
   openTodos,
   onClick,
 }: {
   node: ReviewNode;
   selected: boolean;
   reviewed: boolean;
+  risk: boolean;
   openTodos: number;
   onClick: () => void;
 }) {
@@ -294,6 +308,7 @@ function FileRow({
           >
             {node.label}
           </span>
+          {risk ? <AlertTriangle size={10} className="shrink-0 text-rose" aria-label={t('高风险')} /> : null}
           {reviewed ? <CheckCircle2 size={11} className="shrink-0 text-mint" /> : null}
         </span>
         <span className="mt-0.5 flex items-center gap-1 truncate font-mono text-[9px] text-mist-600">

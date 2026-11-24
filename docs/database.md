@@ -50,6 +50,8 @@ diff-viz 会把代码和 Mapper 里的 SQL 静态解析成「数据库表」节�
 
 表边永远保持「代码 → 表」方向，不随「影响/依赖」视图翻转；橙色实线、标签「读取/写入」。表的 `changed` 表示来源文件里有变更，`impacted` 表示来源文件进入了受影响集合。
 
+每条 SQL 语句带 `line` / `lineEnd` 和 `changed`：只有本次 Diff 的新增行落在该语句范围内才算变更；表带 `changedStatementCount`。表详情默认只列变更 SQL（可切换全部），悬停卡优先展示变更语句，避免「所有 SQL 看起来都改了」。
+
 ## HTTP API
 
 ```bash

@@ -294,3 +294,56 @@
     transition: none;
   }
 }
+
+@keyframes node-risk-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1.5px rgba(212, 58, 58, 0.75), 0 0 0 4px rgba(212, 58, 58, 0.10);
+  }
+  50% {
+    box-shadow: 0 0 0 2.5px rgba(212, 58, 58, 1), 0 0 22px 5px rgba(212, 58, 58, 0.30);
+  }
+}
+
+.node-risk-pulse {
+  animation: node-risk-pulse 1.35s ease-in-out infinite;
+}
+
+.node-confirm-glow {
+  box-shadow: 0 0 0 2px rgba(214, 144, 0, 0.45), 0 0 18px 2px rgba(214, 144, 0, 0.16);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node-risk-pulse {
+    animation: none;
+    box-shadow: 0 0 0 2px rgba(212, 58, 58, 0.75);
+  }
+}
+
+.diff-bubble-gutter {
+  width: 22px;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+  background: transparent;
+}
+
+.diff-bubble-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border: 1px solid rgba(86, 111, 208, 0.35);
+  background: rgba(86, 111, 208, 0.10);
+  color: #4a5f9e;
+  font-size: 8px;
+  line-height: 1;
+  transition: background 0.15s ease;
+}
+
+.diff-bubble-button:hover {
+  background: rgba(86, 111, 208, 0.22);
+}

@@ -499,7 +499,11 @@ export async function startHub({
   const agentTodosOf = (node) =>
     Array.isArray(node?.todos) ? node.todos.filter((todo) => todo?.source === 'agent') : [];
   const hasAgentContent = (node) =>
-    Boolean(node) && (node.summarySource === 'agent' || node.impactSource === 'agent' || agentTodosOf(node).length > 0);
+    Boolean(node) &&
+    (node.summarySource === 'agent' ||
+      node.impactSource === 'agent' ||
+      Boolean(node.riskLevel) ||
+      agentTodosOf(node).length > 0);
 
   const nodeDiffOf = (node, readPayload) => {
     if (typeof node.diff === 'string') return node.diff;
@@ -524,6 +528,7 @@ export async function startHub({
         summary: node.summarySource === 'agent' ? String(node.summary || '') : '',
         impactAnalysis: node.impactSource === 'agent' ? String(node.impactAnalysis || '') : '',
         todos: agentTodosOf(node).map((todo) => ({ ...todo })),
+        riskLevel: node.riskLevel || null,
       };
       const current = store.nodes[node.path];
       if (
@@ -531,6 +536,7 @@ export async function startHub({
         current.key === key &&
         current.summary === next.summary &&
         current.impactAnalysis === next.impactAnalysis &&
+        current.riskLevel === next.riskLevel &&
         JSON.stringify(current.todos || []) === JSON.stringify(next.todos)
       ) {
         continue;
@@ -638,6 +644,9 @@ export async function startHub({
         if (!todo?.text || texts.has(todo.text)) continue;
         todos.push({ ...todo, id: todo.id || `a-${shortId(`${node.path}::${todo.text}`, 10)}` });
         texts.add(todo.text);
+      }
+      if (entry.riskLevel && ['high', 'medium', 'low'].includes(entry.riskLevel)) {
+        node.riskLevel = entry.riskLevel;
       }
       applied += 1;
     }

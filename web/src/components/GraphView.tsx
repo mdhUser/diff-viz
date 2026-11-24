@@ -34,6 +34,7 @@ interface GraphViewProps {
   direction: LayoutDirection;
   edgeMode: EdgeMode;
   openTodoCounts: Record<string, number>;
+  riskNodeIds: Set<string>;
   reviewedMap: Record<string, boolean>;
   ignoredMap: Record<string, boolean>;
   drawerWidth?: number;
@@ -124,6 +125,7 @@ function GraphCanvas({
   direction,
   edgeMode,
   openTodoCounts,
+  riskNodeIds,
   reviewedMap,
   ignoredMap,
   drawerWidth = 0,
@@ -203,6 +205,7 @@ function GraphCanvas({
           direction,
           selected: node.id === selectedId,
           openTodos: openTodoCounts[node.id] || 0,
+          highRisk: riskNodeIds.has(node.id),
           reviewed: Boolean(reviewedMap[node.id] ?? node.reviewed),
           ignored: Boolean(ignoredMap[node.id] ?? node.ignored),
           laneMode: viewMode === 'lane',
@@ -218,6 +221,7 @@ function GraphCanvas({
     direction,
     selectedId,
     openTodoCounts,
+    riskNodeIds,
     reviewedMap,
     ignoredMap,
     handleHoverStart,
