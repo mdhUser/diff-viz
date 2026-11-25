@@ -8,6 +8,12 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 Before releasing a new version, you must add `Added` / `Changed` / `Fixed` entries for that version and make
 `npm run release:check` pass.
 
+## [1.9.2] - 2026-11-25
+
+### Fixed
+
+- **Hiding review bubbles no longer blanks the code diff**: `alwaysShowLines` is part of the diff viewer's memo key but not one of the props that triggers a recompute, so toggling the bubbles off made the table render empty. The requested comment lines are now stable and independent from the bubble toggle; comment anchors also use the viewer's `R-<line>` / `L-<line>` format, so comments on folded lines expand again instead of being skipped.
+
 ## [1.9.1] - 2026-11-24
 
 ### Fixed

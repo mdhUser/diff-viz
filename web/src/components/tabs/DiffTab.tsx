@@ -62,7 +62,10 @@ export function DiffTab({ node, data }: DiffTabProps) {
   const [showBubbles, setShowBubbles] = useState(true);
   const diffShellRef = useRef<HTMLDivElement>(null);
 
-  const summaryText = [node.summary, node.impactAnalysis].map((value) => (value || '').trim()).filter(Boolean);
+  const summaryText = useMemo(
+    () => [node.summary, node.impactAnalysis].map((value) => (value || '').trim()).filter(Boolean),
+    [node.summary, node.impactAnalysis],
+  );
   const fileComments = useMemo(
     () =>
       (data.comments ?? []).filter(
@@ -84,6 +87,20 @@ export function DiffTab({ node, data }: DiffTabProps) {
     return byLine;
   }, [fileComments]);
 
+  // The viewer folds `alwaysShowLines` into its memo key, but it does not
+  // recompute when only that prop changes; switching it while the diff is
+  // mounted makes the table render empty. Keep the requested comment lines
+  // independent from the bubble toggle so showing/hiding bubbles never
+  // invalidates the computed diff.
+  const commentAnchorLines = useMemo(
+    () => [
+      ...new Set(
+        fileComments.map((comment) => `${comment.side === 'old' ? 'L' : 'R'}-${Number(comment.line)}`),
+      ),
+    ],
+    [fileComments],
+  );
+
   // Review bubbles are real rows inserted into the diff table, not floating
   // overlays: the code stays readable and the rows push the diff down. The
   // library only exposes per-line cells, so after it renders we insert one
@@ -92,13 +109,23 @@ export function DiffTab({ node, data }: DiffTabProps) {
   useEffect(() => {
     const root = diffShellRef.current;
     if (!root) return;
-    let frame = 0;
-    let observer: MutationObserver | null = null;
-    let applying = false;
 
     const clearRows = () => {
       root.querySelectorAll('tr.diff-inline-bubble-row').forEach((row) => row.remove());
     };
+
+    // Hiding bubbles only removes the injected rows: the diff props stay
+    // untouched, so the viewer keeps its computed (and visible) diff.
+    if (!showBubbles) {
+      clearRows();
+      return;
+    }
+
+    let frame = 0;
+    let innerFrame = 0;
+    let disposed = false;
+    let observer: MutationObserver | null = null;
+    let applying = false;
 
     const makeText = (tag: 'div' | 'span', className: string, text: string) => {
       const node = document.createElement(tag);
@@ -117,12 +144,13 @@ export function DiffTab({ node, data }: DiffTabProps) {
     };
 
     const insertBubbles = () => {
+      if (disposed) return;
       applying = true;
       observer?.disconnect();
       clearRows();
       const table = root.querySelector('table');
       const tbody = table?.querySelector('tbody');
-      if (showBubbles && table && tbody) {
+      if (table && tbody) {
         const columns = table.querySelector('colgroup')?.children.length ?? 5;
 
         if (summaryText.length > 0) {
@@ -192,7 +220,10 @@ export function DiffTab({ node, data }: DiffTabProps) {
 
     const schedule = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => requestAnimationFrame(insertBubbles));
+      cancelAnimationFrame(innerFrame);
+      frame = requestAnimationFrame(() => {
+        innerFrame = requestAnimationFrame(insertBubbles);
+      });
     };
 
     schedule();
@@ -201,7 +232,9 @@ export function DiffTab({ node, data }: DiffTabProps) {
     });
     observer.observe(root, { childList: true, subtree: true });
     return () => {
+      disposed = true;
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(innerFrame);
       observer?.disconnect();
       clearRows();
     };
@@ -376,7 +409,7 @@ export function DiffTab({ node, data }: DiffTabProps) {
           codeFoldMessageRenderer={(totalFoldedLines) => (
             <span className="diff-fold-label">{t('展开 {count} 行未改动', { count: totalFoldedLines })}</span>
           )}
-          alwaysShowLines={showBubbles ? fileComments.map((comment) => `R${comment.line}`) : []}
+          alwaysShowLines={commentAnchorLines}
           renderGutter={({ lineNumber, additionalLineNumber, prefix, additionalPrefix }) => {
             const oldLine = String(prefix) === 'L' ? lineNumber || undefined : undefined;
             const newLine =

@@ -8,6 +8,12 @@
 发布新版本前，必须为本版本补充 `Added` / `Changed` / `Fixed` 等条目，并让
 `npm run release:check` 通过。
 
+## [1.9.2] - 2026-11-25
+
+### 修复
+
+- **关闭气泡不再清空代码 Diff**：`alwaysShowLines` 属于 diff viewer 的 memo key，但不在触发重算的 props 里，切换气泡时表格会渲染为空。现在评论行请求与气泡开关解耦，并改用 viewer 的 `R-<line>` / `L-<line>` 格式，被折叠行上的评论也会重新展开显示，不再被跳过。
+
 ## [1.9.1] - 2026-11-24
 
 ### 修复
