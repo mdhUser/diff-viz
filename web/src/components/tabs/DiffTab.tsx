@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import DiffViewer, { type ReactDiffViewerStylesOverride } from 'react-diff-viewer-continued';
 import { Columns2, FileWarning, Loader2, MessageSquare, Rows3, ScanLine, Sparkles } from 'lucide-react';
 import type { ReviewComment, ReviewData, ReviewNode } from '../../types';
@@ -59,7 +59,10 @@ export function DiffTab({ node, data }: DiffTabProps) {
   const { t } = useI18n();
   const [splitView, setSplitView] = useState(false);
   const [fullFile, setFullFile] = useState(false);
-  const [showBubbles, setShowBubbles] = useState(true);
+  // Comment threads are expanded by default; the gutter bubble marks every
+  // commented line and toggles that one thread.
+  const [collapsedAnchors, setCollapsedAnchors] = useState<Set<string>>(() => new Set());
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const diffShellRef = useRef<HTMLDivElement>(null);
 
   const summaryText = useMemo(
@@ -76,29 +79,40 @@ export function DiffTab({ node, data }: DiffTabProps) {
       ),
     [data.comments, node.path, node.oldPath],
   );
-  const commentsByLine = useMemo(() => {
-    const byLine = new Map<number, ReviewComment[]>();
+  // Key comments by the side + line they are attached to, so a comment on a
+  // removed line still anchors to the old line number instead of the new one.
+  const commentsByAnchor = useMemo(() => {
+    const byAnchor = new Map<string, ReviewComment[]>();
     for (const comment of fileComments) {
       const line = Number(comment.line);
       if (!Number.isFinite(line)) continue;
-      if (!byLine.has(line)) byLine.set(line, []);
-      byLine.get(line)!.push(comment);
+      const key = `${comment.side === 'old' ? 'old' : 'new'}:${line}`;
+      if (!byAnchor.has(key)) byAnchor.set(key, []);
+      byAnchor.get(key)!.push(comment);
     }
-    return byLine;
+    return byAnchor;
   }, [fileComments]);
+
+  const toggleAnchor = useCallback((anchor: string) => {
+    setCollapsedAnchors((previous) => {
+      const next = new Set(previous);
+      if (next.has(anchor)) next.delete(anchor);
+      else next.add(anchor);
+      return next;
+    });
+  }, []);
 
   // The viewer folds `alwaysShowLines` into its memo key, but it does not
   // recompute when only that prop changes; switching it while the diff is
   // mounted makes the table render empty. Keep the requested comment lines
-  // independent from the bubble toggle so showing/hiding bubbles never
-  // invalidates the computed diff.
+  // stable so expanding/collapsing a thread never invalidates the diff.
   const commentAnchorLines = useMemo(
-    () => [
-      ...new Set(
-        fileComments.map((comment) => `${comment.side === 'old' ? 'L' : 'R'}-${Number(comment.line)}`),
-      ),
-    ],
-    [fileComments],
+    () =>
+      [...commentsByAnchor.keys()].map((anchor) => {
+        const [side, line] = anchor.split(':');
+        return `${side === 'old' ? 'L' : 'R'}-${line}`;
+      }),
+    [commentsByAnchor],
   );
 
   // Review bubbles are real rows inserted into the diff table, not floating
@@ -113,13 +127,6 @@ export function DiffTab({ node, data }: DiffTabProps) {
     const clearRows = () => {
       root.querySelectorAll('tr.diff-inline-bubble-row').forEach((row) => row.remove());
     };
-
-    // Hiding bubbles only removes the injected rows: the diff props stay
-    // untouched, so the viewer keeps its computed (and visible) diff.
-    if (!showBubbles) {
-      clearRows();
-      return;
-    }
 
     let frame = 0;
     let innerFrame = 0;
@@ -157,24 +164,34 @@ export function DiffTab({ node, data }: DiffTabProps) {
           const { row, cell } = makeRow(tbody, columns, 'summary');
           const bubble = document.createElement('div');
           bubble.className = 'diff-inline-bubble diff-inline-summary';
-          const title = document.createElement('div');
+          const title = document.createElement('button');
+          title.type = 'button';
           title.className = 'diff-inline-bubble-title';
+          title.setAttribute('aria-expanded', String(!summaryCollapsed));
+          title.title = summaryCollapsed ? t('展开文件摘要') : t('收起文件摘要');
+          title.addEventListener('click', () => setSummaryCollapsed((value) => !value));
+          title.appendChild(makeText('span', 'diff-inline-bubble-chevron', summaryCollapsed ? '▸' : '▾'));
           const icon = document.createElement('span');
           icon.className = 'diff-inline-bubble-icon';
           icon.textContent = '✦';
           title.appendChild(icon);
           title.appendChild(document.createTextNode(t('文件摘要')));
           bubble.appendChild(title);
-          bubble.appendChild(makeText('div', 'diff-inline-bubble-body', node.summary?.trim() || summaryText[0]));
-          if (node.impactAnalysis?.trim()) {
-            bubble.appendChild(makeText('div', 'diff-inline-bubble-sub', node.impactAnalysis.trim()));
+          if (!summaryCollapsed) {
+            bubble.appendChild(makeText('div', 'diff-inline-bubble-body', node.summary?.trim() || summaryText[0]));
+            if (node.impactAnalysis?.trim()) {
+              bubble.appendChild(makeText('div', 'diff-inline-bubble-sub', node.impactAnalysis.trim()));
+            }
           }
           cell.appendChild(bubble);
           tbody.insertBefore(row, tbody.firstElementChild);
         }
 
-        for (const [line, comments] of commentsByLine) {
-          const gutter = table.querySelector(`td[data-line-new="${line}"]`);
+        for (const [anchor, comments] of commentsByAnchor) {
+          if (collapsedAnchors.has(anchor)) continue;
+          const [side, lineText] = anchor.split(':');
+          const line = Number(lineText);
+          const gutter = table.querySelector(`td[data-line-${side}="${line}"]`);
           const anchorRow = gutter?.closest('tr');
           if (!anchorRow) continue;
           const { row, cell } = makeRow(tbody, columns, 'comment');
@@ -238,7 +255,7 @@ export function DiffTab({ node, data }: DiffTabProps) {
       observer?.disconnect();
       clearRows();
     };
-  }, [node.id, showBubbles, summaryText, commentsByLine, t]);
+  }, [node.id, summaryText, commentsByAnchor, collapsedAnchors, summaryCollapsed, t]);
 
   const hunkCount = useMemo(
     () => node.hunkCount ?? (node.diff ? (node.diff.match(/^@@/gm) || []).length : 0),
@@ -360,26 +377,6 @@ export function DiffTab({ node, data }: DiffTabProps) {
           {t('完整文件')}
         </button>
 
-        {summaryText.length > 0 || fileComments.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setShowBubbles((value) => !value)}
-            className={cn(
-              'flex h-7 items-center gap-1.5 rounded-md border px-2 text-[10px] transition',
-              showBubbles
-                ? 'border-accent/30 bg-accent-soft text-accent-bright'
-                : 'border-line bg-ink-900/50 text-mist-500 hover:text-mist-300',
-            )}
-            title={showBubbles ? t('隐藏气泡') : t('显示气泡')}
-          >
-            <MessageSquare size={11} />
-            {t('气泡')}
-            {fileComments.length > 0 ? (
-              <span className="font-mono text-[8.5px] text-mist-500">{fileComments.length}</span>
-            ) : null}
-          </button>
-        ) : null}
-
         <div className="ml-auto flex items-center gap-2 font-mono text-[9.5px]">
           <span className="text-mint">+{node.stats.additions}</span>
           <span className="text-rose">−{node.stats.deletions}</span>
@@ -418,7 +415,38 @@ export function DiffTab({ node, data }: DiffTabProps) {
                 : String(additionalPrefix) === 'R'
                   ? additionalLineNumber || undefined
                   : undefined;
-            return <td className="diff-bubble-gutter" data-line-old={oldLine} data-line-new={newLine} />;
+            const anchors: Array<{ key: string; line: number }> = [];
+            if (oldLine && commentsByAnchor.has(`old:${oldLine}`)) {
+              anchors.push({ key: `old:${oldLine}`, line: oldLine });
+            }
+            if (newLine && commentsByAnchor.has(`new:${newLine}`)) {
+              anchors.push({ key: `new:${newLine}`, line: newLine });
+            }
+            return (
+              <td className="diff-bubble-gutter" data-line-old={oldLine} data-line-new={newLine}>
+                {anchors.map((anchor) => {
+                  const count = commentsByAnchor.get(anchor.key)?.length ?? 0;
+                  const collapsed = collapsedAnchors.has(anchor.key);
+                  return (
+                    <button
+                      key={anchor.key}
+                      type="button"
+                      className={cn('diff-comment-toggle', collapsed && 'is-collapsed')}
+                      title={collapsed ? t('展开评论') : t('收起评论')}
+                      aria-expanded={!collapsed}
+                      aria-label={`${t('{count} 条行内评论', { count })} · L${anchor.line}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleAnchor(anchor.key);
+                      }}
+                    >
+                      <MessageSquare size={8} />
+                      <span>{count}</span>
+                    </button>
+                  );
+                })}
+              </td>
+            );
           }}
           loadingElement={() => (
             <div className="flex items-center gap-2 px-4 py-8 text-[10.5px] text-mist-500">

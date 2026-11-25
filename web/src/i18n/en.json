@@ -328,5 +328,9 @@
   "文件摘要气泡": "File summary",
   "{count} 条行内评论": "{count} inline comments",
   "关闭评论气泡": "Close comment bubble",
-  "文件摘要": "File summary"
+  "文件摘要": "File summary",
+  "展开评论": "Expand comment",
+  "收起评论": "Collapse comment",
+  "展开文件摘要": "Expand file summary",
+  "收起文件摘要": "Collapse file summary"
 }

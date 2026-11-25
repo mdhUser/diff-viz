@@ -8,6 +8,12 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 Before releasing a new version, you must add `Added` / `Changed` / `Fixed` entries for that version and make
 `npm run release:check` pass.
 
+## [1.10.0] - 2026-11-25
+
+### Changed
+
+- **Per-line comment bubbles**: the toolbar Bubbles toggle is gone. Every commented line now shows a compact comment badge in the diff gutter, next to its line number, with the thread count. Clicking the badge expands or collapses only that thread; the file summary bubble has its own chevron and collapses independently. Comment lines are still forced visible and the badge follows the old/new side, so comments on folded lines remain reachable.
+
 ## [1.9.2] - 2026-11-25
 
 ### Fixed
