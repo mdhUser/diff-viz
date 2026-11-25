@@ -19,7 +19,7 @@ npm install -g diff-viz-cli
 pnpm add -g diff-viz-cli
 
 # 2. 注册 skill（自动创建薄 SKILL.md 链接）
-diff-viz skill install --agent dsh      # dsh | claude | cursor | agents
+diff-viz skill install --agent dsh      # dsh | claude | cursor | agents | antigravity（或 agy）
 ```
 
 手动安装：把本文件放到 `<agent>/skills/diff-viz/SKILL.md` 即可。

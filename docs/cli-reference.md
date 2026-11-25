@@ -90,14 +90,14 @@ diff-viz skill install          # 把薄 SKILL.md 注册到 Agent 技能目录
 
 | 参数 | 说明 |
 | --- | --- |
-| `--agent <name>` | `dsh` \| `claude` \| `cursor` \| `agents`（默认 `dsh`） |
-
-MCP 接入（`diff-viz mcp`）见 [mcp.md](mcp.md)。
+| `--agent <name>` | `dsh` \| `claude` \| `cursor` \| `agents` \| `antigravity`（别名 `agy`；默认 `dsh`） |
 | `--scope <user\|project>` | 用户级或项目级（默认 `user`） |
 | `--dir <dir>` | 自定义 skills 根目录（覆盖 agent/scope） |
 | `--copy` | 复制 `SKILL.md`，不建 symlink |
 | `--force` | 覆盖已有安装 |
 | `--dry-run` | 只打印目标路径，不写入 |
+
+MCP 接入（`diff-viz mcp`）见 [mcp.md](mcp.md)。
 
 ## 状态与环境变量
 

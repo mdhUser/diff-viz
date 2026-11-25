@@ -128,7 +128,7 @@ diff-viz 会从 `package.json` / `pom.xml` / `go.mod` / `build.gradle(.kts)` / `
 diff-viz 自带 Agent Skill，已适配 DSH / Claude Code / Cursor 等：
 
 ```bash
-diff-viz skill install --agent dsh      # 或 claude / cursor
+diff-viz skill install --agent dsh      # 或 claude / cursor / antigravity
 ```
 
 标准流程：Agent 改完代码 → 读 `git diff` 写注解文件（`meta.overallSummary` + 每个文件的 `summary` / `impactAnalysis` / `todos`）→ `diff-viz --annotations .diff-review-annotations.json` → 把 URL 和摘要给用户。不想重启服务时用 `annotate` 追加；注解会按「项目 + 文件 + 改动内容」跨 Review 复用，提交后从版本链进入也不会丢。

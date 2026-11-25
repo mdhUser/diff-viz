@@ -16,7 +16,7 @@ import {
 import { workspaceTemplate } from './workspace.mjs';
 import { isInside, readReviewStore, reviewLayout, writeReviewStore } from './review-store.mjs';
 import { openInBrowser } from './server.mjs';
-import { AGENTS, agentNames, installSkill } from './skill.mjs';
+import { AGENTS, agentNames, installSkill, normalizeAgentName } from './skill.mjs';
 import { writeJsonAtomic } from './util.mjs';
 import { parsePullNumber, preparePullReview, pullLabel } from './remotes.mjs';
 import { attachComments, fetchPullComments } from './comments.mjs';
@@ -70,7 +70,7 @@ diff-viz · 本地代码变更可视化 Review 工具
   --init                  配合 workspace 命令，生成 workspace 模板
 
 Skill:
-  --agent <name>          dsh | claude | cursor | agents（默认 dsh）
+  --agent <name>          dsh | claude | cursor | agents | antigravity（或 agy，默认 dsh）
   --scope <user|project>  安装到用户级或项目级（默认 user）
   --dir <dir>             自定义 skills 根目录
   --copy                  复制 SKILL.md（默认 symlink）
@@ -90,7 +90,7 @@ diff-viz skill install · 把 thin SKILL.md 注册到 Agent 技能目录
   diff-viz skill install [选项]
 
 选项:
-  --agent <name>           dsh | claude | cursor | agents（默认 dsh）
+  --agent <name>           dsh | claude | cursor | agents | antigravity（或 agy，默认 dsh）
   --scope <user|project>   用户级或项目级（默认 user）
   --dir <dir>              自定义 skills 根目录（覆盖 agent/scope）
   --copy                   复制 SKILL.md，不建 symlink
@@ -382,7 +382,7 @@ function runSkillCommand(argv) {
   if (!['user', 'project'].includes(options.scope)) {
     throw new Error(`未知 scope：${options.scope}。可选：user / project`);
   }
-  if (!options.dir && !AGENTS[options.agent]) {
+  if (!options.dir && !AGENTS[normalizeAgentName(options.agent)]) {
     throw new Error(`未知 agent：${options.agent}。可选：${agentNames().join(' / ')}`);
   }
 

@@ -40,6 +40,26 @@ test('extracts tables from common SQL shapes', () => {
   assert.deepEqual(tablesFromSql('with x as (select * from t_a) select * from x'), ['t_a']);
 });
 
+test('keeps comment markers inside strings and ignores string content for tables', () => {
+  assert.equal(
+    normalizeSql("INSERT INTO t_note (body) VALUES ('see -- not a comment')"),
+    "INSERT INTO t_note (body) VALUES ('see -- not a comment')",
+  );
+  assert.equal(
+    normalizeSql("INSERT INTO t_note (body) VALUES ('see /* not a comment */')"),
+    "INSERT INTO t_note (body) VALUES ('see /* not a comment */')",
+  );
+  assert.deepEqual(
+    tablesFromSql("INSERT INTO t_note (body) VALUES ('from fake_table')"),
+    ['t_note'],
+  );
+  assert.deepEqual(
+    tablesFromSql("INSERT INTO t_note (body) VALUES ('join fake_table')"),
+    ['t_note'],
+  );
+  assert.equal(normalizeSql('SELECT *\n  #{id}'), 'SELECT * ?');
+});
+
 test('reads MyBatis mapper statements, includes and dynamic flags', () => {
   const xml = `<?xml version="1.0"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
@@ -116,6 +136,43 @@ select * from t_order;`;
   );
   assert.deepEqual(statements[0].tables, ['t_order']);
   assert.equal(statements[0].line, 3);
+});
+
+test('splits .sql statements reliably across comments, mixed quotes and escapes', () => {
+  const sql = `-- don't split on ; inside a line comment
+/* block comment with ' and ; */
+INSERT INTO t_order (note) VALUES ('it''s; "ok"');
+UPDATE t_fleet SET note = 'a\\'b;c' WHERE id = 1;
+SELECT * FROM t_driver;`;
+  const statements = extractSqlFileStatements(sql, { file: 'db/edge.sql' });
+  assert.equal(statements.length, 3);
+  assert.deepEqual(
+    statements.map((statement) => statement.operation),
+    ['insert', 'update', 'select'],
+  );
+  assert.deepEqual(statements[0].tables, ['t_order']);
+  assert.equal(statements[0].line, 3);
+  assert.equal(statements[0].lineEnd, 3);
+  assert.deepEqual(statements[1].tables, ['t_fleet']);
+  assert.equal(statements[1].line, 4);
+  assert.deepEqual(statements[2].tables, ['t_driver']);
+  assert.equal(statements[2].line, 5);
+});
+
+test('handles MySQL # comments without treating # expressions as comments', () => {
+  const sql = `# heading with it's apostrophe
+INSERT INTO t_order (id) VALUES (1);
+SELECT * FROM t_driver; # trailing comment
+SELECT a # b FROM t_fleet;`;
+  const statements = extractSqlFileStatements(sql, { file: 'db/hash.sql' });
+  assert.deepEqual(
+    statements.map((statement) => statement.operation),
+    ['insert', 'select', 'select'],
+  );
+  assert.deepEqual(statements[0].tables, ['t_order']);
+  assert.deepEqual(statements[1].tables, ['t_driver']);
+  assert.deepEqual(statements[2].tables, ['t_fleet']);
+  assert.match(statements[2].rawSql, /#/);
 });
 
 test('groups statements by table for the database lane', () => {

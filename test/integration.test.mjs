@@ -188,6 +188,7 @@ test('annotation merge and prior review state preservation', () => {
 
     util.todos[0].completed = true;
     util.reviewed = true;
+    util.ignored = true;
     const reread = buildReviewData(repo, { untracked: true });
     applyAnnotations(reread, {
       nodes: { 'src/util.ts': { todos: ['补一个单测'] } },
@@ -195,6 +196,7 @@ test('annotation merge and prior review state preservation', () => {
     mergePreviousState(reread, data);
     const merged = reread.nodes.find((node) => node.path === 'src/util.ts');
     assert.equal(merged.reviewed, true);
+    assert.equal(merged.ignored, true);
     assert.equal(merged.todos[0].completed, true);
   } finally {
     cleanup(dir);

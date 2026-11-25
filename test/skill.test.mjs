@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cleanup, run } from './helpers.mjs';
-import { installSkill, resolveSkillsRoot, skillTargetPath } from '../src/skill.mjs';
+import { installSkill, normalizeAgentName, resolveSkillsRoot, skillTargetPath } from '../src/skill.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const bin = path.join(root, 'bin', 'diff-viz.mjs');
@@ -34,6 +34,21 @@ test('resolves agent skill roots for user and project scope', () => {
   assert.equal(
     skillTargetPath({ agent: 'agents', scope: 'user' }),
     path.join(os.homedir(), '.agents', 'skills', 'diff-viz', 'SKILL.md'),
+  );
+  assert.equal(
+    resolveSkillsRoot({ agent: 'antigravity', scope: 'user' }),
+    path.join(os.homedir(), '.gemini', 'config', 'skills'),
+  );
+  assert.equal(
+    resolveSkillsRoot({ agent: 'agy', scope: 'project', cwd: project }),
+    path.resolve(project, '.agents', 'skills'),
+  );
+  assert.equal(normalizeAgentName('DSH'), 'dsh');
+  assert.equal(normalizeAgentName(' Antigravity '), 'antigravity');
+  assert.equal(normalizeAgentName('agy'), 'antigravity');
+  assert.equal(
+    resolveSkillsRoot({ agent: 'DSH', scope: 'user' }),
+    path.join(os.homedir(), '.dsh', 'skills'),
   );
   assert.equal(
     resolveSkillsRoot({ dir: 'custom-skills', cwd: project }),
@@ -139,6 +154,32 @@ test('CLI skill install writes a thin copy', () => {
     ]);
     assert.match(output, /已安装 diff-viz skill/);
     assert.ok(fs.existsSync(path.join(skills, 'diff-viz', 'SKILL.md')));
+
+    const dryRun = run(dir, process.execPath, [
+      bin,
+      'skill',
+      'install',
+      '--agent',
+      'agy',
+      '--scope',
+      'project',
+      '--dry-run',
+    ]);
+    assert.match(dryRun, /将安装 diff-viz skill/);
+    assert.ok(dryRun.includes(path.join('.agents', 'skills', 'diff-viz', 'SKILL.md')));
+
+    const upper = run(dir, process.execPath, [
+      bin,
+      'skill',
+      'install',
+      '--agent',
+      'DSH',
+      '--scope',
+      'project',
+      '--dry-run',
+    ]);
+    assert.match(upper, /将安装 diff-viz skill/);
+    assert.ok(upper.includes(path.join('.dsh', 'skills', 'diff-viz', 'SKILL.md')));
   } finally {
     cleanup(dir);
   }

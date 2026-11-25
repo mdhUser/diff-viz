@@ -8,6 +8,18 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 Before releasing a new version, you must add `Added` / `Changed` / `Fixed` entries for that version and make
 `npm run release:check` pass.
 
+## [Unreleased]
+
+### Added
+
+- **Antigravity skill target**: `diff-viz skill install --agent antigravity` (alias `agy`) installs into `~/.gemini/config/skills` for the user scope and `.agents/skills` for the project scope. Agent names are now trimmed and case-insensitive.
+
+### Fixed
+
+- Preserve a node's `ignored` flag when a Review is regenerated; it previously only survived `reviewed` and todo completion state.
+- `.sql` statement splitting now handles `--`, `/* */`, and MySQL `#` comments, quoted strings, backslash/doubled-quote escapes, and reports accurate statement line ranges.
+- SQL table extraction is quote-aware: single-quoted literals are masked before table matching, so values such as `'from fake_table'` no longer create fake tables; `--`/`/* */` inside strings are no longer stripped from the displayed SQL.
+
 ## [1.10.0] - 2026-11-25
 
 ### Changed

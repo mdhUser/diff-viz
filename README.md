@@ -133,7 +133,7 @@ Scope format (`worktree` / `staged` / `last` / `range` / `base` / `commit`, with
 Install the skill for your agent:
 
 ```bash
-diff-viz skill install --agent dsh      # or claude / cursor
+diff-viz skill install --agent dsh      # or claude / cursor / antigravity
 ```
 
 An agent's standard loop: make the change → write an annotation file (`meta.overallSummary` + per-file `summary` / `impactAnalysis` / `todos`) → run `diff-viz --annotations ...` → hand the URL and summary to the user. Use `annotate` to update an existing review without restarting anything; annotations are reused per project + file + diff content, including across commits.

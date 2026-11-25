@@ -32,11 +32,112 @@ function lineAt(source, index) {
   return line;
 }
 
+function isHashCommentStart(text, index) {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const char = text[i];
+    if (char === '\n' || char === '\r' || char === ';') return true;
+    if (!/\s/.test(char)) return false;
+  }
+  return true;
+}
+
 function stripComments(sql) {
-  return sql
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/--[^\n]*/g, ' ');
+  if (typeof sql !== 'string') return '';
+  const text = sql.replace(/<!--[\s\S]*?-->/g, ' ');
+  let out = '';
+  let quote = '';
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (inLineComment) {
+      if (char === '\n') {
+        inLineComment = false;
+        out += '\n';
+      }
+      continue;
+    }
+    if (inBlockComment) {
+      if (char === '*' && next === '/') {
+        inBlockComment = false;
+        i += 1;
+        out += ' ';
+      }
+      continue;
+    }
+    if (quote) {
+      out += char;
+      if (char === '\\' && quote !== '`' && i + 1 < text.length) {
+        out += text[++i];
+        continue;
+      }
+      if (char === quote) {
+        if (next === quote) {
+          out += text[++i];
+          continue;
+        }
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '-' && next === '-') {
+      inLineComment = true;
+      i += 1;
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      inBlockComment = true;
+      i += 1;
+      continue;
+    }
+    if (char === '#' && next !== '{' && isHashCommentStart(text, i)) {
+      inLineComment = true;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      out += char;
+      continue;
+    }
+    out += char;
+  }
+  return out;
+}
+
+function maskStringLiterals(sql) {
+  let out = '';
+  for (let i = 0; i < sql.length; i += 1) {
+    const char = sql[i];
+    if (char !== "'") {
+      out += char;
+      continue;
+    }
+    out += "'";
+    i += 1;
+    while (i < sql.length) {
+      if (sql[i] === '\\' && i + 1 < sql.length) {
+        out += '  ';
+        i += 2;
+        continue;
+      }
+      if (sql[i] === "'" && sql[i + 1] === "'") {
+        out += "''";
+        i += 2;
+        continue;
+      }
+      if (sql[i] === "'") {
+        out += "'";
+        break;
+      }
+      out += ' ';
+      i += 1;
+    }
+  }
+  return out;
 }
 
 /** Turn MyBatis/annotation SQL into a readable one-liner with placeholders. */
@@ -60,7 +161,7 @@ export function operationOf(sql, fallback = 'select') {
 
 /** Extract table names referenced by a single SQL statement. */
 export function tablesFromSql(sql) {
-  const text = stripComments(String(sql ?? ''));
+  const text = maskStringLiterals(stripComments(String(sql ?? '')));
   const tables = new Set();
   // CTE aliases are not physical tables; skip them so `with x as (...)` does not
   // add a fake "x" table while the real table inside the CTE is kept.
@@ -178,33 +279,104 @@ export function extractAnnotationStatements(source, { file = '', packageName = '
   return statements;
 }
 
+function meaningfulSqlOffset(piece) {
+  let index = 0;
+  while (index < piece.length) {
+    while (index < piece.length && /\s/.test(piece[index])) index += 1;
+    if (piece[index] === '-' && piece[index + 1] === '-') {
+      const nl = piece.indexOf('\n', index + 2);
+      if (nl === -1) return piece.length;
+      index = nl + 1;
+      continue;
+    }
+    if (piece[index] === '/' && piece[index + 1] === '*') {
+      const close = piece.indexOf('*/', index + 2);
+      if (close === -1) return piece.length;
+      index = close + 2;
+      continue;
+    }
+    if (piece[index] === '#' && piece[index + 1] !== '{' && isHashCommentStart(piece, index)) {
+      const nl = piece.indexOf('\n', index + 1);
+      if (nl === -1) return piece.length;
+      index = nl + 1;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
 /** Split a `.sql` migration file into statements, keeping per-statement lines. */
 export function extractSqlFileStatements(source, { file = '' } = {}) {
   if (typeof source !== 'string' || !source) return [];
   const statements = [];
   const text = source;
-  let current = '';
   let start = 0;
-  let inString = false;
+  let quote = '';
+  let inLineComment = false;
+  let inBlockComment = false;
+
   for (let i = 0; i < text.length; i += 1) {
     const char = text[i];
-    if (char === "'" || char === '"') inString = !inString;
-    if (char === ';' && !inString) {
-      const piece = current;
-      pushPiece(piece, start);
-      current = '';
-      start = i + 1;
+    const next = text[i + 1];
+
+    if (inLineComment) {
+      if (char === '\n') inLineComment = false;
       continue;
     }
-    current += char;
+    if (inBlockComment) {
+      if (char === '*' && next === '/') {
+        inBlockComment = false;
+        i += 1;
+      }
+      continue;
+    }
+    if (quote) {
+      if (char === '\\' && quote !== '`' && i + 1 < text.length) {
+        i += 1;
+        continue;
+      }
+      if (char === quote) {
+        if (next === quote) {
+          i += 1;
+          continue;
+        }
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '-' && next === '-') {
+      inLineComment = true;
+      i += 1;
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      inBlockComment = true;
+      i += 1;
+      continue;
+    }
+    if (char === '#' && next !== '{' && isHashCommentStart(text, i)) {
+      inLineComment = true;
+      continue;
+    }
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === ';') {
+      pushPiece(text.slice(start, i), start);
+      start = i + 1;
+    }
   }
-  pushPiece(current, start);
+  pushPiece(text.slice(start), start);
 
   function pushPiece(piece, pieceStart) {
     const rawSql = normalizeSql(piece);
     if (!rawSql) return;
-    const leading = piece.length - piece.trimStart().length;
-    const meaningfulStart = pieceStart + leading;
+    const offset = meaningfulSqlOffset(piece);
+    const meaningfulStart = pieceStart + offset;
+    const meaningfulEnd = pieceStart + Math.max(offset, piece.trimEnd().length);
     const operation = operationOf(rawSql, '');
     if (!operation || !['select', 'insert', 'update', 'delete'].includes(operation)) return;
     statements.push({
@@ -215,7 +387,7 @@ export function extractSqlFileStatements(source, { file = '' } = {}) {
       rawSql,
       dynamic: false,
       line: lineAt(text, meaningfulStart),
-      lineEnd: lineAt(text, meaningfulStart + piece.trimEnd().length),
+      lineEnd: lineAt(text, meaningfulEnd),
       tables: tablesFromSql(rawSql),
       namespace: '',
       file,

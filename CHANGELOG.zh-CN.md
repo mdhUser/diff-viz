@@ -8,6 +8,18 @@
 发布新版本前，必须为本版本补充 `Added` / `Changed` / `Fixed` 等条目，并让
 `npm run release:check` 通过。
 
+## [Unreleased]
+
+### 新增
+
+- **Antigravity skill 目标**：`diff-viz skill install --agent antigravity`（别名 `agy`）用户级安装到 `~/.gemini/config/skills`，项目级安装到 `.agents/skills`。Agent 名称现在会 trim 并忽略大小写。
+
+### 修复
+
+- 重新生成 Review 时保留节点的 `ignored` 标记；之前只保留 `reviewed` 和 todo 完成状态。
+- `.sql` 语句切分现在支持 `--`、`/* */` 和 MySQL `#` 注释、引号字符串、反斜杠/双写引号转义，并给出准确的行号范围。
+- SQL 表名提取改为字符串感知：匹配前先屏蔽单引号字面量，`'from fake_table'` 这类值不会再产生假表；字符串里的 `--` / `/* */` 也不会再从展示 SQL 中被剥掉。
+
 ## [1.10.0] - 2026-11-25
 
 ### 变更

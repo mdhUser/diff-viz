@@ -27,7 +27,21 @@ export const AGENTS = {
     userRoot: () => path.join(os.homedir(), '.agents', 'skills'),
     projectRoot: path.join('.agents', 'skills'),
   },
+  antigravity: {
+    label: 'Antigravity',
+    userRoot: () => path.join(os.homedir(), '.gemini', 'config', 'skills'),
+    projectRoot: path.join('.agents', 'skills'),
+  },
 };
+
+const AGENT_ALIASES = {
+  agy: 'antigravity',
+};
+
+export function normalizeAgentName(agent) {
+  const key = String(agent ?? '').trim().toLowerCase();
+  return AGENT_ALIASES[key] || key;
+}
 
 const SKILL_DIR_ENTRIES = new Set([
   'SKILL.md',
@@ -47,7 +61,8 @@ export function agentNames() {
 
 export function resolveSkillsRoot({ agent = 'dsh', scope = 'user', dir, cwd = process.cwd() } = {}) {
   if (dir) return path.resolve(cwd, dir);
-  const entry = AGENTS[agent];
+  const resolvedAgent = normalizeAgentName(agent);
+  const entry = AGENTS[resolvedAgent];
   if (!entry) {
     throw new Error(`未知 agent：${agent}。可选：${agentNames().join(' / ')}`);
   }
@@ -109,8 +124,9 @@ export function installSkill({
 
   // Windows needs developer mode for symlinks, so copy there by default.
   const preferCopy = copy || process.platform === 'win32';
+  const resolvedAgent = dir ? agent : normalizeAgentName(agent);
 
-  const target = skillTargetPath({ agent, scope, dir, cwd });
+  const target = skillTargetPath({ agent: resolvedAgent, scope, dir, cwd });
   const targetDir = path.dirname(target);
   const existing = lstatSafe(target);
   const existingDir = lstatSafe(targetDir);
@@ -119,12 +135,12 @@ export function installSkill({
     if (existing.isSymbolicLink()) {
       const linked = path.resolve(targetDir, fs.readlinkSync(target));
       if (linked === sourcePath) {
-        return { status: 'unchanged', target, method: 'symlink', agent, scope };
+        return { status: 'unchanged', target, method: 'symlink', agent: resolvedAgent, scope };
       }
     } else if (existing.isFile() && preferCopy) {
       const same = fs.readFileSync(target, 'utf8') === fs.readFileSync(sourcePath, 'utf8');
       if (same) {
-        return { status: 'unchanged', target, method: 'copy', agent, scope };
+        return { status: 'unchanged', target, method: 'copy', agent: resolvedAgent, scope };
       }
     }
     if (!force) {
@@ -133,7 +149,7 @@ export function installSkill({
   }
 
   if (dryRun) {
-    return { status: 'dry-run', target, method: preferCopy ? 'copy' : 'symlink', agent, scope };
+    return { status: 'dry-run', target, method: preferCopy ? 'copy' : 'symlink', agent: resolvedAgent, scope };
   }
 
   // Replacing an old self-contained skill should remove its bin/src/dist too,
@@ -160,7 +176,7 @@ export function installSkill({
     status: existing || existingDir ? 'replaced' : 'installed',
     target,
     method,
-    agent,
+    agent: resolvedAgent,
     scope,
   };
 }

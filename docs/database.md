@@ -74,3 +74,6 @@ curl -H "X-Diff-Viz-Token: $(cat ~/.diff-viz/token)" \
 - 静态正则提取：动态表名（`${table}`）、跨 Mapper 的 `<include>` 外部片段、`@SelectProvider` 生成的 SQL 无法解析，会标记或跳过。
 - 只分析「本次图内文件」（变更 + 受影响）里的 SQL，不会输出整库表结构。
 - 不做跨服务数据血缘：workspace 视图暂不聚合各服务的表。
+- MySQL `#` 注释按「行首或分号后」识别；`SELECT a # b` 里的 `#` 保留为表达式，不当作注释。
+- PostgreSQL dollar-quoted 函数体（`$$ ... $$`）和 MySQL `DELIMITER` 内的存储过程暂不拆解，会保守跳过，避免把函数体里的 `;` 误当成语句边界。
+- 表名从单引号字符串字面量之外提取；双引号字符串/标识符仍按标识符处理，极端情况下字符串里的 `from` 可能产生误报。

@@ -37,8 +37,9 @@ diff-viz --no-open
 如果 Agent 支持 Skills，再注册一次薄 skill（只链接 `SKILL.md`）：
 
 ```bash
-diff-viz skill install --agent dsh      # DeepSeek Harness
-diff-viz skill install --agent claude   # Claude Code
+diff-viz skill install --agent dsh          # DeepSeek Harness
+diff-viz skill install --agent claude       # Claude Code
+diff-viz skill install --agent antigravity  # Antigravity（或 agy）
 diff-viz skill install --agent cursor --scope project
 ```
 
@@ -53,6 +54,20 @@ diff-viz skill install --agent dsh --scope project  # 项目级
 ```
 
 安装后新开一个 DSH 会话，技能目录里会出现 `diff-viz`。如果只想临时用、不注册 skill，直接让 Agent 运行 `npx -y diff-viz-cli --no-open` 即可。
+
+## Antigravity
+
+Antigravity 从 `~/.gemini/config/skills`（用户级）或 `<项目>/.agents/skills`（项目级）发现 skill：
+
+```bash
+npm install -g diff-viz-cli
+
+diff-viz skill install --agent antigravity                  # 用户级
+diff-viz skill install --agent agy                          # 简写
+diff-viz skill install --agent antigravity --scope project  # 项目级
+```
+
+安装后新开一个 Antigravity 会话即可在技能列表看到 `diff-viz`。
 
 ## Claude Code
 

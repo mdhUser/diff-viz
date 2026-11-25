@@ -1075,6 +1075,7 @@ export function mergePreviousState(data, previous) {
     const prior = priorById.get(node.path);
     if (!prior) continue;
     if (prior.reviewed) node.reviewed = true;
+    if (prior.ignored) node.ignored = true;
     const priorTodos = Array.isArray(prior.todos) ? prior.todos : [];
     const completedById = new Map();
     const completedByText = new Map();
