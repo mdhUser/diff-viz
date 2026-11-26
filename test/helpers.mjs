@@ -32,7 +32,18 @@ export function commitAll(dir, message = 'commit') {
 }
 
 export function cleanup(dir) {
-  fs.rmSync(dir, { recursive: true, force: true });
+  // Windows can briefly keep a directory locked after a child process exits
+  // (file watchers / antivirus). Retry instead of failing the test.
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt === 5) throw error;
+      const wait = new Int32Array(new SharedArrayBuffer(4));
+      Atomics.wait(wait, 0, 0, 200);
+    }
+  }
 }
 
 // Every hub endpoint except /api/health needs the access token now; keep tests

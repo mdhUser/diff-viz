@@ -137,7 +137,7 @@ test('MCP stdio server lists tools and round-trips a review + annotations', asyn
     await client.close();
     await stopHub(home);
     cleanup(repo);
-    fs.rmSync(home, { recursive: true, force: true });
+    cleanup(home);
     if (stderr.length > 0) {
       // Protocol stdout must stay clean; stderr may carry CLI warnings only.
     }

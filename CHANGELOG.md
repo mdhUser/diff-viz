@@ -8,6 +8,12 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 Before releasing a new version, you must add `Added` / `Changed` / `Fixed` entries for that version and make
 `npm run release:check` pass.
 
+## [1.12.1] - 2026-11-26
+
+### Fixed
+
+- Windows CI: retry temporary-directory cleanup after MCP/hub child processes exit. `EBUSY` could briefly fail the MCP round-trip test while a file watcher was still releasing the temp repository.
+
 ## [1.12.0] - 2026-11-26
 
 ### Added
