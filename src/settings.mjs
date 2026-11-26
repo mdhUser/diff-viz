@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { readJsonSafe, writeJsonAtomic } from './util.mjs';
+import { t } from './i18n.mjs';
 
 export const DEFAULT_HUB_SETTINGS = Object.freeze({
   language: null,
@@ -26,26 +27,26 @@ export function readHubSettings(home) {
 
 export function writeHubSettings(home, patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
-    throw new Error('设置必须是 JSON 对象。');
+    throw new Error(t('设置必须是 JSON 对象。'));
   }
   const current = readHubSettings(home);
   const next = { ...current };
 
   if (Object.prototype.hasOwnProperty.call(patch, 'language')) {
     if (patch.language !== null && patch.language !== 'zh' && patch.language !== 'en') {
-      throw new Error('language 只能是 zh / en / null。');
+      throw new Error(t('language 只能是 zh / en / null。'));
     }
     next.language = patch.language;
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'diffLayout')) {
     if (patch.diffLayout !== 'unified' && patch.diffLayout !== 'split') {
-      throw new Error('diffLayout 只能是 unified / split。');
+      throw new Error(t('diffLayout 只能是 unified / split。'));
     }
     next.diffLayout = patch.diffLayout;
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'commentsExpanded')) {
     if (typeof patch.commentsExpanded !== 'boolean') {
-      throw new Error('commentsExpanded 必须是布尔值。');
+      throw new Error(t('commentsExpanded 必须是布尔值。'));
     }
     next.commentsExpanded = patch.commentsExpanded;
   }

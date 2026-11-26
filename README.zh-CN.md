@@ -15,6 +15,8 @@ diff-viz 把一次 Git 改动展开成一张可交互的依赖拓扑图：改了
 
 ## 快速开始
 
+CLI 输出**默认英文**；需要中文时加 `--lang zh`，或设置 `DIFF_VIZ_LANG=zh`。
+
 要求：Node.js >= 20，在**任意 Git 仓库根目录**执行：
 
 ```bash
@@ -156,7 +158,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor / antigravity
 
 ## 版本与兼容
 
-当前版本 **1.11.1**：从 1.0.0 起冻结对外契约（CLI 参数、数据格式 v2、hub HTTP API、Agent 注解 JSON），1.x 内不做破坏性改动，破坏性变更进入 2.0.0。旧版单文件数据仍可读取并自动升级。
+当前版本 **1.12.0**：从 1.0.0 起冻结对外契约（CLI 参数、数据格式 v2、hub HTTP API、Agent 注解 JSON），1.x 内不做破坏性改动，破坏性变更进入 2.0.0。旧版单文件数据仍可读取并自动升级。
 
 版本历史见 [CHANGELOG.zh-CN.md](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.zh-CN.md)。
 

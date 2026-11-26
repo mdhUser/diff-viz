@@ -25,6 +25,7 @@ diff-viz skill install --agent dsh      # dsh | claude | cursor | agents | antig
 手动安装：把本文件放到 `<agent>/skills/diff-viz/SKILL.md` 即可。
 
 > **命令约定**：下文所有 `diff-viz` 指已安装的 CLI。
+> CLI 输出默认英文；需要中文输出时加 `--lang zh` 或设置 `DIFF_VIZ_LANG=zh`。
 > - 如果 `diff-viz` 不在 PATH，用 `npx -y diff-viz-cli` 代替。
 > - 只有从源码目录直接运行、且本文件所在目录包含 `bin/diff-viz.mjs` 时，才用 `node "$SKILL_DIR/bin/diff-viz.mjs"`（`$SKILL_DIR` 指本 `SKILL.md` 所在目录）。
 > - 不需要 `dist/` 或 `npm install`；npm 包已经包含前端构建产物。

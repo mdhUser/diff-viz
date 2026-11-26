@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { t } from './i18n.mjs';
 import readline from 'node:readline';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -23,34 +24,34 @@ const TOOLS = [
   {
     name: 'diff_viz_review',
     description:
-      '分析 Git 变更并生成/打开 diff-viz Review，返回带 token 的 URL。支持工作区、暂存区、最近提交、范围、目标分支、指定 commit、GitHub PR、GitLab MR；可同时传入 annotations 写入 Agent 摘要。',
+      t('分析 Git 变更并生成/打开 diff-viz Review，返回带 token 的 URL。支持工作区、暂存区、最近提交、范围、目标分支、指定 commit、GitHub PR、GitLab MR；可同时传入 annotations 写入 Agent 摘要。'),
     inputSchema: {
       type: 'object',
       properties: {
-        repo: { type: 'string', description: '仓库目录（默认 MCP server 启动目录）' },
+        repo: { type: 'string', description: t('仓库目录（默认 MCP server 启动目录）') },
         scope: {
           type: 'string',
           enum: ['worktree', 'staged', 'last', 'range', 'base', 'commit', 'pr', 'mr'],
-          description: '比较范围，默认 worktree',
+          description: t('比较范围，默认 worktree'),
         },
-        range: { type: 'string', description: 'scope=range 时必填，如 main..HEAD 或 main...HEAD' },
-        base: { type: 'string', description: 'scope=base 或 PR/MR 时的目标分支' },
-        commit: { type: 'string', description: 'scope=commit 时的提交' },
-        pullRequest: { type: ['string', 'number'], description: 'scope=pr/mr 时的编号或 URL' },
-        annotations: { type: 'object', description: '可选注解对象：{ meta:{overallSummary}, nodes:{ "path": { summary, impactAnalysis, todos } } }' },
+        range: { type: 'string', description: t('scope=range 时必填，如 main..HEAD 或 main...HEAD') },
+        base: { type: 'string', description: t('scope=base 或 PR/MR 时的目标分支') },
+        commit: { type: 'string', description: t('scope=commit 时的提交') },
+        pullRequest: { type: ['string', 'number'], description: t('scope=pr/mr 时的编号或 URL') },
+        annotations: { type: 'object', description: t('可选注解对象：{ meta:{overallSummary}, nodes:{ "path": { summary, impactAnalysis, todos } } }') },
       },
       additionalProperties: false,
     },
   },
   {
     name: 'diff_viz_get_review',
-    description: '读取已存在的 diff-viz Review 清单（meta、节点摘要、边、评论、表/配置），默认压缩节点字段。',
+    description: t('读取已存在的 diff-viz Review 清单（meta、节点摘要、边、评论、表/配置），默认压缩节点字段。'),
     inputSchema: {
       type: 'object',
       properties: {
-        reviewId: { type: 'string', description: 'Review id，或带 review 参数的 URL' },
-        compact: { type: 'boolean', description: '只返回 Agent 常用字段（默认 true）' },
-        full: { type: 'boolean', description: '包含懒加载内容（diff/源码/表 SQL），可能很大' },
+        reviewId: { type: 'string', description: t('Review id，或带 review 参数的 URL') },
+        compact: { type: 'boolean', description: t('只返回 Agent 常用字段（默认 true）') },
+        full: { type: 'boolean', description: t('包含懒加载内容（diff/源码/表 SQL），可能很大') },
       },
       required: ['reviewId'],
       additionalProperties: false,
@@ -58,13 +59,13 @@ const TOOLS = [
   },
   {
     name: 'diff_viz_get_node',
-    description: '读取单个文件节点的完整 diff / oldContent / newContent（默认超过 200KB 截断）。',
+    description: t('读取单个文件节点的完整 diff / oldContent / newContent（默认超过 200KB 截断）。'),
     inputSchema: {
       type: 'object',
       properties: {
         reviewId: { type: 'string' },
-        id: { type: 'string', description: '节点 id（通常等于仓库相对路径）' },
-        maxChars: { type: 'number', description: 'diff 文本截断长度，默认 200000' },
+        id: { type: 'string', description: t('节点 id（通常等于仓库相对路径）') },
+        maxChars: { type: 'number', description: t('diff 文本截断长度，默认 200000') },
       },
       required: ['reviewId', 'id'],
       additionalProperties: false,
@@ -72,14 +73,14 @@ const TOOLS = [
   },
   {
     name: 'diff_viz_annotate',
-    description: '把 Agent 摘要 / 影响分析 / 待确认项写入已有 Review（不会重新分析代码）。',
+    description: t('把 Agent 摘要 / 影响分析 / 待确认项写入已有 Review（不会重新分析代码）。'),
     inputSchema: {
       type: 'object',
       properties: {
-        reviewId: { type: 'string', description: '要写入的 hub Review id（优先）' },
-        dataPath: { type: 'string', description: '没有 reviewId 时写入本地数据文件' },
-        annotations: { type: 'object', description: '注解对象：{ meta:{overallSummary}, nodes:{...} }' },
-        summary: { type: 'string', description: '可选，覆盖整体摘要' },
+        reviewId: { type: 'string', description: t('要写入的 hub Review id（优先）') },
+        dataPath: { type: 'string', description: t('没有 reviewId 时写入本地数据文件') },
+        annotations: { type: 'object', description: t('注解对象：{ meta:{overallSummary}, nodes:{...} }') },
+        summary: { type: 'string', description: t('可选，覆盖整体摘要') },
       },
       required: ['annotations'],
       additionalProperties: false,
@@ -87,15 +88,15 @@ const TOOLS = [
   },
   {
     name: 'diff_viz_list_projects',
-    description: '列出 hub 中已注册的仓库/项目。',
+    description: t('列出 hub 中已注册的仓库/项目。'),
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'diff_viz_list_reviews',
-    description: '列出本地 hub 保存的 Review 快照（普通 Review、PR/MR、工作区），按时间倒序。',
+    description: t('列出本地 hub 保存的 Review 快照（普通 Review、PR/MR、工作区），按时间倒序。'),
     inputSchema: {
       type: 'object',
-      properties: { limit: { type: 'number', description: '默认 20，最多 100' } },
+      properties: { limit: { type: 'number', description: t('默认 20，最多 100') } },
       additionalProperties: false,
     },
   },
@@ -108,7 +109,7 @@ function hubBase(info) {
 
 async function hubGet(info, pathname) {
   if (!info || !(await hubIsAlive(info))) {
-    throw new Error('diff-viz hub 没有运行；请先运行 `diff-viz` 或 `diff-viz hub`。');
+    throw new Error(t('diff-viz hub 没有运行；请先运行 `diff-viz` 或 `diff-viz hub`。'));
   }
   const response = await fetch(`${hubBase(info)}${pathname}`, {
     headers: { ...hubAuthHeaders(info) },
@@ -120,7 +121,7 @@ async function hubGet(info, pathname) {
 
 function parseReviewId(value) {
   const raw = String(value || '').trim();
-  if (!raw) throw new Error('缺少 reviewId。');
+  if (!raw) throw new Error(t('缺少 reviewId。'));
   try {
     const url = new URL(raw);
     const reviewId = url.searchParams.get('review');
@@ -179,7 +180,7 @@ async function runCli(args, { cwd, env, timeout = 180_000 } = {}) {
     return { stdout: result.stdout || '', stderr: result.stderr || '' };
   } catch (error) {
     const detail = String(error.stderr || error.stdout || error.message || '').trim();
-    throw new Error(detail || `diff-viz 命令失败：${args.join(' ')}`);
+    throw new Error(detail || t('diff-viz 命令失败：{command}', { command: args.join(' ') }));
   }
 }
 
@@ -189,7 +190,7 @@ function parseReviewUrl(stdout) {
     .map((line) => line.trim())
     .filter((line) => line.startsWith('http://') || line.startsWith('https://'));
   const raw = lines[lines.length - 1];
-  if (!raw) throw new Error('diff-viz 没有返回 Review URL。');
+  if (!raw) throw new Error(t('diff-viz 没有返回 Review URL。'));
   const url = new URL(raw);
   return {
     url: raw,
@@ -206,20 +207,20 @@ async function toolReview(args, ctx) {
   if (scope === 'staged') cliArgs.push('--staged');
   else if (scope === 'last') cliArgs.push('--last');
   else if (scope === 'range') {
-    if (!args.range) throw new Error('scope=range 需要 range 参数。');
+    if (!args.range) throw new Error(t('scope=range 需要 range 参数。'));
     cliArgs.push('--range', String(args.range));
   } else if (scope === 'base') {
-    if (!args.base) throw new Error('scope=base 需要 base 参数。');
+    if (!args.base) throw new Error(t('scope=base 需要 base 参数。'));
     cliArgs.push('--base', String(args.base));
   } else if (scope === 'commit') {
-    if (!args.commit) throw new Error('scope=commit 需要 commit 参数。');
+    if (!args.commit) throw new Error(t('scope=commit 需要 commit 参数。'));
     cliArgs.push('--commit', String(args.commit));
   } else if (scope === 'pr' || scope === 'mr') {
-    if (!args.pullRequest) throw new Error(`scope=${scope} 需要 pullRequest 参数。`);
+    if (!args.pullRequest) throw new Error(t('scope={scope} 需要 pullRequest 参数。', { scope }));
     cliArgs.push(`--${scope}`, String(args.pullRequest));
     if (args.base) cliArgs.push('--base', String(args.base));
   } else if (scope !== 'worktree') {
-    throw new Error(`不支持的 scope：${scope}`);
+    throw new Error(t('不支持的 scope：{scope}', { scope }));
   }
 
   let tempAnnotations = null;
@@ -277,13 +278,13 @@ async function toolGetReview(args, ctx) {
 async function toolGetNode(args, ctx) {
   const reviewId = parseReviewId(args.reviewId);
   const id = String(args.id || '').trim();
-  if (!id) throw new Error('缺少 id。');
+  if (!id) throw new Error(t('缺少 id。'));
   const node = await hubGet(
     readHubInfo(ctx.env?.DIFF_VIZ_HOME || undefined),
     `/api/node?review=${encodeURIComponent(reviewId)}&id=${encodeURIComponent(id)}&t=${Date.now()}`,
   );
   const maxChars = Math.max(1000, Number(args.maxChars) || 200_000);
-  const trim = (value) => (typeof value === 'string' && value.length > maxChars ? `${value.slice(0, maxChars)}\n…（已截断）` : value);
+  const trim = (value) => (typeof value === 'string' && value.length > maxChars ? `${value.slice(0, maxChars)}\n${t('…（已截断）')}` : value);
   return {
     ...node,
     diff: trim(node.diff),
@@ -293,13 +294,13 @@ async function toolGetNode(args, ctx) {
 }
 
 async function toolAnnotate(args, ctx) {
-  if (!args.annotations || typeof args.annotations !== 'object') throw new Error('annotations 必须是对象。');
+  if (!args.annotations || typeof args.annotations !== 'object') throw new Error(t('annotations 必须是对象。'));
   const temp = path.join(os.tmpdir(), `diff-viz-mcp-annotations-${process.pid}-${Date.now()}.json`);
   fs.writeFileSync(temp, JSON.stringify(args.annotations, null, 2));
   const cliArgs = ['annotate', '--annotations', temp];
   if (args.reviewId) cliArgs.push('--review', parseReviewId(args.reviewId));
   else if (args.dataPath) cliArgs.push('--data', path.resolve(ctx.cwd, String(args.dataPath)));
-  else throw new Error('需要 reviewId 或 dataPath。');
+  else throw new Error(t('需要 reviewId 或 dataPath。'));
   if (args.summary) cliArgs.push('--summary', String(args.summary));
   try {
     const { stdout } = await runCli(cliArgs, ctx);
@@ -395,7 +396,7 @@ export async function handleMcpMessage(message, ctx = {}) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
         instructions:
-          'diff-viz 本地变更 Review。使用 diff_viz_review 生成 Review，diff_viz_get_review / diff_viz_get_node 读取拓扑和 Diff，diff_viz_annotate 写入 Agent 摘要。需要先启动 hub（diff-viz 命令会自动启动）。',
+          t('diff-viz 本地变更 Review。使用 diff_viz_review 生成 Review，diff_viz_get_review / diff_viz_get_node 读取拓扑和 Diff，diff_viz_annotate 写入 Agent 摘要。需要先启动 hub（diff-viz 命令会自动启动）。'),
       },
     };
   }
@@ -406,7 +407,7 @@ export async function handleMcpMessage(message, ctx = {}) {
   if (method === 'tools/call') {
     const name = params?.name;
     const handler = TOOL_HANDLERS[name];
-    if (!handler) return rpcError(id, -32601, `未知工具：${name}`);
+    if (!handler) return rpcError(id, -32601, t('未知工具：{name}', { name }));
     const args = params?.arguments && typeof params.arguments === 'object' ? params.arguments : {};
     try {
       const result = await handler(args, { cwd: ctx.cwd || process.cwd(), env: ctx.env || process.env });
@@ -420,7 +421,7 @@ export async function handleMcpMessage(message, ctx = {}) {
     }
   }
   if (isNotification) return null;
-  return rpcError(id, -32601, `未知方法：${method}`);
+  return rpcError(id, -32601, t('未知方法：{method}', { method }));
 }
 
 /**

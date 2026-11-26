@@ -8,6 +8,16 @@
 发布新版本前，必须为本版本补充 `Added` / `Changed` / `Fixed` 等条目，并让
 `npm run release:check` 通过。
 
+## [1.12.0] - 2026-11-26
+
+### 新增
+
+- **CLI 中英双语，默认英文**：help、状态输出、参数错误、hub HTTP 错误和 MCP 工具描述默认英文。加 `--lang zh` 或设置 `DIFF_VIZ_LANG=zh` 切换中文，`--lang` 优先于环境变量。Web UI 会发送 `X-Diff-Viz-Lang`，hub 错误跟随界面语言。
+
+### 变更
+
+- CLI 输出中的范围标签会随语言本地化；自动生成的 Review 内容（启发式摘要、Agent 注解、Reviewer 评论正文）仍保持生成时的语言。
+
 ## [1.11.1] - 2026-11-26
 
 ### 修复

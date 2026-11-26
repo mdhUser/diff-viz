@@ -8,6 +8,16 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 Before releasing a new version, you must add `Added` / `Changed` / `Fixed` entries for that version and make
 `npm run release:check` pass.
 
+## [1.12.0] - 2026-11-26
+
+### Added
+
+- **Bilingual CLI, English by default**: help, status output, argument errors, hub HTTP errors and MCP tool descriptions now default to English. Pass `--lang zh` or set `DIFF_VIZ_LANG=zh` for Chinese; `--lang` wins over the environment variable. The web UI sends `X-Diff-Viz-Lang`, so hub errors follow the interface language.
+
+### Changed
+
+- CLI range labels are localized in output. Generated review content (heuristic summaries, agent annotations, reviewer comment bodies) remains in the language it was created in.
+
 ## [1.11.1] - 2026-11-26
 
 ### Fixed

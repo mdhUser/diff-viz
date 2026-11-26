@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { t } from './i18n.mjs';
 import path from 'node:path';
 import { toPosix } from './util.mjs';
 
@@ -75,17 +76,17 @@ function normalizePatterns(patterns) {
 }
 
 function normalizeSpec(raw) {
-  if (!raw || typeof raw !== 'object') throw new Error('语言定义必须是对象。');
+  if (!raw || typeof raw !== 'object') throw new Error(t('语言定义必须是对象。'));
   const id = String(raw.id || '').trim();
-  if (!id) throw new Error('语言定义缺少 id。');
+  if (!id) throw new Error(t('语言定义缺少 id。'));
   const extensions = (raw.extensions || []).map((ext) => String(ext).toLowerCase());
-  if (!extensions.length) throw new Error(`语言 ${id} 缺少 extensions。`);
+  if (!extensions.length) throw new Error(t('语言 {id} 缺少 extensions。', { id }));
   const strategy = raw.strategy || PACKAGE_STRATEGY;
   if (![PACKAGE_STRATEGY, RELATIVE_STRATEGY, RUST_STRATEGY].includes(strategy)) {
-    throw new Error(`语言 ${id} 的 strategy 不支持：${strategy}`);
+    throw new Error(t('语言 {id} 的 strategy 不支持：{strategy}', { id, strategy }));
   }
   const imports = normalizePatterns(raw.importPatterns || raw.imports);
-  if (!imports.length) throw new Error(`语言 ${id} 缺少 importPatterns。`);
+  if (!imports.length) throw new Error(t('语言 {id} 缺少 importPatterns。', { id }));
   const ignorePrefixes = raw.ignorePrefixes || [];
   return {
     id,
@@ -106,7 +107,7 @@ function normalizeSpec(raw) {
 export function loadLanguageSpecs(file) {
   const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
   const list = Array.isArray(raw) ? raw : raw.languages;
-  if (!Array.isArray(list)) throw new Error('语言配置需要 { "languages": [...] } 或数组。');
+  if (!Array.isArray(list)) throw new Error(t('语言配置需要 { "languages": [...] } 或数组。'));
   return list.map(normalizeSpec);
 }
 

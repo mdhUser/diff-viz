@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import http from 'node:http';
 import path from 'node:path';
+import { t } from './i18n.mjs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readReviewStore } from './review-store.mjs';
@@ -53,7 +54,7 @@ async function readBody(req, limit = 1024 * 1024) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > limit) throw new Error('请求体过大');
+    if (size > limit) throw new Error(t('请求体过大'));
     chunks.push(chunk);
   }
   if (chunks.length === 0) return {};
@@ -61,21 +62,21 @@ async function readBody(req, limit = 1024 * 1024) {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error('请求体不是合法 JSON');
+    throw new Error(t('请求体不是合法 JSON'));
   }
 }
 
 export function updateReviewState(dataPath, payload) {
   const store = readReviewStore(dataPath);
   const data = store.manifest;
-  if (!Array.isArray(data.nodes)) throw new Error('数据文件格式不正确。');
+  if (!Array.isArray(data.nodes)) throw new Error(t('数据文件格式不正确。'));
   const node = store.findNode(payload.nodeId);
-  if (!node) throw new Error(`节点不存在：${payload.nodeId}`);
+  if (!node) throw new Error(t('节点不存在：{nodeId}', { nodeId: payload.nodeId }));
 
   if (payload.action === 'addTodo') {
     const text = String(payload.text || '').trim();
-    if (!text) throw new Error('待办内容不能为空。');
-    if (text.length > 500) throw new Error('待办内容过长（最多 500 字）。');
+    if (!text) throw new Error(t('待办内容不能为空。'));
+    if (text.length > 500) throw new Error(t('待办内容过长（最多 500 字）。'));
     const todo = {
       id: `manual-${shortId(`${node.path}::${text}::${Date.now()}`, 10)}`,
       text,
@@ -95,7 +96,7 @@ export function updateReviewState(dataPath, payload) {
   if (payload.todoId) {
     node.todos = Array.isArray(node.todos) ? node.todos : [];
     const todo = node.todos.find((item) => item.id === payload.todoId);
-    if (!todo) throw new Error(`待办不存在：${payload.todoId}`);
+    if (!todo) throw new Error(t('待办不存在：{todoId}', { todoId: payload.todoId }));
     todo.completed = Boolean(payload.completed);
   }
   if (payload.reviewed !== undefined) node.reviewed = Boolean(payload.reviewed);
@@ -130,7 +131,7 @@ function createRequestHandler({ dataPath, host = '127.0.0.1' }) {
 
       if (pathname === '/api/data') {
         if (!fs.existsSync(dataPath)) {
-          sendJson(res, 404, { error: '数据文件不存在，请重新运行 diff-viz。' });
+          sendJson(res, 404, { error: t('数据文件不存在，请重新运行 diff-viz。') });
           return;
         }
         const store = readReviewStore(dataPath);
@@ -149,7 +150,7 @@ function createRequestHandler({ dataPath, host = '127.0.0.1' }) {
         const store = readReviewStore(dataPath);
         const node = store.readNode(url.searchParams.get('id'));
         if (!node) {
-          sendJson(res, 404, { error: '节点不存在。' });
+          sendJson(res, 404, { error: t('节点不存在。') });
           return;
         }
         sendJson(res, 200, node);
@@ -160,7 +161,7 @@ function createRequestHandler({ dataPath, host = '127.0.0.1' }) {
         const store = readReviewStore(dataPath);
         const table = store.readTable(url.searchParams.get('table') || url.searchParams.get('id'));
         if (!table) {
-          sendJson(res, 404, { error: '数据表不存在。' });
+          sendJson(res, 404, { error: t('数据表不存在。') });
           return;
         }
         sendJson(res, 200, table);
@@ -187,7 +188,7 @@ function createRequestHandler({ dataPath, host = '127.0.0.1' }) {
         sendText(
           res,
           503,
-          'Review UI 尚未构建。请在工具目录执行 `npm install && npm run build` 后重试。',
+          t('Review UI 尚未构建。请在工具目录执行 `npm install && npm run build` 后重试。'),
           'text/plain; charset=utf-8',
         );
         return;
@@ -289,8 +290,8 @@ export async function startServer({ dataPath, port = 5173, host = '127.0.0.1', o
     process.stdout.write(`${url}\n`);
   } else {
     process.stdout.write(`\n  Review UI  ${url}\n`);
-    process.stdout.write(`  数据文件   ${dataPath}\n`);
-    process.stdout.write('  按 Ctrl+C 停止服务\n\n');
+    process.stdout.write(t('  数据文件   {path}\n', { path: dataPath }));
+    process.stdout.write(t('  按 Ctrl+C 停止服务\n\n'));
   }
 
   return {

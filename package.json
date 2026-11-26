@@ -1,6 +1,6 @@
 {
   "name": "diff-viz-cli",
-  "version": "1.11.1",
+  "version": "1.12.0",
   "type": "module",
   "description": "Local git change review visualizer: dependency topology, code diffs, impact analysis and review todos.",
   "bin": {
@@ -18,7 +18,7 @@
   "scripts": {
     "build": "vite build",
     "dev:web": "vite",
-    "test": "node --test",
+    "test": "node --require ./test/setup.cjs --test",
     "typecheck": "tsc --noEmit",
     "demo": "node scripts/demo.mjs",
     "package:skill": "node scripts/build-skill-package.mjs",

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { t } from './i18n.mjs';
 import path from 'node:path';
 import { GitRepo } from './git.mjs';
 import { parseUnifiedDiff, extractTodosFromAddedLines } from './diff-parse.mjs';
@@ -98,7 +99,7 @@ export function resolveScope(repo, options = {}) {
 
   if (options.commit) {
     const target = repo.revParse(options.commit);
-    if (!target) throw new Error(`无法解析提交：${options.commit}`);
+    if (!target) throw new Error(t('无法解析提交：{commit}', { commit: options.commit }));
     const parent = repo.revParse(`${options.commit}~1`) || emptyTree;
     return runRevDiff(parent, target, `提交 ${target.slice(0, 8)}`);
   }
@@ -106,7 +107,7 @@ export function resolveScope(repo, options = {}) {
   if (options.last) {
     const parent = head ? repo.revParse('HEAD~1') : null;
     const baseRef = parent || emptyTree;
-    if (!head) throw new Error('当前仓库还没有提交，无法查看最近一次提交。');
+    if (!head) throw new Error(t('当前仓库还没有提交，无法查看最近一次提交。'));
     return runRevDiff(baseRef, head, parent ? `最近提交 · ${head.slice(0, 8)}` : `首个提交 · ${head.slice(0, 8)}`);
   }
 
@@ -119,29 +120,29 @@ export function resolveScope(repo, options = {}) {
       const [from, to] = range.split('...');
       const target = to || 'HEAD';
       targetRef = repo.revParse(target);
-      if (!targetRef) throw new Error(`无法解析提交范围：${range}`);
+      if (!targetRef) throw new Error(t('无法解析提交范围：{range}', { range }));
       baseRef = repo.mergeBase(from, targetRef);
-      if (!baseRef) throw new Error(`找不到 ${from} 与 ${target} 的共同祖先。`);
+      if (!baseRef) throw new Error(t('找不到 {from} 与 {target} 的共同祖先。', { from, target }));
       display = `${from}...${to || 'HEAD'}`;
     } else if (range.includes('..')) {
       const [from, to] = range.split('..');
       baseRef = repo.revParse(from);
       targetRef = repo.revParse(to || 'HEAD');
-      if (!baseRef || !targetRef) throw new Error(`无法解析提交范围：${range}`);
+      if (!baseRef || !targetRef) throw new Error(t('无法解析提交范围：{range}', { range }));
       display = `${from}..${to || 'HEAD'}`;
     } else {
       baseRef = repo.revParse(range);
       targetRef = head;
-      if (!baseRef || !targetRef) throw new Error(`无法解析提交范围：${range}`);
+      if (!baseRef || !targetRef) throw new Error(t('无法解析提交范围：{range}', { range }));
       display = `${range}..HEAD`;
     }
     return runRevDiff(baseRef, targetRef, `${display} (${String(range).slice(0, 48)})`);
   }
 
   if (options.base) {
-    if (!head) throw new Error('当前仓库还没有提交，无法与目标分支比较。');
+    if (!head) throw new Error(t('当前仓库还没有提交，无法与目标分支比较。'));
     const baseRef = repo.mergeBase(options.base, head);
-    if (!baseRef) throw new Error(`无法找到 ${options.base} 与 HEAD 的共同祖先。`);
+    if (!baseRef) throw new Error(t('无法找到 {base} 与 HEAD 的共同祖先。', { base: options.base }));
     return runRevDiff(baseRef, head, `${options.base}...HEAD`);
   }
 
@@ -423,13 +424,13 @@ function loadRegistry(root, option) {
     ? path.resolve(process.cwd(), String(option))
     : path.join(root, '.diff-viz', 'languages.json');
   if (!fs.existsSync(file)) {
-    if (explicit) throw new Error(`语言配置不存在：${file}`);
+    if (explicit) throw new Error(t('语言配置不存在：{file}', { file }));
     return registryFor([]);
   }
   try {
     return registryFor(loadLanguageSpecs(file));
   } catch (error) {
-    throw new Error(`语言配置读取失败（${file}）：${error.message}`);
+    throw new Error(t('语言配置读取失败（{file}）：{error}', { file, error: error.message }));
   }
 }
 

@@ -36,6 +36,7 @@ import {
   writeJsonAtomic,
 } from './util.mjs';
 import { hubSettingsPath, readHubSettings, writeHubSettings } from './settings.mjs';
+import { getLanguage, setLanguage, t } from './i18n.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, '..', 'dist');
@@ -128,14 +129,14 @@ async function readBody(req, limit = 80 * 1024 * 1024) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > limit) throw new Error('请求体过大');
+    if (size > limit) throw new Error(t('请求体过大'));
     chunks.push(chunk);
   }
   if (chunks.length === 0) return {};
   try {
     return JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
-    throw new Error('请求体不是合法 JSON');
+    throw new Error(t('请求体不是合法 JSON'));
   }
 }
 
@@ -727,22 +728,22 @@ export async function startHub({
   };
 
   const registerProject = (rootInput) => {
-    if (!rootInput) throw new Error('缺少仓库路径。');
+    if (!rootInput) throw new Error(t('缺少仓库路径。'));
     const candidate = normalizeRoot(rootInput);
     let stat = null;
     try {
       stat = fs.statSync(candidate);
     } catch {
-      throw new Error(`目录不存在：${candidate}`);
+      throw new Error(t('目录不存在：{dir}', { dir: candidate }));
     }
-    if (!stat.isDirectory()) throw new Error(`不是目录：${candidate}`);
+    if (!stat.isDirectory()) throw new Error(t('不是目录：{dir}', { dir: candidate }));
     let top = '';
     try {
       top = findRepoRoot(candidate);
     } catch {
-      throw new Error(`不是 Git 仓库：${candidate}`);
+      throw new Error(t('不是 Git 仓库：{dir}', { dir: candidate }));
     }
-    if (!top) throw new Error(`不是 Git 仓库：${candidate}`);
+    if (!top) throw new Error(t('不是 Git 仓库：{dir}', { dir: top }));
     const repo = new GitRepo(normalizeRoot(top));
     const root = normalizeRoot(repo.root);
     const id = shortId(root, 12);
@@ -768,9 +769,9 @@ export async function startHub({
   };
 
   const getProject = (idInput) => {
-    if (!idInput) throw new Error('缺少 projectId。');
+    if (!idInput) throw new Error(t('缺少 projectId。'));
     const project = projects.get(idInput);
-    if (!project) throw new Error(`未知仓库：${idInput}`);
+    if (!project) throw new Error(t('未知仓库：{id}', { id: idInput }));
     return project;
   };
 
@@ -797,7 +798,7 @@ export async function startHub({
     else if (scope === 'commit') options.commit = payload.commit;
     else if (scope === 'range') options.range = payload.range;
     else if (scope === 'base') options.base = payload.base;
-    else throw new Error(`不支持的 scope：${scope}`);
+    else throw new Error(t('不支持的 scope：{scope}', { scope }));
     if (payload.annotations && typeof payload.annotations === 'object') options.annotations = payload.annotations;
     if (payload.summary) options.summary = String(payload.summary);
     if (maxScanFiles) options.maxScanFiles = Number(maxScanFiles);
@@ -1017,7 +1018,7 @@ export async function startHub({
     let data = null;
     if (!sourceStore) {
       data = payload.data;
-      if (!data?.meta || !Array.isArray(data.nodes)) throw new Error('导入的数据格式不正确。');
+      if (!data?.meta || !Array.isArray(data.nodes)) throw new Error(t('导入的数据格式不正确。'));
     }
     const meta = sourceStore ? sourceStore.manifest.meta : data.meta;
     const inferredScope =
@@ -1076,6 +1077,8 @@ export async function startHub({
   const handler = async (req, res) => {
     const url = new URL(req.url || '/', 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
+    const requestedLanguage = String(req.headers['x-diff-viz-lang'] || '').toLowerCase();
+    if (requestedLanguage === 'zh' || requestedLanguage === 'en') setLanguage(requestedLanguage);
 
     try {
       const untrusted = checkRequestTrust(req, { hostnames: allowedHosts });
@@ -1090,7 +1093,7 @@ export async function startHub({
       if (needsToken && !tokenMatches(token, extractToken(req, url))) {
         sendJson(res, 401, {
           error:
-            '缺少或无效的访问令牌：请从 diff-viz 打印的带 token 链接打开，或在请求头带上 X-Diff-Viz-Token（token 见 ~/.diff-viz/token）。',
+            t('缺少或无效的访问令牌：请从 diff-viz 打印的带 token 链接打开，或在请求头带上 X-Diff-Viz-Token（token 见 ~/.diff-viz/token）。'),
         });
         return;
       }
@@ -1249,7 +1252,7 @@ export async function startHub({
 
       if (pathname === '/api/workspace' && req.method === 'POST') {
         const payload = await readBody(req);
-        if (!payload.file) throw new Error('缺少 workspace 文件路径。');
+        if (!payload.file) throw new Error(t('缺少 workspace 文件路径。'));
         const { reviewId, data } = analyzeWorkspace(payload.file);
         sendJson(res, 200, {
           ok: true,
@@ -1264,7 +1267,7 @@ export async function startHub({
       if (pathname === '/api/workspace/history') {
         const file = url.searchParams.get('file');
         if (!file) {
-          sendJson(res, 400, { error: '缺少 file 参数。' });
+          sendJson(res, 400, { error: t('缺少 file 参数。') });
           return;
         }
         sendJson(res, 200, { ok: true, file: path.resolve(file), versions: workspaceHistory(file) });
@@ -1281,7 +1284,7 @@ export async function startHub({
       if (pathname === '/api/projects' && req.method === 'DELETE') {
         const id = url.searchParams.get('id');
         if (!removeProject(id)) {
-          sendJson(res, 404, { error: `未知仓库：${id ?? '(空)'}` });
+          sendJson(res, 404, { error: t('未知仓库：{id}', { id: id ?? t('(空)') }) });
           return;
         }
         sendJson(res, 200, { ok: true });
@@ -1294,7 +1297,7 @@ export async function startHub({
         if (payload.pull) {
           const number = Number(payload.pull.number);
           if (!Number.isInteger(number) || number <= 0) {
-            sendJson(res, 400, { error: '缺少有效的 PR/MR 编号。' });
+            sendJson(res, 400, { error: t('缺少有效的 PR/MR 编号。') });
             return;
           }
           const prepared = await preparePullReview(new GitRepo(project.root), {
@@ -1342,10 +1345,10 @@ export async function startHub({
       if (pathname === '/api/annotate' && req.method === 'POST') {
         const payload = await readBody(req);
         const reviewId = safeReviewId(payload.reviewId, '');
-        if (!reviewId) throw new Error('缺少 reviewId。');
+        if (!reviewId) throw new Error(t('缺少 reviewId。'));
         const store = loadStore(reviewId);
         if (!store) {
-          sendJson(res, 404, { error: 'hub 没有该 Review 快照。' });
+          sendJson(res, 404, { error: t('hub 没有该 Review 快照。') });
           return;
         }
         const data = store.manifest;
@@ -1369,12 +1372,12 @@ export async function startHub({
       if (pathname === '/api/data') {
         const reviewId = safeReviewId(url.searchParams.get('review'), '');
         if (!reviewId) {
-          sendJson(res, 400, { error: '缺少 review 参数。' });
+          sendJson(res, 400, { error: t('缺少 review 参数。') });
           return;
         }
         const store = loadStore(reviewId);
         if (!store) {
-          sendJson(res, 404, { error: '找不到该 Review。' });
+          sendJson(res, 404, { error: t('找不到该 Review。') });
           return;
         }
         // Historical reviews may not carry agent annotations themselves; reuse
@@ -1398,17 +1401,17 @@ export async function startHub({
       if (pathname === '/api/node') {
         const reviewId = safeReviewId(url.searchParams.get('review'), '');
         if (!reviewId) {
-          sendJson(res, 400, { error: '缺少 review 参数。' });
+          sendJson(res, 400, { error: t('缺少 review 参数。') });
           return;
         }
         const store = loadStore(reviewId);
         if (!store) {
-          sendJson(res, 404, { error: '找不到该 Review。' });
+          sendJson(res, 404, { error: t('找不到该 Review。') });
           return;
         }
         const node = store.readNode(url.searchParams.get('id'));
         if (!node) {
-          sendJson(res, 404, { error: '节点不存在。' });
+          sendJson(res, 404, { error: t('节点不存在。') });
           return;
         }
         sendJson(res, 200, node);
@@ -1418,18 +1421,18 @@ export async function startHub({
       if (pathname === '/api/table') {
         const reviewId = safeReviewId(url.searchParams.get('review'), '');
         if (!reviewId) {
-          sendJson(res, 400, { error: '缺少 review 参数。' });
+          sendJson(res, 400, { error: t('缺少 review 参数。') });
           return;
         }
         const store = loadStore(reviewId);
         if (!store) {
-          sendJson(res, 404, { error: '找不到该 Review。' });
+          sendJson(res, 404, { error: t('找不到该 Review。') });
           return;
         }
         const tableId = url.searchParams.get('table') || url.searchParams.get('id');
         const table = store.readTable(tableId);
         if (!table) {
-          sendJson(res, 404, { error: '数据表不存在。' });
+          sendJson(res, 404, { error: t('数据表不存在。') });
           return;
         }
         sendJson(res, 200, table);
@@ -1439,9 +1442,9 @@ export async function startHub({
       if (pathname === '/api/state' && req.method === 'POST') {
         const payload = await readBody(req);
         const reviewId = safeReviewId(payload.reviewId, '');
-        if (!reviewId) throw new Error('缺少 reviewId。');
+        if (!reviewId) throw new Error(t('缺少 reviewId。'));
         const store = loadStore(reviewId);
-        if (!store) throw new Error('找不到该 Review 数据。');
+        if (!store) throw new Error(t('找不到该 Review 数据。'));
         reviews.delete(reviewId);
         const result = updateReviewState(store.target, payload);
         sendJson(res, 200, result);
@@ -1491,9 +1494,9 @@ export async function startHub({
   if (open) openInBrowser(withHubToken(url, token));
   if (!quiet) {
     process.stdout.write(`\n  diff-viz hub  ${url}\n`);
-    if (token) process.stdout.write(`  带令牌链接    ${withHubToken(url, token)}\n`);
-    process.stdout.write(`  状态目录      ${home}\n`);
-    process.stdout.write('  按 Ctrl+C 停止 hub\n\n');
+    if (token) process.stdout.write(t('  带令牌链接    {url}\n', { url: withHubToken(url, token) }));
+    process.stdout.write(t('  状态目录      {home}\n', { home }));
+    process.stdout.write(t('  按 Ctrl+C 停止 hub\n\n'));
   }
 
   return {
@@ -1569,7 +1572,7 @@ export async function ensureHub({ port, host = '127.0.0.1', home = hubHome() } =
     {
       detached: true,
       stdio: 'ignore',
-      env: { ...process.env },
+      env: { ...process.env, DIFF_VIZ_LANG: getLanguage() },
     },
   );
   child.unref();
@@ -1589,7 +1592,7 @@ export async function ensureHub({ port, host = '127.0.0.1', home = hubHome() } =
       };
     }
   }
-  throw new Error('diff-viz hub 启动超时，请检查端口或手动运行 `diff-viz hub`。');
+  throw new Error(t('diff-viz hub 启动超时，请检查端口或手动运行 `diff-viz hub`。'));
 }
 
 export async function stopHub(home = hubHome()) {

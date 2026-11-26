@@ -20,11 +20,12 @@ import { AGENTS, agentNames, installSkill, normalizeAgentName } from './skill.mj
 import { writeJsonAtomic } from './util.mjs';
 import { parsePullNumber, preparePullReview, pullLabel } from './remotes.mjs';
 import { attachComments, fetchPullComments } from './comments.mjs';
+import { getLanguage, languageFromArgv, localizeRangeLabel, setLanguage, t } from './i18n.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
 
-const HELP = `
+const HELP_ZH = `
 diff-viz · 本地代码变更可视化 Review 工具
 
 用法:
@@ -80,10 +81,75 @@ Skill:
 其他:
   -h, --help              显示帮助
   -v, --version           显示版本
+  --lang <en|zh>          CLI 语言（默认 en）
   --quiet                 减少日志
 `;
 
-const SKILL_HELP = `
+const HELP_EN = `
+diff-viz · local code-change review visualizer
+
+Usage:
+  diff-viz [review] [options]         Analyze Git changes and register them with the local hub
+  diff-viz serve [options]            Register existing data with the hub and open it
+  diff-viz annotate [options]         Merge agent/human annotations into the data file
+  diff-viz mcp                        Run the MCP stdio server for AI agents
+  diff-viz hub [options]              Start the persistent hub in the foreground
+  diff-viz stop                       Stop the local hub
+  diff-viz workspace [--init]         Analyze a multi-repository workspace (./diff-viz.workspace.json)
+  diff-viz skill install [options]    Register the thin SKILL.md with an agent skills directory
+
+Scope (default: worktree changes; otherwise the latest commit):
+  --staged                Only staged changes (git diff --cached)
+  --last                  Latest commit
+  --range <A..B|A...B>    Commit range
+  --base <ref>            Diff against a branch/ref (merge-base..HEAD)
+  --commit <ref>          A specific commit (parent..commit)
+  --pr <number|URL>       Analyze a GitHub PR (fetches refs/pull/<n>/head)
+  --mr <number|URL>       Analyze a GitLab MR (fetches refs/merge-requests/<iid>/head)
+
+Output and UI:
+  --data <file>           Manifest path (default <repo>/.diff-review-data.json; node content in <file>.nodes/)
+  --annotations <file>    Merge annotations while generating (JSON, see SKILL.md)
+  --node <path>           Limit annotate to one node
+  --review <id>           Annotate an existing hub review (including historical commit reviews)
+  --languages <file>      Extra language definitions (or <repo>/.diff-viz/languages.json)
+  --summary <text>        Override the overall summary
+  --json-only             Print JSON only; do not start the UI
+  --port <n>              Hub port (default 5173; auto-increments when busy)
+  --host <addr>           Listen address (default 127.0.0.1)
+  --no-open               Do not open a browser
+
+Analysis:
+  --impact-depth <n>      Downstream impact depth (default 3)
+  --max-impact <n>        Maximum impacted files to show (default 120)
+  --max-scan-files <n>    Maximum code files to scan (default 15000)
+  --no-untracked          Exclude untracked files
+  --repo <dir>            Repository directory (default: current directory)
+
+Workspace (multi-repository):
+  --workspace <file>      Analyze all repositories in a workspace JSON file
+  --init                  With workspace, generate a template
+
+Skill:
+  --agent <name>          dsh | claude | cursor | agents | antigravity (or agy; default dsh)
+  --scope <user|project>  User or project scope (default user)
+  --dir <dir>             Custom skills root
+  --copy                  Copy SKILL.md (default: symlink)
+  --force                 Overwrite an existing install
+  --dry-run               Print the target only
+
+Other:
+  -h, --help              Show help
+  -v, --version           Show version
+  --lang <en|zh>          CLI language (default en)
+  --quiet                 Reduce log output
+`;
+
+function helpText() {
+  return getLanguage() === 'zh' ? HELP_ZH : HELP_EN;
+}
+
+const SKILL_HELP_ZH = `
 diff-viz skill install · 把 thin SKILL.md 注册到 Agent 技能目录
 
 用法:
@@ -96,6 +162,7 @@ diff-viz skill install · 把 thin SKILL.md 注册到 Agent 技能目录
   --copy                   复制 SKILL.md，不建 symlink
   --force                  覆盖已有安装
   --dry-run                只显示目标路径，不写入
+  --lang <en|zh>           CLI 语言（默认 en）
   -h, --help               显示帮助
 
 示例:
@@ -103,6 +170,32 @@ diff-viz skill install · 把 thin SKILL.md 注册到 Agent 技能目录
   diff-viz skill install --agent claude --scope project
   diff-viz skill install --dir ~/.config/my-agent/skills --copy
 `;
+
+const SKILL_HELP_EN = `
+diff-viz skill install · register the thin SKILL.md with an agent skills directory
+
+Usage:
+  diff-viz skill install [options]
+
+Options:
+  --agent <name>          dsh | claude | cursor | agents | antigravity (or agy; default dsh)
+  --scope <user|project>  User or project scope (default user)
+  --dir <dir>             Custom skills root (overrides agent/scope)
+  --copy                  Copy SKILL.md instead of symlinking
+  --force                 Overwrite an existing install
+  --dry-run               Print the target only; do not write
+  --lang <en|zh>          CLI language (default en)
+  -h, --help              Show help
+
+Examples:
+  diff-viz skill install --agent dsh
+  diff-viz skill install --agent claude --scope project
+  diff-viz skill install --dir ~/.config/my-agent/skills --copy
+`;
+
+function skillHelpText() {
+  return getLanguage() === 'zh' ? SKILL_HELP_ZH : SKILL_HELP_EN;
+}
 
 const BOOLEAN_FLAGS = new Set([
   'staged',
@@ -137,6 +230,7 @@ const VALUE_FLAGS = new Set([
   'languages',
   'workspace',
   'review',
+  'lang',
 ]);
 
 function toCamel(name) {
@@ -148,7 +242,7 @@ export function parseArgs(argv) {
   let index = 0;
   if (argv[0] && !argv[0].startsWith('-')) {
     if (!['review', 'serve', 'annotate', 'hub', 'stop', 'workspace', 'mcp'].includes(argv[0])) {
-      throw new Error(`未知命令：${argv[0]}`);
+      throw new Error(t('未知命令：{command}', { command: argv[0] }));
     }
     options.command = argv[0];
     index = 1;
@@ -156,7 +250,7 @@ export function parseArgs(argv) {
   for (; index < argv.length; index += 1) {
     const arg = argv[index];
     if (!arg.startsWith('--') && arg !== '-h' && arg !== '-v') {
-      throw new Error(`无法识别的参数：${arg}`);
+      throw new Error(t('无法识别的参数：{arg}', { arg }));
     }
     let name = arg;
     let inlineValue;
@@ -167,18 +261,18 @@ export function parseArgs(argv) {
     if (name === '-v') name = '--version';
     const key = name.slice(2);
     if (BOOLEAN_FLAGS.has(key)) {
-      if (inlineValue !== undefined) throw new Error(`参数 ${name} 不需要值`);
+      if (inlineValue !== undefined) throw new Error(t('参数 {name} 不需要值', { name }));
       if (key === 'no-untracked') options.untracked = false;
       else options[toCamel(key)] = true;
       continue;
     }
     if (VALUE_FLAGS.has(key)) {
       const value = inlineValue !== undefined ? inlineValue : argv[++index];
-      if (value === undefined || value.startsWith('--')) throw new Error(`参数 ${name} 需要一个值`);
+      if (value === undefined || value.startsWith('--')) throw new Error(t('参数 {name} 需要一个值', { name }));
       options[toCamel(key)] = value;
       continue;
     }
-    throw new Error(`未知参数：${name}`);
+    throw new Error(t('未知参数：{name}', { name }));
   }
   return options;
 }
@@ -187,17 +281,17 @@ export function parseArgs(argv) {
 function hubPortOption(options) {
   if (options.port === undefined) return undefined;
   const port = Number(options.port);
-  if (!Number.isFinite(port) || port <= 0) throw new Error(`端口不合法：${options.port}`);
+  if (!Number.isFinite(port) || port <= 0) throw new Error(t('端口不合法：{port}', { port: options.port }));
   return port;
 }
 
 function repoFromOptions(options) {
   const start = path.resolve(process.cwd(), options.repo || '.');
-  if (!fs.existsSync(start)) throw new Error(`目录不存在：${start}`);
+  if (!fs.existsSync(start)) throw new Error(t('目录不存在：{dir}', { dir: start }));
   try {
     return new GitRepo(findRepoRoot(start));
   } catch {
-    throw new Error(`当前目录不是 Git 仓库：${start}\n  请在项目根目录运行，或使用 --repo <dir> 指定仓库。`);
+    throw new Error(t('当前目录不是 Git 仓库：{dir}\n  请在项目根目录运行，或使用 --repo <dir> 指定仓库。', { dir: start }));
   }
 }
 
@@ -229,15 +323,15 @@ function readAnnotations(filePath) {
       const raw = fs.readFileSync(0, 'utf8');
       return JSON.parse(raw);
     } catch {
-      throw new Error('无法从 stdin 读取注解 JSON。');
+      throw new Error(t('无法从 stdin 读取注解 JSON。'));
     }
   }
   const resolved = path.resolve(process.cwd(), filePath);
-  if (!fs.existsSync(resolved)) throw new Error(`注解文件不存在：${resolved}`);
+  if (!fs.existsSync(resolved)) throw new Error(t('注解文件不存在：{file}', { file: resolved }));
   try {
     return JSON.parse(fs.readFileSync(resolved, 'utf8'));
   } catch (error) {
-    throw new Error(`注解文件不是合法 JSON：${resolved}`);
+    throw new Error(t('注解文件不是合法 JSON：{file}', { file: resolved }));
   }
 }
 
@@ -245,21 +339,27 @@ function printSummary(data, dataPath) {
   const { meta } = data;
   const stats = meta.stats;
   process.stdout.write(
-    `\n  ✔ 分析完成  ${stats.changedFiles} 个变更 · ${stats.impactedFiles} 个受影响 · +${stats.additions} / −${stats.deletions} · ${stats.todos} 个待办\n`,
+    t('\n  ✔ 分析完成  {changed} 个变更 · {impacted} 个受影响 · +{additions} / −{deletions} · {todos} 个待办\n', {
+      changed: stats.changedFiles,
+      impacted: stats.impactedFiles,
+      additions: stats.additions,
+      deletions: stats.deletions,
+      todos: stats.todos,
+    }),
   );
-  process.stdout.write(`  范围        ${meta.rangeLabel}  (${meta.branch})\n`);
-  process.stdout.write(`  数据        ${dataPath}\n`);
+  process.stdout.write(t('  范围        {range}  ({branch})\n', { range: localizeRangeLabel(meta.rangeLabel), branch: meta.branch }));
+  process.stdout.write(t('  数据        {path}\n', { path: dataPath }));
 }
 
 async function callHub(hub, endpoint, body) {
   try {
     return await fetch(new URL(endpoint, hub.url), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...hubAuthHeaders(hub) },
+      headers: { 'Content-Type': 'application/json', 'X-Diff-Viz-Lang': getLanguage(), ...hubAuthHeaders(hub) },
       body: JSON.stringify(body),
     });
   } catch (error) {
-    throw new Error(`无法连接 diff-viz hub：${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(t('无法连接 diff-viz hub：{error}', { error: error instanceof Error ? error.message : String(error) }));
   }
 }
 
@@ -271,7 +371,7 @@ async function hubError(response, prefix) {
   } catch {
     /* ignore */
   }
-  return new Error(`${prefix}：${detail}`);
+  return new Error(t('{prefix}：{detail}', { prefix, detail }));
 }
 
 // Importing by path lets the hub copy node files instead of receiving one huge
@@ -293,13 +393,13 @@ async function uploadReview(hub, { root, data, dataPath, reviewId, maxScanFiles 
     } catch {
       /* not JSON; keep the status-only decision */
     }
-    const shapeRejected = response.status === 405 || /数据格式不正确|未知参数|dataPath/.test(detail);
+    const shapeRejected = response.status === 405 || /数据格式不正确|未知参数|dataPath|invalid data|unknown option/i.test(detail);
     if (shapeRejected) {
       const full = data ?? readReviewStore(dataPath).toFullData();
       response = await request({ data: full });
     }
   }
-  if (!response.ok) throw await hubError(response, '注册 Review 到 hub 失败');
+  if (!response.ok) throw await hubError(response, t('注册 Review 到 hub 失败'));
   return response.json();
 }
 
@@ -343,7 +443,7 @@ async function keepAlive(server) {
 
 function runSkillCommand(argv) {
   if (argv.length === 0 || argv.includes('-h') || argv.includes('--help')) {
-    process.stdout.write(SKILL_HELP);
+    process.stdout.write(skillHelpText());
     return;
   }
 
@@ -357,8 +457,15 @@ function runSkillCommand(argv) {
     }
     if (arg === '--agent' || arg === '--scope' || arg === '--dir') {
       const value = argv[++index];
-      if (value === undefined || value.startsWith('--')) throw new Error(`参数 ${arg} 需要一个值`);
+      if (value === undefined || value.startsWith('--')) throw new Error(t('参数 {arg} 需要一个值', { arg }));
       options[arg.slice(2)] = value;
+      continue;
+    }
+    if (arg === '--lang') {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--lang=')) {
       continue;
     }
     if (arg === '--copy') {
@@ -373,17 +480,17 @@ function runSkillCommand(argv) {
       options.dryRun = true;
       continue;
     }
-    throw new Error(`无法识别的参数：${arg}`);
+    throw new Error(t('无法识别的参数：{arg}', { arg }));
   }
 
   if (subcommand !== 'install') {
-    throw new Error('用法：diff-viz skill install [选项]（运行 diff-viz skill --help 查看帮助）');
+    throw new Error(t('用法：diff-viz skill install [选项]（运行 diff-viz skill --help 查看帮助）'));
   }
   if (!['user', 'project'].includes(options.scope)) {
-    throw new Error(`未知 scope：${options.scope}。可选：user / project`);
+    throw new Error(t('未知 scope：{scope}。可选：user / project', { scope: options.scope }));
   }
   if (!options.dir && !AGENTS[normalizeAgentName(options.agent)]) {
-    throw new Error(`未知 agent：${options.agent}。可选：${agentNames().join(' / ')}`);
+    throw new Error(t('未知 agent：{agent}。可选：{agents}', { agent: options.agent, agents: agentNames().join(' / ') }));
   }
 
   let cwd = process.cwd();
@@ -401,34 +508,51 @@ function runSkillCommand(argv) {
     cwd,
   });
   const verb = {
-    installed: '已安装',
-    replaced: '已替换',
-    unchanged: '已经安装',
-    'dry-run': '将安装',
-  }[result.status] || '已处理';
+    installed: t('已安装'),
+    replaced: t('已替换'),
+    unchanged: t('已经安装'),
+    'dry-run': t('将安装'),
+  }[result.status] || t('已处理');
 
-  process.stdout.write(`\n  ✔ ${verb} diff-viz skill（${result.method}）\n`);
-  process.stdout.write(`  目标    ${result.target}\n`);
+  process.stdout.write(t('\n  ✔ {verb} diff-viz skill（{method}）\n', { verb, method: result.method }));
+  process.stdout.write(t('  目标    {target}\n', { target: result.target }));
   if (result.status === 'dry-run') {
-    process.stdout.write('  模式    --dry-run，未写入磁盘\n\n');
+    process.stdout.write(t('  模式    --dry-run，未写入磁盘\n\n'));
     return;
   }
-  process.stdout.write('  下一步  新开一个 Agent 会话，技能列表里会出现 diff-viz\n');
+  process.stdout.write(t('  下一步  新开一个 Agent 会话，技能列表里会出现 diff-viz\n'));
   if (!options.dir && options.scope === 'user') {
-    process.stdout.write(`  可用    diff-viz skill install --agent ${options.agent} --scope project\n`);
+    process.stdout.write(t('  可用    diff-viz skill install --agent {agent} --scope project\n', { agent: options.agent }));
   }
   process.stdout.write('\n');
 }
 
+
+function stripLanguageArg(argv) {
+  const args = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--lang') {
+      index += 1;
+      continue;
+    }
+    if (arg.startsWith('--lang=')) continue;
+    args.push(arg);
+  }
+  return args;
+}
+
 export async function main(argv = process.argv.slice(2)) {
-  if (argv[0] === 'skill') {
-    runSkillCommand(argv.slice(1));
+  setLanguage(languageFromArgv(argv));
+  const args = stripLanguageArg(argv);
+  if (args[0] === 'skill') {
+    runSkillCommand(args.slice(1));
     return;
   }
 
-  const options = parseArgs(argv);
+  const options = parseArgs(args);
   if (options.help) {
-    process.stdout.write(HELP);
+    process.stdout.write(helpText());
     return;
   }
   if (options.version) {
@@ -447,8 +571,8 @@ export async function main(argv = process.argv.slice(2)) {
     if (existing && (await hubIsAlive(existing))) {
       const infoHost = existing.host === '0.0.0.0' || existing.host === '::' ? '127.0.0.1' : existing.host;
       const hubUrl = `http://${infoHost}:${existing.port}/`;
-      process.stdout.write(`hub 已在运行：${hubUrl}\n`);
-      if (existing.token) process.stdout.write(`带令牌链接：${withHubToken(hubUrl, existing.token)}\n`);
+      process.stdout.write(t('hub 已在运行：{url}\n', { url: hubUrl }));
+      if (existing.token) process.stdout.write(t('带令牌链接：{url}\n', { url: withHubToken(hubUrl, existing.token) }));
       return;
     }
     const server = await startHub({
@@ -463,12 +587,12 @@ export async function main(argv = process.argv.slice(2)) {
 
   if (options.command === 'stop') {
     const result = await stopHub();
-    process.stdout.write(result.stopped ? `✔ 已停止 hub（pid ${result.pid}）\n` : '没有发现正在运行的 hub。\n');
+    process.stdout.write(result.stopped ? t('✔ 已停止 hub（pid {pid}）\n', { pid: result.pid }) : t('没有发现正在运行的 hub。\n'));
     return;
   }
 
   if (options.command === 'annotate') {
-    if (!options.annotations) throw new Error('annotate 需要 --annotations <file|->。');
+    if (!options.annotations) throw new Error(t('annotate 需要 --annotations <file|->。'));
     const annotations = readAnnotations(options.annotations);
     const onlyPaths = options.node ? [String(options.node)] : null;
 
@@ -478,7 +602,7 @@ export async function main(argv = process.argv.slice(2)) {
       const reviewId = String(options.review);
       const info = readHubInfo();
       if (!info || !(await hubIsAlive(info))) {
-        throw new Error('--review 需要 hub 正在运行；请先运行 diff-viz hub，或用不带 --review 的 annotate 写本地数据文件。');
+        throw new Error(t('--review 需要 hub 正在运行；请先运行 diff-viz hub，或用不带 --review 的 annotate 写本地数据文件。'));
       }
       const hub = { url: hubUrlFor(info), token: info.token };
       const response = await syncAnnotations(hub, {
@@ -489,15 +613,15 @@ export async function main(argv = process.argv.slice(2)) {
       });
       if (response.ok) {
         const payload = await response.json().catch(() => ({}));
-        const count = Number.isFinite(payload.annotated) ? `，${payload.annotated} 个节点有 Agent 注解` : '';
-        process.stdout.write(`✔ 已把注解写入 hub Review ${reviewId}${count}\n`);
+        const count = Number.isFinite(payload.annotated) ? t('，{count} 个节点有 Agent 注解', { count: payload.annotated }) : '';
+        process.stdout.write(t('✔ 已把注解写入 hub Review {reviewId}{count}\n', { reviewId, count }));
         return;
       }
-      if (response.status === 404) throw new Error(`hub 里找不到 Review：${reviewId}`);
+      if (response.status === 404) throw new Error(t('hub 里找不到 Review：{reviewId}', { reviewId }));
       if (response.status === 405) {
-        throw new Error('运行中的 hub 版本过旧，不支持 /api/annotate；请运行 `diff-viz stop` 后重新打开 Review 再试。');
+        throw new Error(t('运行中的 hub 版本过旧，不支持 /api/annotate；请运行 `diff-viz stop` 后重新打开 Review 再试。'));
       }
-      throw await hubError(response, '写入 hub Review 失败');
+      throw await hubError(response, t('写入 hub Review 失败'));
     }
 
     const repo = repoFromOptions(options);
@@ -506,7 +630,7 @@ export async function main(argv = process.argv.slice(2)) {
     try {
       store = readReviewStore(dataPath);
     } catch {
-      throw new Error(`找不到数据文件：${dataPath}，请先运行 diff-viz。`);
+      throw new Error(t('找不到数据文件：{path}，请先运行 diff-viz。', { path: dataPath }));
     }
     // Only the manifest is loaded here: summaries and todos live in node
     // metadata, so a 100 MB review does not have to be read or rewritten.
@@ -536,12 +660,12 @@ export async function main(argv = process.argv.slice(2)) {
           summary: options.summary,
         });
         if (response.ok) {
-          syncNote = '已把注解同步到运行中的 hub';
+          syncNote = t('已把注解同步到运行中的 hub');
         } else if (response.status === 405) {
           // An older hub has no /api/annotate. Re-uploading the whole review
           // would be exactly the large-file cost this format removes, so ask
           // the user to restart it instead.
-          syncNote = '运行中的 hub 版本过旧，未同步；执行 `diff-viz stop` 后重开 Review 即可看到注解';
+          syncNote = t('运行中的 hub 版本过旧，未同步；执行 `diff-viz stop` 后重开 Review 即可看到注解');
         } else if (response.status === 404) {
           // The hub has no snapshot for this review (fresh state dir or pruned
           // history). Import by path when possible so node content is copied
@@ -556,19 +680,19 @@ export async function main(argv = process.argv.slice(2)) {
           if (imported.reviewId) {
             applyReviewIds(dataPath, { reviewId: imported.reviewId, projectId: imported.project?.id });
           }
-          syncNote = '已把注解同步到运行中的 hub（重新导入）';
+          syncNote = t('已把注解同步到运行中的 hub（重新导入）');
         } else {
-          throw await hubError(response, '同步 hub 失败');
+          throw await hubError(response, t('同步 hub 失败'));
         }
         process.stdout.write(`  ↳ ${syncNote}\n`);
       } catch (error) {
-        process.stdout.write(`  ! 注解已写入本地，但同步 hub 失败：${error instanceof Error ? error.message : String(error)}\n`);
+        process.stdout.write(t('  ! 注解已写入本地，但同步 hub 失败：{error}\n', { error: error instanceof Error ? error.message : String(error) }));
       }
     }
     const annotated = data.nodes.filter((node) => node.summarySource === 'agent' || (node.todos || []).some((todo) => todo.source === 'agent')).length;
-    process.stdout.write(`✔ 已合并注解：${annotated} 个节点 · ${dataPath}\n`);
+    process.stdout.write(t('✔ 已合并注解：{count} 个节点 · {path}\n', { count: annotated, path: dataPath }));
     if (upgraded) {
-      process.stdout.write(`  ↳ 数据文件已升级为拆分存储（节点内容在 ${reviewLayout(dataPath).nodesDir}）\n`);
+      process.stdout.write(t('  ↳ 数据文件已升级为拆分存储（节点内容在 {dir}）\n', { dir: reviewLayout(dataPath).nodesDir }));
     }
     return;
   }
@@ -579,10 +703,10 @@ export async function main(argv = process.argv.slice(2)) {
       ? path.resolve(process.cwd(), options.data)
       : dataPathFor(repo, options);
     if (!fs.existsSync(dataPath)) {
-      throw new Error(`找不到数据文件：${dataPath}，请先运行 diff-viz。`);
+      throw new Error(t('找不到数据文件：{path}，请先运行 diff-viz。', { path: dataPath }));
     }
     const store = readReviewStore(dataPath, { strict: false });
-    if (!store) throw new Error(`数据文件不是合法 JSON：${dataPath}`);
+    if (!store) throw new Error(t('数据文件不是合法 JSON：{path}', { path: dataPath }));
     const data = store.manifest;
     const hub = await ensureHub({
       port: hubPortOption(options),
@@ -609,23 +733,26 @@ export async function main(argv = process.argv.slice(2)) {
     if (options.init) {
       const template = workspaceTemplate(process.cwd());
       writeJsonAtomic(target, template);
-      process.stdout.write(`\n  ✔ 已生成 ${path.relative(process.cwd(), target) || target}\n`);
-      process.stdout.write(`    收录 ${template.repos.length} 个仓库：${template.repos.map((repo) => repo.id).join(', ') || '(未发现)'}\n`);
-      process.stdout.write('    用 links 补充 RPC / HTTP 依赖，然后运行 diff-viz workspace\n\n');
+      process.stdout.write(t('\n  ✔ 已生成 {path}', { path: path.relative(process.cwd(), target) || target }));
+      process.stdout.write(t('    收录 {count} 个仓库：{repos}\n', { count: template.repos.length, repos: template.repos.map((repo) => repo.id).join(', ') || '(none)' }));
+      process.stdout.write(t('    用 links 补充 RPC / HTTP 依赖，然后运行 diff-viz workspace\n\n'));
       return;
     }
 
     if (!fs.existsSync(target)) {
-      throw new Error(`找不到 workspace 文件：${target}\n  先运行 diff-viz workspace --init 生成模板。`);
+      throw new Error(t('找不到 workspace 文件：{path}\n  先运行 diff-viz workspace --init 生成模板。', { path: target }));
     }
     const hub = await ensureHub({ port: hubPortOption(options), host: options.host || '127.0.0.1' });
     const response = await callHub(hub, 'api/workspace', { file: target });
-    if (!response.ok) throw await hubError(response, '工作区分析失败');
+    if (!response.ok) throw await hubError(response, t('工作区分析失败'));
     const payload = await response.json();
     const url = withHubToken(new URL(payload.url, hub.url).toString(), hub.token);
     if (!options.noOpen && !process.env.CI) openInBrowser(url);
     process.stdout.write(
-      `\n  ✔ 工作区分析完成  ${payload.stats.changed} 个仓库有改动 · ${payload.stats.impacted} 个受影响\n`,
+      t('\n  ✔ 工作区分析完成  {changed} 个仓库有改动 · {impacted} 个受影响\n', {
+        changed: payload.stats.changed,
+        impacted: payload.stats.impacted,
+      }),
     );
     for (const warning of payload.warnings || []) process.stdout.write(`  ! ${warning}\n`);
     process.stdout.write(`\n  Workspace  ${url}\n  Hub        ${hub.url}\n\n`);
@@ -641,7 +768,7 @@ export async function main(argv = process.argv.slice(2)) {
   let pull = null;
   let pullInfo = null;
   if (options.pr || options.mr) {
-    if (options.pr && options.mr) throw new Error('--pr 与 --mr 只能选一个。');
+    if (options.pr && options.mr) throw new Error(t('--pr 与 --mr 只能选一个。'));
     const input = options.pr || options.mr;
     const prepared = await preparePullReview(repo, {
       number: parsePullNumber(input),
@@ -691,7 +818,7 @@ export async function main(argv = process.argv.slice(2)) {
       } catch (error) {
         data.meta.warnings = [
           ...(data.meta.warnings || []),
-          `读取 PR/MR 评论失败：${error instanceof Error ? error.message : String(error)}`,
+          t('读取 PR/MR 评论失败：{error}', { error: error instanceof Error ? error.message : String(error) }),
         ];
       }
     }
@@ -740,7 +867,7 @@ export async function main(argv = process.argv.slice(2)) {
     process.stdout.write(`${reviewUrl}\n`);
   } else {
     process.stdout.write(`\n  Review UI  ${reviewUrl}\n`);
-    process.stdout.write(`  Hub        ${hub.url}${hub.started ? ' (已启动)' : ' (复用中)'}\n\n`);
+    process.stdout.write(t('  Hub        {url}{state}\n\n', { url: hub.url, state: hub.started ? t(' (已启动)') : t(' (复用中)') }));
   }
   if (!options.noOpen && !process.env.CI) openInBrowser(reviewUrl);
 }

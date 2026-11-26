@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { t } from './i18n.mjs';
 
 export const SKILL_NAME = 'diff-viz';
 
@@ -64,11 +65,11 @@ export function resolveSkillsRoot({ agent = 'dsh', scope = 'user', dir, cwd = pr
   const resolvedAgent = normalizeAgentName(agent);
   const entry = AGENTS[resolvedAgent];
   if (!entry) {
-    throw new Error(`未知 agent：${agent}。可选：${agentNames().join(' / ')}`);
+    throw new Error(t('未知 agent：{agent}。可选：{agents}', { agent, agents: agentNames().join(' / ') }));
   }
   if (scope === 'user') return entry.userRoot();
   if (scope === 'project') return path.join(path.resolve(cwd), entry.projectRoot);
-  throw new Error(`未知 scope：${scope}。可选：user / project`);
+  throw new Error(t('未知 scope：{scope}。可选：user / project', { scope }));
 }
 
 export function skillTargetPath({ agent, scope, dir, cwd } = {}) {
@@ -90,7 +91,7 @@ function removeExistingSkillDir(skillDir) {
     return;
   }
   if (!stat.isDirectory()) {
-    throw new Error(`无法覆盖目标：${skillDir}`);
+    throw new Error(t('无法覆盖目标：{dir}', { dir: skillDir }));
   }
   const entries = fs.readdirSync(skillDir);
   const looksLikeSkill = entries.length === 0 || (
@@ -98,7 +99,7 @@ function removeExistingSkillDir(skillDir) {
   );
   if (!looksLikeSkill) {
     throw new Error(
-      `目标目录不是空的 diff-viz skill 目录，拒绝覆盖：${skillDir}\n  请手动检查后删除，或换一个 --dir。`,
+      t('目标目录不是空的 diff-viz skill 目录，拒绝覆盖：{dir}\n  请手动检查后删除，或换一个 --dir。', { dir: skillDir }),
     );
   }
   fs.rmSync(skillDir, { recursive: true, force: true });
@@ -118,9 +119,9 @@ export function installSkill({
   dryRun = false,
   cwd = process.cwd(),
 } = {}) {
-  if (!source) throw new Error('缺少 SKILL.md 源文件路径。');
+  if (!source) throw new Error(t('缺少 SKILL.md 源文件路径。'));
   const sourcePath = path.resolve(source);
-  if (!fs.existsSync(sourcePath)) throw new Error(`找不到 SKILL.md：${sourcePath}`);
+  if (!fs.existsSync(sourcePath)) throw new Error(t('找不到 SKILL.md：{path}', { path: sourcePath }));
 
   // Windows needs developer mode for symlinks, so copy there by default.
   const preferCopy = copy || process.platform === 'win32';
@@ -144,7 +145,7 @@ export function installSkill({
       }
     }
     if (!force) {
-      throw new Error(`目标已存在：${target}\n  加 --force 覆盖，或先删除它。`);
+      throw new Error(t('目标已存在：{target}\n  加 --force 覆盖，或先删除它。', { target }));
     }
   }
 

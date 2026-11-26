@@ -42,6 +42,7 @@ export function currentToken(): string | null {
 export function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   if (token) headers.set('X-Diff-Viz-Token', token);
+  headers.set('X-Diff-Viz-Lang', getLanguage());
   return fetch(input, { ...init, headers });
 }
 

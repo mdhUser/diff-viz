@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { t } from './i18n.mjs';
 
 // Remote pull-request integration for GitHub and GitLab. The CLI stays
 // dependency-free: HTTP goes through the global fetch, refs are fetched with
@@ -53,7 +54,7 @@ export function detectProvider(remoteUrl, env = process.env) {
   if (!parsed) return null;
   const override = String(env.DIFF_VIZ_PROVIDER || '').trim().toLowerCase();
   if (override && override !== 'github' && override !== 'gitlab') {
-    throw new Error('DIFF_VIZ_PROVIDER 只支持 github 或 gitlab。');
+    throw new Error(t('DIFF_VIZ_PROVIDER 只支持 github 或 gitlab。'));
   }
   const githubHosts = new Set([
     ...splitHosts(GITHUB_HOSTS_DEFAULT),
@@ -104,13 +105,12 @@ export function detectRepoProvider(repo, { remote = 'origin', env = process.env 
   const result = repo.run(['remote', 'get-url', remote], { allowFailure: true });
   const remoteUrl = String(env.DIFF_VIZ_REMOTE_URL || result.stdout || '').trim();
   if (!remoteUrl) {
-    throw new Error(`仓库没有配置 ${remote} 远端；请先 git remote add ${remote} <url>。`);
+    throw new Error(t('仓库没有配置 {remote} 远端；请先 git remote add {remote} <url>。', { remote }));
   }
   const info = detectProvider(remoteUrl, env);
   if (!info) {
     throw new Error(
-      `无法识别远端平台：${remoteUrl}\n` +
-        'GitHub 企业版 / 自建 GitLab 请设置 DIFF_VIZ_PROVIDER=github|gitlab（必要时再设 DIFF_VIZ_GITHUB_HOSTS / DIFF_VIZ_GITLAB_HOSTS）。',
+      t('无法识别远端平台：{url}\nGitHub 企业版 / 自建 GitLab 请设置 DIFF_VIZ_PROVIDER=github|gitlab（必要时再设 DIFF_VIZ_GITHUB_HOSTS / DIFF_VIZ_GITLAB_HOSTS）。', { url: remoteUrl }),
     );
   }
   return { ...info, remote };
@@ -191,8 +191,8 @@ function authHeaders(info, env) {
 
 function authHint(provider) {
   return provider === 'github'
-    ? '私有仓库请设置 GITHUB_TOKEN（或 GH_TOKEN），或先 gh auth login；公开仓库可不配置。'
-    : '私有仓库请设置 GITLAB_TOKEN（或 GLAB_TOKEN），或先 glab auth login；公开项目可不配置。';
+    ? t('私有仓库请设置 GITHUB_TOKEN（或 GH_TOKEN），或先 gh auth login；公开仓库可不配置。')
+    : t('私有仓库请设置 GITLAB_TOKEN（或 GLAB_TOKEN），或先 glab auth login；公开项目可不配置。');
 }
 
 export async function requestJsonRaw(
@@ -200,7 +200,7 @@ export async function requestJsonRaw(
   url,
   { env = process.env, fetchImpl = globalThis.fetch, timeoutMs = DEFAULT_TIMEOUT_MS } = {},
 ) {
-  if (typeof fetchImpl !== 'function') throw new Error('当前 Node 版本缺少 fetch，无法访问远端 API。');
+  if (typeof fetchImpl !== 'function') throw new Error(t('当前 Node 版本缺少 fetch，无法访问远端 API。'));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let response;
@@ -211,8 +211,8 @@ export async function requestJsonRaw(
       signal: controller.signal,
     });
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error(`访问 ${info.host} API 超时（${timeoutMs}ms）。`);
-    throw new Error(`无法访问 ${info.host} API：${error instanceof Error ? error.message : String(error)}`);
+    if (error?.name === 'AbortError') throw new Error(t('访问 {host} API 超时（{ms}ms）。', { host: info.host, ms: timeoutMs }));
+    throw new Error(t('无法访问 {host} API：{error}', { host: info.host, error: error instanceof Error ? error.message : String(error) }));
   } finally {
     clearTimeout(timer);
   }
@@ -230,15 +230,15 @@ export async function requestJsonRaw(
       // A cached `gh`/`glab` token may have expired; drop it so the next
       // attempt rediscovers a fresh token instead of failing until hub restart.
       cliTokenCache.delete(`${info.provider}:${info.host}`);
-      throw new Error(`${info.provider === 'github' ? 'GitHub' : 'GitLab'} 鉴权失败：${authHint(info.provider)}${suffix}`);
+      throw new Error(t('{provider} 鉴权失败：{hint}{suffix}', { provider: info.provider === 'github' ? 'GitHub' : 'GitLab', hint: authHint(info.provider), suffix }));
     }
     if (status === 404) {
-      throw new Error(`找不到仓库 ${info.path} 或 PR/MR${suffix}；请检查远端地址与访问权限。${authHint(info.provider)}`);
+      throw new Error(t('找不到仓库 {path} 或 PR/MR{suffix}；请检查远端地址与访问权限。{hint}', { path: info.path, suffix, hint: authHint(info.provider) }));
     }
     if (status === 429 || /rate limit/i.test(detail)) {
-      throw new Error(`${info.provider} API 触发限流；请设置 token 或稍后再试。${suffix}`);
+      throw new Error(t('{provider} API 触发限流；请设置 token 或稍后再试。{suffix}', { provider: info.provider, suffix }));
     }
-    throw new Error(`${info.provider} API 请求失败（HTTP ${status}）${suffix}`);
+    throw new Error(t('{provider} API 请求失败（HTTP {status}）{suffix}', { provider: info.provider, status, suffix }));
   }
   return { data: await response.json(), headers: response.headers };
 }
@@ -310,7 +310,7 @@ export async function listPullRequests(info, options = {}) {
 export async function getPullRequest(info, number, options = {}) {
   const env = options.env || process.env;
   const id = Number(number);
-  if (!Number.isInteger(id) || id <= 0) throw new Error(`PR/MR 编号不合法：${number}`);
+  if (!Number.isInteger(id) || id <= 0) throw new Error(t('PR/MR 编号不合法：{number}', { number }));
   if (info.provider === 'github') {
     const item = await requestJson(info, `${info.apiBase}/repos/${info.path}/pulls/${id}`, { ...options, env });
     return mapGithubPull(item);
@@ -326,12 +326,12 @@ export async function getPullRequest(info, number, options = {}) {
 /** Accept a bare number, a PR/MR URL, or a URL with a number fragment. */
 export function parsePullNumber(input, info) {
   const raw = String(input || '').trim();
-  if (!raw) throw new Error('缺少 PR/MR 编号或 URL。');
+  if (!raw) throw new Error(t('缺少 PR/MR 编号或 URL。'));
   if (/^\d+$/.test(raw)) return Number(raw);
   const githubMatch = /\/pull\/(\d+)(?:[/?#]|$)/i.exec(raw);
   const gitlabMatch = /\/merge_requests\/(\d+)(?:[/?#]|$)/i.exec(raw);
   const match = info?.provider === 'gitlab' ? gitlabMatch || githubMatch : githubMatch || gitlabMatch;
-  if (!match) throw new Error(`无法从 URL 解析 PR/MR 编号：${raw}`);
+  if (!match) throw new Error(t('无法从 URL 解析 PR/MR 编号：{value}', { value: raw }));
   return Number(match[1]);
 }
 
@@ -362,8 +362,7 @@ function validatePullUrl(input, info) {
   const path = parsed.pathname.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\.git$/i, '');
   if (host !== info.host || !(path === info.path || path.startsWith(`${info.path}/`))) {
     throw new Error(
-      `PR/MR URL 与当前仓库不匹配：\n  URL     ${raw}\n  当前仓库 ${info.host}/${info.path}\n` +
-        '请切到对应仓库再运行，或只传 PR/MR 编号。',
+      t('PR/MR URL 与当前仓库不匹配：\n  URL     {url}\n  当前仓库 {host}/{path}\n请切到对应仓库再运行，或只传 PR/MR 编号。', { url: raw, host: info.host, path: info.path }),
     );
   }
 }
@@ -398,12 +397,15 @@ export function fetchPullRefs(repo, info, number, baseBranch, { remote = 'origin
   if (result.status !== 0) {
     const stderr = String(result.stderr || '').trim();
     throw new Error(
-      `拉取 ${info.provider === 'github' ? 'PR' : 'MR'} #${number} 的 ref 失败` +
-        (stderr ? `：${stderr}` : '；请确认远端可访问、编号存在。'),
+      t('拉取 {kind} #{number} 的 ref 失败{detail}', {
+        kind: info.provider === 'github' ? 'PR' : 'MR',
+        number,
+        detail: stderr ? t('：{stderr}', { stderr }) : t('；请确认远端可访问、编号存在。'),
+      }),
     );
   }
-  if (!repo.revParse(headRef)) throw new Error(`拉取后找不到 ${headRef}。`);
-  if (!repo.revParse(baseRef)) throw new Error(`拉取后找不到目标分支 ${baseBranch}。`);
+  if (!repo.revParse(headRef)) throw new Error(t('拉取后找不到 {ref}。', { ref: headRef }));
+  if (!repo.revParse(baseRef)) throw new Error(t('拉取后找不到目标分支 {branch}。', { branch: baseBranch }));
   return { headRef, baseRef, baseBranch };
 }
 
@@ -423,7 +425,7 @@ export async function preparePullReview(
     remote,
   );
   if (!baseBranch) {
-    throw new Error('无法确定 PR/MR 的目标分支；请用 --base <branch> 指定。');
+    throw new Error(t('无法确定 PR/MR 的目标分支；请用 --base <branch> 指定。'));
   }
   const refs = fetchPullRefs(repo, info, pull.number, baseBranch, { remote });
   return {

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { t } from './i18n.mjs';
 import { ensurePrivateDir } from './util.mjs';
 
 // Binding to 127.0.0.1 keeps the wider network out, but it does not stop a
@@ -81,12 +82,12 @@ export function checkRequestTrust(req, { hostnames }) {
   const hostHeader = req.headers?.host;
   if (typeof hostHeader === 'string' && hostHeader.trim()) {
     const hostname = parseHostname(hostHeader);
-    if (!hostname) return `Host 头格式不正确：${hostHeader}`;
+    if (!hostname) return t('Host 头格式不正确：{host}', { host: hostHeader });
     if (!hostnames.has(hostname)) {
-      return `Host「${hostname}」不在允许列表内（已拦截 DNS rebinding 请求）。`;
+      return t('Host「{host}」不在允许列表内（已拦截 DNS rebinding 请求）。', { host: hostname });
     }
   } else if (!isLoopbackAddress(req.socket?.remoteAddress)) {
-    return '缺少 Host 头。';
+    return t('缺少 Host 头。');
   }
 
   const origin = req.headers?.origin;
@@ -95,13 +96,13 @@ export function checkRequestTrust(req, { hostnames }) {
     try {
       parsed = new URL(origin);
     } catch {
-      return `Origin 头格式不正确：${origin}`;
+      return t('Origin 头格式不正确：{origin}', { origin });
     }
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return `Origin 协议不被允许：${origin}`;
+      return t('Origin 协议不被允许：{origin}', { origin });
     }
     if (!hostnames.has(normalizeHostname(parsed.hostname))) {
-      return `Origin「${origin}」不在允许列表内。`;
+      return t('Origin「{origin}」不在允许列表内。', { origin });
     }
   }
   return null;

@@ -14,6 +14,12 @@ diff-viz workspace --init       # 生成 workspace 模板
 diff-viz skill install          # 把薄 SKILL.md 注册到 Agent 技能目录
 ```
 
+## 语言
+
+CLI 输出默认英文。用 `--lang en|zh` 或 `DIFF_VIZ_LANG=en|zh` 切换，`--lang` 优先；Web UI 的 hub 错误会跟随界面语言（`X-Diff-Viz-Lang`）。
+
+自动生成的 Review 内容（启发式摘要、Agent 注解、Reviewer 评论正文等）属于数据内容，仍按生成时的语言保存，不受 CLI 开关影响。
+
 ## 范围
 
 默认：工作区有改动则看工作区，干净则看最近一次提交。

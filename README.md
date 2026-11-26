@@ -17,7 +17,7 @@ diff-viz turns a Git change into an interactive dependency graph: which files ch
 
 ## Quick start
 
-Requirements: Node.js >= 20. Run this in **any Git repository root**:
+Requirements: Node.js >= 20. The CLI is **English by default**; add `--lang zh` (or set `DIFF_VIZ_LANG=zh`) for Chinese output. Run this in **any Git repository root**:
 
 ```bash
 npx diff-viz-cli
@@ -166,7 +166,7 @@ Data format and HTTP API: **[docs/data-contract.md](https://github.com/mdhUser/d
 
 ## Version and compatibility
 
-Current version **1.11.1**. Since 1.0.0 the public contract (CLI flags, data format v2, hub HTTP API, agent annotation JSON) is frozen: no breaking changes within 1.x; breaking changes go to 2.0.0. Old single-file review data is still readable and upgrades automatically.
+Current version **1.12.0**. Since 1.0.0 the public contract (CLI flags, data format v2, hub HTTP API, agent annotation JSON) is frozen: no breaking changes within 1.x; breaking changes go to 2.0.0. Old single-file review data is still readable and upgrades automatically.
 
 See [CHANGELOG.md](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md).
 

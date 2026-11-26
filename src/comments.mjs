@@ -1,4 +1,5 @@
 import { requestJsonRaw } from './remotes.mjs';
+import { t } from './i18n.mjs';
 
 // Reviewer comments for a PR/MR. Comments are fetched separately from the diff
 // and attached to the review so the UI can badge files that have feedback.
@@ -21,7 +22,7 @@ function safeHttpUrl(value) {
 
 function truncateBody(body) {
   const text = String(body ?? '');
-  return text.length > MAX_BODY ? `${text.slice(0, MAX_BODY)}\n…（评论过长，已截断）` : text;
+  return text.length > MAX_BODY ? `${text.slice(0, MAX_BODY)}\n${t('…（评论过长，已截断）')}` : text;
 }
 
 async function collectPages(info, baseUrl, options = {}) {
@@ -120,7 +121,7 @@ export async function fetchPullComments(info, number, options = {}) {
   const env = options.env || process.env;
   const requestOptions = { ...options, env };
   const id = Number(number);
-  if (!Number.isInteger(id) || id <= 0) return { comments: [], warnings: ['缺少有效的 PR/MR 编号，未读取评论。'] };
+  if (!Number.isInteger(id) || id <= 0) return { comments: [], warnings: [t('缺少有效的 PR/MR 编号，未读取评论。')] };
   const comments = [];
 
   if (info.provider === 'github') {
@@ -132,7 +133,7 @@ export async function fetchPullComments(info, number, options = {}) {
       );
       comments.push(...inline.map((item) => mapGithubInline(item)));
     } catch (error) {
-      warnings.push(`读取 GitHub 行内评论失败：${error instanceof Error ? error.message : String(error)}`);
+      warnings.push(t('读取 GitHub 行内评论失败：{error}', { error: error instanceof Error ? error.message : String(error) }));
     }
     try {
       const general = await collectPages(
@@ -142,7 +143,7 @@ export async function fetchPullComments(info, number, options = {}) {
       );
       comments.push(...general.map((item) => mapGithubGeneral(item)));
     } catch (error) {
-      warnings.push(`读取 GitHub 讨论评论失败：${error instanceof Error ? error.message : String(error)}`);
+      warnings.push(t('读取 GitHub 讨论评论失败：{error}', { error: error instanceof Error ? error.message : String(error) }));
     }
   } else {
     try {
@@ -156,7 +157,7 @@ export async function fetchPullComments(info, number, options = {}) {
         comments.push(mapGitlabNote(info, id, note));
       }
     } catch (error) {
-      warnings.push(`读取 GitLab 评论失败：${error instanceof Error ? error.message : String(error)}`);
+      warnings.push(t('读取 GitLab 评论失败：{error}', { error: error instanceof Error ? error.message : String(error) }));
     }
   }
 

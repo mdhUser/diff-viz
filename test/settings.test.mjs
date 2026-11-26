@@ -61,6 +61,19 @@ test('hub serves shared settings over HTTP', async () => {
     assert.equal(after.initialized, true);
     assert.deepEqual(after.settings, { language: 'zh', diffLayout: 'split', commentsExpanded: false });
 
+
+    const englishError = await hubFetch(server, 'api/data', {
+      headers: { 'X-Diff-Viz-Lang': 'en' },
+    });
+    assert.equal(englishError.status, 400);
+    assert.match((await englishError.json()).error, /Missing review parameter/);
+
+    const chineseError = await hubFetch(server, 'api/data', {
+      headers: { 'X-Diff-Viz-Lang': 'zh' },
+    });
+    assert.equal(chineseError.status, 400);
+    assert.match((await chineseError.json()).error, /缺少 review 参数/);
+
     const bad = await hubFetch(server, 'api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

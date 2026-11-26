@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { t } from './i18n.mjs';
 import path from 'node:path';
 import { toPosix } from './util.mjs';
 
@@ -170,21 +171,21 @@ const SCOPE_MODES = new Set(['worktree', 'staged', 'last', 'range', 'base', 'com
 function normalizeScope(raw, label) {
   if (raw === undefined || raw === null) return null;
   const value = typeof raw === 'string' ? { mode: raw } : raw;
-  if (typeof value !== 'object') throw new Error(`${label} 的 scope 必须是对象或字符串。`);
+  if (typeof value !== 'object') throw new Error(t('{label} 的 scope 必须是对象或字符串。', { label }));
   const mode = String(value.mode || '');
   if (!SCOPE_MODES.has(mode)) {
-    throw new Error(`${label} 的 scope.mode 不支持：${mode}（可选 ${[...SCOPE_MODES].join(' / ')}）`);
+    throw new Error(t('{label} 的 scope.mode 不支持：{mode}（可选 {modes}）', { label, mode, modes: [...SCOPE_MODES].join(' / ') }));
   }
   const scope = { mode };
   if (mode === 'range') {
     const range = value.range || value.base;
-    if (!range) throw new Error(`${label} 的 scope.mode=range 需要 range 或 base。`);
+    if (!range) throw new Error(t('{label} 的 scope.mode=range 需要 range 或 base。', { label }));
     scope.range = String(range);
   } else if (mode === 'base') {
-    if (!value.base) throw new Error(`${label} 的 scope.mode=base 需要 base。`);
+    if (!value.base) throw new Error(t('{label} 的 scope.mode=base 需要 base。', { label }));
     scope.base = String(value.base);
   } else if (mode === 'commit') {
-    if (!value.commit) throw new Error(`${label} 的 scope.mode=commit 需要 commit。`);
+    if (!value.commit) throw new Error(t('{label} 的 scope.mode=commit 需要 commit。', { label }));
     scope.commit = String(value.commit);
   }
   return scope;
@@ -193,25 +194,25 @@ function normalizeScope(raw, label) {
 export function loadWorkspace(file) {
   const absolute = path.resolve(file);
   const raw = readText(absolute);
-  if (!raw) throw new Error(`找不到 workspace 文件：${absolute}`);
+  if (!raw) throw new Error(t('找不到 workspace 文件：{path}', { path: absolute }));
   let parsed;
   try {
     parsed = JSON.parse(raw);
   } catch (error) {
-    throw new Error(`workspace 文件不是合法 JSON：${error.message}`);
+    throw new Error(t('workspace 文件不是合法 JSON：{error}', { error: error.message }));
   }
   const base = path.dirname(absolute);
   const defaultScope = normalizeScope(parsed.scope, 'workspace');
   const repos = (parsed.repos || []).map((entry, index) => {
-    if (!entry || !entry.path) throw new Error(`workspace.repos[${index}] 缺少 path。`);
+    if (!entry || !entry.path) throw new Error(t('workspace.repos[{index}] 缺少 path。', { index }));
     const root = path.resolve(base, entry.path);
     let stat = null;
     try {
       stat = fs.statSync(root);
     } catch {
-      throw new Error(`仓库目录不存在：${root}`);
+      throw new Error(t('仓库目录不存在：{path}', { path: root }));
     }
-    if (!stat.isDirectory()) throw new Error(`仓库路径不是目录：${root}`);
+    if (!stat.isDirectory()) throw new Error(t('仓库路径不是目录：{path}', { path: root }));
     const id = String(entry.id || path.basename(root));
     const scope = normalizeScope(entry.scope, `repos[${index}]（${id}）`) || defaultScope || { mode: 'worktree' };
     return {
@@ -222,10 +223,10 @@ export function loadWorkspace(file) {
       scope,
     };
   });
-  if (!repos.length) throw new Error('workspace.repos 不能为空。');
+  if (!repos.length) throw new Error(t('workspace.repos 不能为空。'));
   const ids = new Set();
   for (const repo of repos) {
-    if (ids.has(repo.id)) throw new Error(`workspace 中仓库 id 重复：${repo.id}`);
+    if (ids.has(repo.id)) throw new Error(t('workspace 中仓库 id 重复：{id}', { id: repo.id }));
     ids.add(repo.id);
   }
 
@@ -234,13 +235,13 @@ export function loadWorkspace(file) {
   const warnings = [];
   const links = [];
   (parsed.links || []).forEach((link, index) => {
-    if (!link || !link.from || !link.to) throw new Error(`workspace.links[${index}] 缺少 from/to。`);
+    if (!link || !link.from || !link.to) throw new Error(t('workspace.links[{index}] 缺少 from/to。', { index }));
     if (!ids.has(link.from)) {
-      warnings.push(`links[${index}].from 不是已声明的仓库：${link.from}（已忽略）`);
+      warnings.push(t('links[{index}].from 不是已声明的仓库：{from}（已忽略）', { index, from: link.from }));
       return;
     }
     if (!ids.has(link.to)) {
-      warnings.push(`links[${index}].to 不是已声明的仓库：${link.to}（已忽略）`);
+      warnings.push(t('links[{index}].to 不是已声明的仓库：{to}（已忽略）', { index, to: link.to }));
       return;
     }
     links.push({

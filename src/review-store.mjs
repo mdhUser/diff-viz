@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { t } from './i18n.mjs';
 import { ensurePrivateDir, readJsonSafe, shortId, toPosix, writeJsonAtomic } from './util.mjs';
 
 /*
@@ -160,7 +161,7 @@ function removeStalePayloads(nodesDir, keep) {
  */
 export function writeReviewStore(target, data) {
   if (!data || typeof data !== 'object' || !data.meta || !Array.isArray(data.nodes)) {
-    throw new Error('Review 数据格式不正确。');
+    throw new Error(t('Review 数据格式不正确。'));
   }
   const layout = reviewLayout(target);
   ensurePrivateDir(path.dirname(layout.manifestPath));
@@ -226,10 +227,10 @@ export function readReviewStore(target, { strict = true } = {}) {
   const kind = statKind(layout.manifestPath);
   if (!kind) {
     if (!strict) return null;
-    throw new Error(`找不到 Review 数据：${layout.manifestPath}`);
+    throw new Error(t('找不到 Review 数据：{path}', { path: layout.manifestPath }));
   }
   const raw = readJsonSafe(layout.manifestPath);
-  if (!raw) throw new Error(`Review 数据不是合法 JSON：${layout.manifestPath}`);
+  if (!raw) throw new Error(t('Review 数据不是合法 JSON：{path}', { path: layout.manifestPath }));
 
   const split = isSplitManifest(raw);
   const nodesDir = split
@@ -247,7 +248,7 @@ export function readReviewStore(target, { strict = true } = {}) {
         ...(Array.isArray(raw.comments) ? { comments: raw.comments } : {}),
       }
     : raw;
-  if (!Array.isArray(data.nodes)) throw new Error(`Review 数据缺少 nodes：${layout.manifestPath}`);
+  if (!Array.isArray(data.nodes)) throw new Error(t('Review 数据缺少 nodes：{path}', { path: layout.manifestPath }));
 
   const findNode = (idOrPath) =>
     data.nodes.find((node) => node.id === idOrPath || node.path === idOrPath) || null;
@@ -350,7 +351,7 @@ export function readReviewStore(target, { strict = true } = {}) {
  * source is already split. Used by the hub to snapshot an imported review.
  */
 export function copyReviewStore(source, targetDir, { metaPatch = {} } = {}) {
-  if (!source) throw new Error('缺少要导入的 Review。');
+  if (!source) throw new Error(t('缺少要导入的 Review。'));
   ensurePrivateDir(targetDir);
   const layout = reviewLayout(targetDir);
   ensurePrivateDir(layout.nodesDir);
@@ -361,7 +362,7 @@ export function copyReviewStore(source, targetDir, { metaPatch = {} } = {}) {
       const key = stub.payload || nodePayloadKey(stub);
       const from = path.join(source.nodesDir, `${key}.json`);
       if (!fs.existsSync(from)) {
-        throw new Error(`节点内容缺失：${stub.path || stub.id || key}`);
+        throw new Error(t('节点内容缺失：{path}', { path: stub.path || stub.id || key }));
       }
       const name = `${key}.json`;
       fs.copyFileSync(from, path.join(layout.nodesDir, name));
@@ -377,7 +378,7 @@ export function copyReviewStore(source, targetDir, { metaPatch = {} } = {}) {
         const key = table.payload;
         const from = key ? path.join(source.tablesDir, `${key}.json`) : null;
         if (!from || !fs.existsSync(from)) {
-          throw new Error(`数据表内容缺失：${table.name || table.id || key}`);
+          throw new Error(t('数据表内容缺失：{name}', { name: table.name || table.id || key }));
         }
         const name = `${key}.json`;
         fs.copyFileSync(from, path.join(layout.tablesDir, name));
