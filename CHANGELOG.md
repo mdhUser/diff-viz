@@ -8,6 +8,12 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 Before releasing a new version, you must add `Added` / `Changed` / `Fixed` entries for that version and make
 `npm run release:check` pass.
 
+## [1.11.1] - 2026-11-26
+
+### Fixed
+
+- **Settings are now hub-shared instead of browser-local**: the hub persists `language`, `diffLayout` and `commentsExpanded` in `~/.diff-viz/settings.json` (0600) through the new `GET/POST /api/settings` endpoints. Every browser using the same hub loads the same values; localStorage is only a first-paint cache, and settings saved by the previous browser-local build are migrated to the hub on first load. The interface language is synced the same way, so switching browsers no longer resets the UI to that browser's language.
+
 ## [1.11.0] - 2026-11-26
 
 ### Added

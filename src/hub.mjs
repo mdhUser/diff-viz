@@ -35,6 +35,7 @@ import {
   toPosix,
   writeJsonAtomic,
 } from './util.mjs';
+import { hubSettingsPath, readHubSettings, writeHubSettings } from './settings.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = path.resolve(__dirname, '..', 'dist');
@@ -338,6 +339,11 @@ export async function startHub({
     }
     try {
       fs.chmodSync(projectsFile, 0o600);
+    } catch {
+      /* ignore */
+    }
+    try {
+      fs.chmodSync(hubSettingsPath(home), 0o600);
     } catch {
       /* ignore */
     }
@@ -1114,6 +1120,31 @@ export async function startHub({
           home,
           projects: [...projects.values()].sort((a, b) => a.name.localeCompare(b.name)),
         });
+        return;
+      }
+
+      if (pathname === '/api/settings') {
+        if (req.method === 'GET') {
+          sendJson(res, 200, {
+            ok: true,
+            initialized: fs.existsSync(hubSettingsPath(home)),
+            settings: readHubSettings(home),
+          });
+          return;
+        }
+        if (req.method === 'POST') {
+          const payload = await readBody(req);
+          try {
+            sendJson(res, 200, { ok: true, settings: writeHubSettings(home, payload) });
+          } catch (error) {
+            sendJson(res, 400, {
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+          return;
+        }
+        sendJson(res, 405, { error: 'Method not allowed' });
         return;
       }
 

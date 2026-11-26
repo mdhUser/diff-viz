@@ -13,7 +13,7 @@ diff-viz turns a Git change into an interactive dependency graph: which files ch
 
 ![diff-viz topology overview](https://raw.githubusercontent.com/mdhUser/diff-viz/main/docs/overview.png)
 
-> The web UI supports **English / Chinese switching** (open **Settings** from the gear icon; `?lang=en` or `?lang=zh` in the URL also works). The Settings dialog also holds the default Diff layout and comment-bubble state. The detailed docs are being translated; links below currently point to mostly Chinese docs.
+> The web UI supports **English / Chinese switching** (open **Settings** from the gear icon; `?lang=en` or `?lang=zh` in the URL also works). The Settings dialog also holds the default Diff layout and comment-bubble state. Settings are stored in the local hub (`~/.diff-viz/settings.json`), so every browser using the same hub shows the same values; browser localStorage is only a first-paint cache. The detailed docs are being translated; links below currently point to mostly Chinese docs.
 
 ## Quick start
 
@@ -166,7 +166,7 @@ Data format and HTTP API: **[docs/data-contract.md](https://github.com/mdhUser/d
 
 ## Version and compatibility
 
-Current version **1.8.0**. Since 1.0.0 the public contract (CLI flags, data format v2, hub HTTP API, agent annotation JSON) is frozen: no breaking changes within 1.x; breaking changes go to 2.0.0. Old single-file review data is still readable and upgrades automatically.
+Current version **1.11.1**. Since 1.0.0 the public contract (CLI flags, data format v2, hub HTTP API, agent annotation JSON) is frozen: no breaking changes within 1.x; breaking changes go to 2.0.0. Old single-file review data is still readable and upgrades automatically.
 
 See [CHANGELOG.md](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.md).
 

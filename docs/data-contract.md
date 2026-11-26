@@ -105,6 +105,7 @@
 - `todos` 支持字符串或 `{ text, severity, category }`；`severity` 可选 `high` / `medium`；已存在的 TODO 按文本去重。
 - 写入后节点 `summarySource` / `impactSource` 变为 `agent`，页面显示「Agent 总结」徽章。
 - hub 会把注解按「项目 + 文件路径 + 归一化 diff」记在 `~/.diff-viz/annotations/<projectId>.json`（含整体概览）。同一改动在 worktree / commit / range Review 之间切换时自动复用；内容变化后不会套用旧注解。
+- 界面设置（界面语言、Diff 默认布局、评论气泡默认状态）由 hub 统一保存在 `~/.diff-viz/settings.json`（0600），同一 hub 下的所有浏览器共用；浏览器 `localStorage` 只做首屏缓存，页面加载后以 hub 返回值为准。
 - 给任意已有 Review（包括版本链里点开的 commit Review）写注解：`diff-viz annotate --review <id> --annotations <file>`。
 
 ## 数据库表（1.3 起）
@@ -200,6 +201,7 @@ hub 默认监听 `127.0.0.1:5173`，只提供本机访问。只绑 loopback 挡�
 | --- | --- |
 | `GET /api/health` | 存活检查（唯一不需要令牌的端点） |
 | `GET /api/hub` | hub 状态与已注册仓库 |
+| `GET /api/settings` / `POST /api/settings` | 读取 / 更新共享界面设置（`language`、`diffLayout`、`commentsExpanded`），写入 `~/.diff-viz/settings.json` |
 | `POST /api/projects` / `DELETE /api/projects?id=` | 注册 / 移除仓库 |
 | `GET /api/commits?project=<id>[&all=1]` | 版本链提交（默认只看当前分支） |
 | `POST /api/review` | 按 scope 分析仓库并生成 Review |

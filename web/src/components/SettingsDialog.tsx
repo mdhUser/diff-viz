@@ -59,7 +59,7 @@ function SettingRow({ title, hint, children }: { title: string; hint: string; ch
 
 export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
   const { t, lang, setLang } = useI18n();
-  const { settings, updateSettings } = useSettings();
+  const { settings, saveError, updateSettings } = useSettings();
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -105,7 +105,7 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
               <div id="diff-viz-settings-title" className="text-[12px] font-semibold text-mist-100">
                 {t('设置')}
               </div>
-              <div className="mt-0.5 text-[9px] text-mist-600">{t('偏好保存在本机浏览器')}</div>
+              <div className="mt-0.5 text-[9px] text-mist-600">{t('偏好保存在本地 hub')}</div>
             </div>
           </div>
           <button
@@ -123,12 +123,15 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         <div className="space-y-4 px-4 py-4">
           <SettingRow title={t('界面语言')} hint={t('切换后立即生效')}>
             <Choice
-              value={lang}
+              value={settings.language ?? lang}
               options={[
                 { value: 'zh', label: '中文' },
                 { value: 'en', label: 'English' },
               ]}
-              onChange={setLang}
+              onChange={(value) => {
+                setLang(value);
+                updateSettings({ language: value });
+              }}
             />
           </SettingRow>
 
@@ -158,7 +161,11 @@ export function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         </div>
 
         <div className="flex items-center justify-between border-t border-line/80 bg-ink-900/40 px-4 py-2.5">
-          <span className="text-[9px] text-mist-600">{t('设置只影响当前浏览器')}</span>
+          <span className={cn('text-[9px]', saveError ? 'text-rose' : 'text-mist-600')}>
+            {saveError
+              ? t('保存到 hub 失败：{error}', { error: saveError })
+              : t('设置保存在本地 hub，所有浏览器共用')}
+          </span>
           <button
             type="button"
             onClick={onClose}

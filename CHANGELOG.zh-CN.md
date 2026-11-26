@@ -8,6 +8,12 @@
 发布新版本前，必须为本版本补充 `Added` / `Changed` / `Fixed` 等条目，并让
 `npm run release:check` 通过。
 
+## [1.11.1] - 2026-11-26
+
+### 修复
+
+- **设置改为 hub 共享，不再只存在浏览器里**：hub 通过新增的 `GET/POST /api/settings` 把 `language`、`diffLayout`、`commentsExpanded` 持久化到 `~/.diff-viz/settings.json`（0600）。同一 hub 下的所有浏览器读取同一份设置；浏览器 localStorage 只做首屏缓存，旧版本存在浏览器里的设置会在首次加载时迁移到 hub。界面语言也一起同步，换浏览器不会再退回该浏览器自己的语言。
+
 ## [1.11.0] - 2026-11-26
 
 ### 新增

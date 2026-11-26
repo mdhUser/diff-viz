@@ -147,7 +147,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor / antigravity
 
 ## 已知限制
 
-- 界面框架支持中英文切换（顶部齿轮 → 设置 → 界面语言）；Agent 注解、评论正文和服务端生成的启发式摘要仍保持原文语言。
+- 界面框架支持中英文切换（顶部齿轮 → 设置 → 界面语言）；设置由本地 hub 统一保存在 `~/.diff-viz/settings.json`，同一 hub 下的所有浏览器共用，浏览器 localStorage 只做首屏缓存；Agent 注解、评论正文和服务端生成的启发式摘要仍保持原文语言。
 - 依赖解析是静态近似（正则/解析器，不跑 AST，也不处理运行时动态路径）：Java 同包引用可能把注释里的同名类算成依赖，可在界面「忽略」；tsconfig 只读仓库根目录，不处理 `extends` 和 monorepo 子包。
 - 超过 15,000 个代码文件只扫描前 15,000 个：页面顶部会显式警告「共 N 个文件，只分析了前 15,000 个」，需要完整结果时用 `--max-scan-files` 调高上限（扫描耗时随文件数增长）。
 - 自动刷新只对 hub 本进程分析过的仓库生效；hub 重启后需再跑一次 `diff-viz`。Linux 上 Node 的递归 `fs.watch` 不可用，会退化为不监听。
@@ -156,7 +156,7 @@ diff-viz skill install --agent dsh      # 或 claude / cursor / antigravity
 
 ## 版本与兼容
 
-当前版本 **1.8.0**：从 1.0.0 起冻结对外契约（CLI 参数、数据格式 v2、hub HTTP API、Agent 注解 JSON），1.x 内不做破坏性改动，破坏性变更进入 2.0.0。旧版单文件数据仍可读取并自动升级。
+当前版本 **1.11.1**：从 1.0.0 起冻结对外契约（CLI 参数、数据格式 v2、hub HTTP API、Agent 注解 JSON），1.x 内不做破坏性改动，破坏性变更进入 2.0.0。旧版单文件数据仍可读取并自动升级。
 
 版本历史见 [CHANGELOG.zh-CN.md](https://github.com/mdhUser/diff-viz/blob/main/CHANGELOG.zh-CN.md)。
 
