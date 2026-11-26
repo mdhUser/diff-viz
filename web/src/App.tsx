@@ -19,7 +19,7 @@ import { Legend } from './components/Legend';
 import { DetailDrawer } from './components/DetailDrawer';
 import { TableDetail } from './components/TableDetail';
 import { CommentsPanel } from './components/CommentsPanel';
-import { LanguageSwitch } from './components/LanguageSwitch';
+import { SettingsButton } from './components/SettingsButton';
 import { ResizeHandle } from './components/ResizeHandle';
 import { RepoPanel } from './components/RepoPanel';
 import { useI18n } from './i18n';
@@ -815,7 +815,7 @@ export function App() {
     return (
       <div className="app-bg relative flex h-screen items-center justify-center px-6">
         <div className="absolute right-4 top-4 z-10">
-          <LanguageSwitch compact />
+          <SettingsButton compact />
         </div>
         <div className="w-full max-w-[460px] rounded-2xl border border-line bg-ink-850/80 p-6">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-rose/25 bg-rose/10 text-rose">

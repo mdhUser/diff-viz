@@ -74,8 +74,9 @@
 
 - 前端 i18n：中文源文案作为 key + 英文词典，`I18nProvider`/`useI18n`；按 `?lang` → localStorage → 浏览器语言检测，切换即时生效并写入 URL/本地存储。
 - 覆盖全部界面组件与工作区/错误/加载页；日期使用当前 locale；顶栏与工作区均有语言切换器。
+- v1.11.0 起语言切换器统一收进「设置」弹窗（`SettingsDialog.tsx` / `SettingsButton.tsx`），顶栏只保留齿轮入口。
 - 新增 i18n 覆盖测试；服务端摘要/Agent 注解/评论正文保持原文，CLI 输出和详细文档翻译顺延到 v1.9。
-- 关键文件：`web/src/i18n/`、`LanguageSwitch.tsx`、全部 `web/src/components/*`、`test/i18n.test.mjs`。
+- 关键文件：`web/src/i18n/`、`SettingsButton.tsx`、`SettingsDialog.tsx`、全部 `web/src/components/*`、`test/i18n.test.mjs`。
 
 ## 数据契约增量（1.x 兼容）
 

@@ -5,6 +5,7 @@ import type { ReviewComment, ReviewData, ReviewNode } from '../../types';
 import { formatTimestamp, highlightLanguage } from '../../format';
 import { cn } from '../../cn';
 import { useI18n } from '../../i18n';
+import { useSettings } from '../../settings';
 
 const diffStyles: ReactDiffViewerStylesOverride = {
   variables: {
@@ -57,11 +58,9 @@ interface DiffTabProps {
 
 export function DiffTab({ node, data }: DiffTabProps) {
   const { t } = useI18n();
-  const [splitView, setSplitView] = useState(false);
+  const { settings } = useSettings();
+  const [splitView, setSplitView] = useState(settings.diffLayout === 'split');
   const [fullFile, setFullFile] = useState(false);
-  // Comment threads are expanded by default; the gutter bubble marks every
-  // commented line and toggles that one thread.
-  const [collapsedAnchors, setCollapsedAnchors] = useState<Set<string>>(() => new Set());
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const diffShellRef = useRef<HTMLDivElement>(null);
 
@@ -92,6 +91,20 @@ export function DiffTab({ node, data }: DiffTabProps) {
     }
     return byAnchor;
   }, [fileComments]);
+
+  // Comment threads follow the Settings default; the gutter bubble marks every
+  // commented line and toggles that one thread.
+  const [collapsedAnchors, setCollapsedAnchors] = useState<Set<string>>(() =>
+    settings.commentsExpanded ? new Set() : new Set(commentsByAnchor.keys()),
+  );
+
+  useEffect(() => {
+    setSplitView(settings.diffLayout === 'split');
+  }, [settings.diffLayout]);
+
+  useEffect(() => {
+    setCollapsedAnchors(settings.commentsExpanded ? new Set() : new Set(commentsByAnchor.keys()));
+  }, [settings.commentsExpanded, commentsByAnchor]);
 
   const toggleAnchor = useCallback((anchor: string) => {
     setCollapsedAnchors((previous) => {

@@ -332,5 +332,16 @@
   "展开评论": "Expand comment",
   "收起评论": "Collapse comment",
   "展开文件摘要": "Expand file summary",
-  "收起文件摘要": "Collapse file summary"
+  "收起文件摘要": "Collapse file summary",
+  "设置": "Settings",
+  "关闭设置": "Close settings",
+  "偏好保存在本机浏览器": "Preferences are saved in this browser",
+  "界面语言": "Interface language",
+  "切换后立即生效": "Applies immediately",
+  "Diff 默认布局": "Default diff layout",
+  "打开代码 Diff 时使用的默认视图": "Default view when opening a code diff",
+  "评论气泡默认状态": "Comment bubble default",
+  "行号旁的评论徽标仍可逐行展开/收起": "The comment badge next to each line still toggles that thread",
+  "完成": "Done",
+  "设置只影响当前浏览器": "Settings only affect this browser"
 }

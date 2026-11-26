@@ -14,7 +14,7 @@ import type { ReviewData, ServiceEdge, WorkspaceMeta, WorkspaceRepo } from '../t
 import { apiFetch, describeResponseFailure, responseErrorDetail } from '../api';
 import { cn } from '../cn';
 import { useI18n } from '../i18n';
-import { LanguageSwitch } from './LanguageSwitch';
+import { SettingsButton } from './SettingsButton';
 
 const CARD_W = 264;
 const CARD_H = 118;
@@ -242,7 +242,7 @@ export function WorkspaceView({
               </div>
             ) : null}
           </div>
-          <LanguageSwitch />
+          <SettingsButton />
           <button
             type="button"
             onClick={onRefresh}

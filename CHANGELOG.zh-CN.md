@@ -8,11 +8,16 @@
 发布新版本前，必须为本版本补充 `Added` / `Changed` / `Fixed` 等条目，并让
 `npm run release:check` 通过。
 
-## [Unreleased]
+## [1.11.0] - 2026-11-26
 
 ### 新增
 
+- **设置弹窗**：顶栏与工作区统一为一个齿轮入口，低频设置不再散落在页面上。设置内包含界面语言、Diff 默认布局（单栏/双栏）、评论气泡默认展开状态；偏好保存在 localStorage，对已打开和后续打开的 Diff 都生效。
 - **Antigravity skill 目标**：`diff-viz skill install --agent antigravity`（别名 `agy`）用户级安装到 `~/.gemini/config/skills`，项目级安装到 `.agents/skills`。Agent 名称现在会 trim 并忽略大小写。
+
+### 变更
+
+- 中英文切换不再是顶栏/工作区里的独立按钮，改为 **设置 → 界面语言**；`?lang=en|zh` 仍然可用。
 
 ### 修复
 

@@ -5,14 +5,17 @@ import './index.css';
 import { App } from './App';
 import { initApiToken } from './api';
 import { I18nProvider } from './i18n';
+import { SettingsProvider } from './settings';
 
 // Capture `?token=` before the first render: every API call needs it.
 initApiToken();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <I18nProvider>
-      <App />
-    </I18nProvider>
+    <SettingsProvider>
+      <I18nProvider>
+        <App />
+      </I18nProvider>
+    </SettingsProvider>
   </React.StrictMode>,
 );

@@ -13,7 +13,7 @@ diff-viz turns a Git change into an interactive dependency graph: which files ch
 
 ![diff-viz topology overview](https://raw.githubusercontent.com/mdhUser/diff-viz/main/docs/overview.png)
 
-> The web UI supports **English / Chinese switching** (top-bar language switch; `?lang=en` or `?lang=zh` in the URL). The detailed docs are being translated; links below currently point to mostly Chinese docs.
+> The web UI supports **English / Chinese switching** (open **Settings** from the gear icon; `?lang=en` or `?lang=zh` in the URL also works). The Settings dialog also holds the default Diff layout and comment-bubble state. The detailed docs are being translated; links below currently point to mostly Chinese docs.
 
 ## Quick start
 
@@ -58,7 +58,7 @@ The default port is `5173` and auto-increments when busy; use the URL printed by
 | Left sidebar | Overall summary, changed/impacted file lists, review progress; click to select a file |
 | Canvas | Dependency topology. Purple dashed = impact (A changed → B affected), blue solid = dependency (A imports B), gray nodes = untouched but impacted |
 | Detail drawer | Summary & impact, code diff, review todos; side-by-side diff, full-file view, syntax highlighting |
-| Top bar | Repo switcher, version chain (current branch by default), historical commit reviews, refresh, **language switch**; switch between **flow / swimlane** views (lanes by module/directory/package) and toggle **config** / **database** layers |
+| Top bar | Repo switcher, version chain (current branch by default), historical commit reviews, refresh, **Settings** (language, default Diff layout, comment-bubble default); switch between **flow / swimlane** views (lanes by module/directory/package) and toggle **config** / **database** layers |
 
 Keyboard: `←` / `→` move between files, `Esc` closes the drawer. When you save code, the hub re-analyzes and the page refreshes over SSE — no need to re-run the CLI.
 

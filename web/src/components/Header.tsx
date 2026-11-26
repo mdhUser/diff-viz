@@ -15,7 +15,7 @@ import {
 import type { HubProject, ReviewData } from '../types';
 import { prettyRangeLabel } from '../format';
 import { useI18n } from '../i18n';
-import { LanguageSwitch } from './LanguageSwitch';
+import { SettingsButton } from './SettingsButton';
 
 interface HeaderProps {
   data: ReviewData;
@@ -208,7 +208,7 @@ export function Header({
           </button>
         </div>
 
-        <LanguageSwitch compact />
+        <SettingsButton compact />
 
         {hubAvailable ? (
           <button

@@ -8,11 +8,16 @@ and version numbers follow [Semantic Versioning](https://semver.org/).
 Before releasing a new version, you must add `Added` / `Changed` / `Fixed` entries for that version and make
 `npm run release:check` pass.
 
-## [Unreleased]
+## [1.11.0] - 2026-11-26
 
 ### Added
 
+- **Settings dialog**: a single gear entry in the top bar and workspace replaces scattered low-frequency controls. Settings contains the interface language, the default Diff layout (unified/split), and whether comment threads start expanded; preferences persist in localStorage and apply to open and new diffs.
 - **Antigravity skill target**: `diff-viz skill install --agent antigravity` (alias `agy`) installs into `~/.gemini/config/skills` for the user scope and `.agents/skills` for the project scope. Agent names are now trimmed and case-insensitive.
+
+### Changed
+
+- The language switch is no longer a standalone top-bar/workspace button; use **Settings → Interface language**. `?lang=en|zh` still works.
 
 ### Fixed
 
